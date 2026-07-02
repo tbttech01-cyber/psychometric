@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Verify OTP — Tamil Business Tribe</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="/assets/css/custom.css" />
+</head>
+<body class="min-h-screen flex items-center justify-center bg-gradient-to-br from-[#1E3A5F] to-[#162d4a]">
+  <div id="toast-container"></div>
+  <div class="w-full max-w-md mx-4">
+    <div class="card text-center">
+      <div class="text-5xl mb-3">📧</div>
+      <h2 class="text-xl font-bold mb-1" style="color:var(--tbt-primary)">Verify Your Email</h2>
+      <p class="text-sm mb-1" style="color:var(--tbt-muted)">We sent a 6-digit code to</p>
+      <p id="email-display" class="font-semibold mb-6" style="color:var(--tbt-primary)"></p>
+
+      <div class="flex justify-center gap-2 mb-6">
+        <input class="otp-box" type="text" maxlength="1" data-idx="0" />
+        <input class="otp-box" type="text" maxlength="1" data-idx="1" />
+        <input class="otp-box" type="text" maxlength="1" data-idx="2" />
+        <input class="otp-box" type="text" maxlength="1" data-idx="3" />
+        <input class="otp-box" type="text" maxlength="1" data-idx="4" />
+        <input class="otp-box" type="text" maxlength="1" data-idx="5" />
+      </div>
+
+      <button id="btn-verify" class="btn btn-primary w-full mb-3">Verify OTP</button>
+      <button id="btn-resend" class="text-sm font-semibold" style="color:var(--tbt-primary)">Resend OTP</button>
+      <p id="resend-timer" class="text-xs mt-1 hidden" style="color:var(--tbt-muted)">Resend in <span id="countdown">60</span>s</p>
+    </div>
+  </div>
+  <script src="/assets/js/api.js"></script>
+  <script src="/assets/js/validator.js"></script>
+  <script>
+    const email = localStorage.getItem('tbt_pending_email');
+    if (!email) window.location.href = '/user/index.html';
+    document.getElementById('email-display').textContent = email;
+
+    const boxes = document.querySelectorAll('.otp-box');
+    boxes.forEach((box, i) => {
+      box.addEventListener('input', () => {
+        if (box.value && i < 5) boxes[i + 1].focus();
+      });
+      box.addEventListener('keydown', e => {
+        if (e.key === 'Backspace' && !box.value && i > 0) boxes[i - 1].focus();
+      });
+    });
+
+    const getOTP = () => Array.from(boxes).map(b => b.value).join('');
+
+    document.getElementById('btn-verify').addEventListener('click', async () => {
+      const otp = getOTP();
+      if (!Validator.otp(otp)) return showToast('Enter all 6 digits.', 'error');
+      const btn = document.getElementById('btn-verify');
+      btn.disabled = true; btn.textContent = 'Verifying...';
+      const { ok, data } = await api.post('/user/verify-otp', { email, otp });
+      btn.disabled = false; btn.textContent = 'Verify OTP';
+      if (!ok) { showToast(data.message || 'Invalid OTP.', 'error'); return; }
+      api.setToken('user', data.token);
+      api.setUser(data.user);
+      localStorage.removeItem('tbt_pending_email');
+      window.location.href = '/user/welcome.html';
+    });
+
+    let resendSeconds = 0;
+    function startResendTimer() {
+      resendSeconds = 60;
+      document.getElementById('btn-resend').style.display = 'none';
+      document.getElementById('resend-timer').classList.remove('hidden');
+      const interval = setInterval(() => {
+        resendSeconds--;
+        document.getElementById('countdown').textContent = resendSeconds;
+        if (resendSeconds <= 0) {
+          clearInterval(interval);
+          document.getElementById('btn-resend').style.display = '';
+          document.getElementById('resend-timer').classList.add('hidden');
+        }
+      }, 1000);
+    }
+
+    document.getElementById('btn-resend').addEventListener('click', async () => {
+      const { ok, data } = await api.post('/user/resend-otp', { email });
+      if (!ok) { showToast(data.message || 'Failed to resend.', 'error'); return; }
+      showToast('New OTP sent!', 'success');
+      startResendTimer();
+    });
+  </script>
+</body>
+</html>

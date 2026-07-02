@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Welcome — Tamil Business Tribe</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="/assets/css/custom.css" />
+</head>
+<body class="min-h-screen flex items-center justify-center bg-gradient-to-br from-[#1E3A5F] to-[#162d4a]">
+  <div id="toast-container"></div>
+  <div class="w-full max-w-lg mx-4">
+    <div class="card text-center">
+      <div class="text-6xl mb-4">🎯</div>
+      <h1 class="text-2xl font-extrabold mb-1" style="color:var(--tbt-primary)">Ready to Discover Your Potential?</h1>
+      <p id="greeting" class="mb-4" style="color:var(--tbt-muted)">Welcome! Take a moment to understand your strengths.</p>
+
+      <div class="bg-blue-50 rounded-xl p-4 mb-6 text-left space-y-2 text-sm" style="border:1px solid #DBEAFE">
+        <p class="font-bold mb-2" style="color:var(--tbt-primary)">Before you begin:</p>
+        <div class="flex gap-2"><span>✅</span><span>40 questions across 8 psychometric categories</span></div>
+        <div class="flex gap-2"><span>⏱️</span><span>30-minute time limit — complete in one sitting</span></div>
+        <div class="flex gap-2"><span>🔒</span><span>One attempt only — answers cannot be changed after submission</span></div>
+        <div class="flex gap-2"><span>💡</span><span>Answer honestly — there are no right or wrong answers</span></div>
+      </div>
+
+      <button id="btn-start" class="btn btn-accent w-full text-lg py-3">Start Assessment</button>
+      <button id="btn-logout" class="btn btn-outline w-full mt-3">Logout</button>
+    </div>
+  </div>
+  <script src="/assets/js/api.js"></script>
+  <script src="/assets/js/validator.js"></script>
+  <script>
+    const token = api.requireAuth('user');
+    const user = api.getUser();
+    if (user) document.getElementById('greeting').textContent = `Welcome, ${user.name}! Take a moment to understand your strengths.`;
+
+    document.getElementById('btn-start').addEventListener('click', async () => {
+      const btn = document.getElementById('btn-start');
+      btn.disabled = true; btn.textContent = 'Starting...';
+      const { ok, data } = await api.post('/assessment/start', {}, token);
+      if (!ok && data.sessionId) { window.location.href = '/user/assessment.html'; return; }
+      if (!ok) { showToast(data.message || 'Failed to start.', 'error'); btn.disabled = false; btn.textContent = 'Start Assessment'; return; }
+      localStorage.setItem('tbt_session_id', data.sessionId);
+      localStorage.setItem('tbt_session_expires', data.expiresAt);
+      window.location.href = '/user/assessment.html';
+    });
+
+    document.getElementById('btn-logout').addEventListener('click', async () => {
+      await api.post('/user/logout', {}, token).catch(() => {});
+      api.removeToken('user'); api.removeUser();
+      window.location.href = '/user/login.html';
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Questions — Tamil Business Tribe Admin</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="/assets/css/custom.css" />
+</head>
+<body class="flex min-h-screen" style="background:var(--tbt-bg)">
+  <div id="toast-container"></div>
+  <nav class="sidebar hidden md:flex flex-col">
+    <div class="p-5 border-b border-white/10"><h2 class="font-extrabold text-white text-lg leading-tight">Tamil Business<br/>Tribe Admin</h2></div>
+    <div class="flex-1 py-4">
+      <a href="/admin/dashboard.html">📊 Dashboard</a>
+      <a href="/admin/shared-ids.html">🔑 Access Codes</a>
+      <a href="/admin/question-types.html">🗂️ Question Types</a>
+      <a href="/admin/questions.html" class="active">❓ Questions</a>
+      <a href="/admin/answer-options.html">✅ Answer Options</a>
+      <a href="/admin/results.html">📈 Results</a>
+    </div>
+    <div class="p-4 border-t border-white/10"><button id="btn-logout" class="text-sm text-white/70 hover:text-white">Logout</button></div>
+  </nav>
+  <div class="flex-1 overflow-auto">
+    <header class="bg-white border-b px-6 py-4"><h1 class="text-xl font-bold" style="color:var(--tbt-primary)">Questions</h1></header>
+    <main class="p-6 space-y-4">
+      <!-- Filter -->
+      <div class="card flex gap-3">
+        <label class="text-sm font-semibold self-center">Filter by Category:</label>
+        <select id="f-type" class="border-2 rounded-lg px-3 py-2 focus:outline-none" style="border-color:var(--tbt-border)">
+          <option value="">All Categories</option>
+        </select>
+      </div>
+      <div class="card overflow-x-auto">
+        <p id="count" class="text-sm mb-3" style="color:var(--tbt-muted)"></p>
+        <table class="data-table"><thead><tr><th>#</th><th>Category</th><th>Question Text</th><th>Status</th></tr></thead>
+        <tbody id="tbl-body"></tbody></table>
+      </div>
+    </main>
+  </div>
+  <script src="/assets/js/api.js"></script>
+  <script src="/assets/js/validator.js"></script>
+  <script>
+    const token = api.requireAuth('admin');
+
+    async function loadTypes() {
+      const { ok, data } = await api.get('/admin/question-types', token);
+      if (!ok) return;
+      const sel = document.getElementById('f-type');
+      data.data.forEach(t => sel.innerHTML += `<option value="${t._id}">${t.name}</option>`);
+    }
+
+    async function load() {
+      const typeId = document.getElementById('f-type').value;
+      const qs = typeId ? `?typeId=${typeId}` : '';
+      const { ok, data } = await api.get(`/admin/questions${qs}`, token);
+      if (!ok) return;
+      document.getElementById('count').textContent = `${data.data.length} question(s)`;
+      document.getElementById('tbl-body').innerHTML = data.data.map(q => `<tr>
+        <td class="font-bold">${q.order}</td>
+        <td><span class="inline-block px-2 py-0.5 rounded text-xs font-semibold text-white" style="background:${q.typeId?.color||'#1E3A5F'}">${q.typeId?.name||''}</span></td>
+        <td class="text-sm max-w-md">${q.text}</td>
+        <td><span class="badge ${q.isActive ? 'badge-good' : 'badge-needs'}">${q.isActive ? 'Active' : 'Inactive'}</span></td>
+      </tr>`).join('');
+    }
+
+    document.getElementById('f-type').addEventListener('change', load);
+    document.getElementById('btn-logout').addEventListener('click', async () => {
+      await api.post('/admin/logout', {}, token).catch(() => {});
+      api.removeToken('admin'); window.location.href = '/admin/login.html';
+    });
+
+    loadTypes().then(load);
+  </script>
+</body>
+</html>

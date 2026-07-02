@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Tamil Business Tribe — Enter Access Code</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="/assets/css/custom.css" />
+</head>
+<body class="min-h-screen flex items-center justify-center bg-gradient-to-br from-[#1E3A5F] to-[#162d4a]">
+  <div id="toast-container"></div>
+  <div class="w-full max-w-md mx-4">
+    <div class="text-center mb-8">
+      <h1 class="text-3xl font-extrabold text-white">Tamil Business Tribe</h1>
+      <p class="text-blue-200 mt-1 text-sm">Psychometric Assessment Platform</p>
+    </div>
+    <div class="card">
+      <h2 class="text-xl font-bold text-center mb-1" style="color:var(--tbt-primary)">Welcome</h2>
+      <p class="text-sm text-center mb-6" style="color:var(--tbt-muted)">Enter your access code to get started</p>
+      <div class="mb-4">
+        <label class="block text-sm font-semibold mb-1" for="code">Access Code</label>
+        <input id="code" type="text" placeholder="e.g. TBT2024" maxlength="20"
+          class="w-full border-2 rounded-lg px-4 py-3 text-center text-xl font-bold tracking-widest uppercase focus:outline-none transition"
+          style="border-color:var(--tbt-border)" />
+        <p id="code-error" class="text-red-500 text-xs mt-1 hidden"></p>
+      </div>
+      <button id="btn-continue" class="btn btn-primary w-full">Continue</button>
+      <div class="mt-4 text-center text-sm" style="color:var(--tbt-muted)">
+        Already have an account? <a href="/user/login.html" class="font-semibold" style="color:var(--tbt-primary)">Login</a>
+      </div>
+    </div>
+  </div>
+  <script src="/assets/js/api.js"></script>
+  <script src="/assets/js/validator.js"></script>
+  <script>
+    const btn = document.getElementById('btn-continue');
+    const codeInput = document.getElementById('code');
+    codeInput.addEventListener('input', () => { codeInput.value = codeInput.value.toUpperCase(); });
+    btn.addEventListener('click', async () => {
+      Validator.clearAll(['code']);
+      const code = codeInput.value.trim();
+      if (!Validator.required(code)) return Validator.show('code', 'Access code is required.');
+      btn.disabled = true; btn.textContent = 'Checking...';
+      const { ok, data } = await api.post('/user/validate-code', { code });
+      btn.disabled = false; btn.textContent = 'Continue';
+      if (!ok) { Validator.show('code', data.message || 'Invalid code.'); return; }
+      localStorage.setItem('tbt_code_id', data.codeId);
+      localStorage.setItem('tbt_code', code);
+      window.location.href = '/user/register.html';
+    });
+  </script>
+</body>
+</html>

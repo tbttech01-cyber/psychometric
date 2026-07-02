@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Login — Tamil Business Tribe</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="/assets/css/custom.css" />
+</head>
+<body class="min-h-screen flex items-center justify-center bg-gradient-to-br from-[#1E3A5F] to-[#162d4a]">
+  <div id="toast-container"></div>
+  <div class="w-full max-w-md mx-4">
+    <div class="text-center mb-6">
+      <h1 class="text-2xl font-extrabold text-white">Tamil Business Tribe</h1>
+      <p class="text-blue-200 text-sm">Psychometric Assessment Platform</p>
+    </div>
+    <div class="card">
+      <h2 class="text-xl font-bold mb-5" style="color:var(--tbt-primary)">Sign In</h2>
+      <div class="mb-3">
+        <label class="block text-sm font-semibold mb-1" for="email">Email</label>
+        <input id="email" type="email" placeholder="you@example.com" class="w-full border-2 rounded-lg px-4 py-2.5 focus:outline-none" style="border-color:var(--tbt-border)" />
+        <p id="email-error" class="text-red-500 text-xs mt-1 hidden"></p>
+      </div>
+      <div class="mb-5">
+        <label class="block text-sm font-semibold mb-1" for="password">Password</label>
+        <input id="password" type="password" placeholder="Your password" class="w-full border-2 rounded-lg px-4 py-2.5 focus:outline-none" style="border-color:var(--tbt-border)" />
+        <p id="password-error" class="text-red-500 text-xs mt-1 hidden"></p>
+      </div>
+      <button id="btn-login" class="btn btn-primary w-full">Sign In</button>
+      <div class="mt-4 text-center text-sm" style="color:var(--tbt-muted)">
+        New user? <a href="/user/index.html" class="font-semibold" style="color:var(--tbt-primary)">Enter Access Code</a>
+      </div>
+    </div>
+  </div>
+  <script src="/assets/js/api.js"></script>
+  <script src="/assets/js/validator.js"></script>
+  <script>
+    if (api.getToken('user')) {
+      const user = api.getUser();
+      window.location.href = user && user.hasCompletedAssessment ? '/user/result.html' : '/user/welcome.html';
+    }
+    document.getElementById('btn-login').addEventListener('click', async () => {
+      Validator.clearAll(['email','password']);
+      const email = document.getElementById('email').value.trim();
+      const password = document.getElementById('password').value;
+      let valid = true;
+      if (!Validator.email(email)) { Validator.show('email','Valid email required.'); valid = false; }
+      if (!Validator.required(password)) { Validator.show('password','Password required.'); valid = false; }
+      if (!valid) return;
+      const btn = document.getElementById('btn-login');
+      btn.disabled = true; btn.textContent = 'Signing in...';
+      const { ok, data } = await api.post('/user/login', { email, password });
+      btn.disabled = false; btn.textContent = 'Sign In';
+      if (!ok) { showToast(data.message || 'Login failed.', 'error'); return; }
+      api.setToken('user', data.token);
+      api.setUser(data.user);
+      window.location.href = data.user.hasCompletedAssessment ? '/user/result.html' : '/user/welcome.html';
+    });
+  </script>
+</body>
+</html>
