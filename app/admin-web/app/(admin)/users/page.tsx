@@ -24,6 +24,7 @@ type UserRow = {
 };
 
 type UserStats = { totalUsers: number; verifiedUsers: number; pendingUsers: number; completedUsers: number };
+type SharedIDOption = { _id: string; code: string; label: string; isActive: boolean };
 
 export default function UsersPage() {
   const showToast = useToast();
@@ -38,6 +39,7 @@ export default function UsersPage() {
   const [status, setStatus] = useState("");
   const [showAdd, setShowAdd] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [sharedCodes, setSharedCodes] = useState<SharedIDOption[]>([]);
 
   const [form, setForm] = useState({
     name: "", email: "", password: "", phone: "", sharedCode: "",
@@ -57,6 +59,12 @@ export default function UsersPage() {
   }, [page, search, status, token, showToast]);
 
   useEffect(() => { load(); }, [load]);
+
+  useEffect(() => {
+    api.get("/admin/shared-ids", token).then(({ ok, data }) => {
+      if (ok) setSharedCodes(data.data.filter((s: SharedIDOption) => s.isActive));
+    });
+  }, [token]);
 
   async function generateCandidateId() {
     const { ok, data } = await api.get("/admin/users/generate-candidate-id", token);
@@ -144,8 +152,13 @@ export default function UsersPage() {
                 <h3 className="font-bold" style={{ color: "var(--tbt-text)" }}>Candidate Configuration</h3>
               </div>
               <div className="grid md:grid-cols-2 gap-3">
-                <input placeholder="Access code (e.g. TBT2025)" value={form.sharedCode} onChange={(e) => setForm({ ...form, sharedCode: e.target.value.toUpperCase() })}
-                  className="border rounded-xl px-3.5 py-2.5 uppercase font-mono focus:outline-none" style={{ borderColor: "var(--tbt-border)" }} />
+                <select value={form.sharedCode} onChange={(e) => setForm({ ...form, sharedCode: e.target.value })}
+                  className="border rounded-xl px-3.5 py-2.5 font-mono focus:outline-none" style={{ borderColor: "var(--tbt-border)" }}>
+                  <option value="">Select access code</option>
+                  {sharedCodes.map((s) => (
+                    <option key={s._id} value={s.code}>{s.code} — {s.label}</option>
+                  ))}
+                </select>
                 <input placeholder="Assessment batch (optional)" value={form.batch} onChange={(e) => setForm({ ...form, batch: e.target.value })}
                   className="border rounded-xl px-3.5 py-2.5 focus:outline-none" style={{ borderColor: "var(--tbt-border)" }} />
                 <input type="date" value={form.accessExpiry} onChange={(e) => setForm({ ...form, accessExpiry: e.target.value })}
