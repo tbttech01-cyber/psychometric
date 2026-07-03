@@ -18,27 +18,17 @@ describe('Admin auth flow', () => {
     expect(res.body.success).toBe(false);
   });
 
-  it('logs in and issues an OTP, then verifies it for a JWT', async () => {
+  it('logs in with email and password and issues a JWT directly', async () => {
     const loginRes = await request(app)
       .post('/api/v1/admin/login')
       .send({ email: ADMIN_EMAIL, password: ADMIN_PASSWORD });
     expect(loginRes.status).toBe(200);
     expect(loginRes.body.success).toBe(true);
+    expect(loginRes.body.token).toBeTruthy();
+    expect(loginRes.body.admin.email).toBe(ADMIN_EMAIL);
 
     const admin = await Admin.findOne({ email: ADMIN_EMAIL });
-    expect(admin.otpCode).toMatch(/^\d{6}$/);
-
-    const badOtp = await request(app)
-      .post('/api/v1/admin/verify-otp')
-      .send({ email: ADMIN_EMAIL, otp: '000000' });
-    expect(badOtp.status).toBe(400);
-
-    const verifyRes = await request(app)
-      .post('/api/v1/admin/verify-otp')
-      .send({ email: ADMIN_EMAIL, otp: admin.otpCode });
-    expect(verifyRes.status).toBe(200);
-    expect(verifyRes.body.token).toBeTruthy();
-    expect(verifyRes.body.admin.email).toBe(ADMIN_EMAIL);
+    expect(admin.activeToken).toBe(loginRes.body.token);
   });
 
   it('rejects protected routes without a token', async () => {

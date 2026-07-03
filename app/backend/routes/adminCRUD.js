@@ -6,6 +6,15 @@ const adminAuth = require('../middleware/adminAuth');
 
 router.use(adminAuth);
 
+// Users
+router.get('/users', ctrl.listUsers);
+router.get('/users/generate-candidate-id', ctrl.generateCandidateId);
+router.post('/users',
+  [body('name').notEmpty(), body('email').isEmail(), body('password').isLength({ min: 6 }), body('sharedCode').notEmpty()],
+  validate, ctrl.createUser
+);
+router.delete('/users/:id', ctrl.deleteUser);
+
 // Shared User IDs
 router.get('/shared-ids', ctrl.listSharedIDs);
 router.post('/shared-ids',

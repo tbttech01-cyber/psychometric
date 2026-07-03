@@ -1,8 +1,10 @@
+const bcrypt = require('bcryptjs');
 const SharedUserID = require('../models/SharedUserID');
 const QuestionType = require('../models/QuestionType');
 const Question = require('../models/Question');
 const AnswerOption = require('../models/AnswerOption');
 const AssessmentSession = require('../models/AssessmentSession');
+const User = require('../models/User');
 
 // ── Shared User IDs ─────────────────────────────────────────────────────────
 exports.listSharedIDs = async (req, res, next) => {
@@ -41,7 +43,6 @@ exports.deleteSharedID = async (req, res, next) => {
 
 exports.sharedIDStats = async (req, res, next) => {
   try {
-    const User = require('../models/User');
     const doc = await SharedUserID.findById(req.params.id);
     if (!doc) return res.status(404).json({ success: false, message: 'Not found.' });
     const users = await User.find({ sharedUserID: req.params.id }).select('name email createdAt');
@@ -68,6 +69,19 @@ exports.createQuestionType = async (req, res, next) => {
 
 exports.updateQuestionType = async (req, res, next) => {
   try {
+    if (req.body.order !== undefined) {
+      const current = await QuestionType.findById(req.params.id);
+      if (!current) return res.status(404).json({ success: false, message: 'Not found.' });
+      if (current.order !== req.body.order) {
+        const clash = await QuestionType.findOne({ order: req.body.order, _id: { $ne: req.params.id } });
+        if (clash) {
+          // Swap via a temporary out-of-range sentinel so the unique index is never violated mid-swap.
+          await QuestionType.findByIdAndUpdate(clash._id, { order: 0 });
+          await QuestionType.findByIdAndUpdate(req.params.id, { order: req.body.order });
+          await QuestionType.findByIdAndUpdate(clash._id, { order: current.order });
+        }
+      }
+    }
     const doc = await QuestionType.findByIdAndUpdate(req.params.id, { $set: req.body }, { new: true });
     if (!doc) return res.status(404).json({ success: false, message: 'Not found.' });
     res.json({ success: true, data: doc });
@@ -161,6 +175,101 @@ exports.deleteAnswerOption = async (req, res, next) => {
     const used = await AssessmentSession.exists({ status: { $in: ['in-progress', 'submitted'] } });
     if (used) return res.status(400).json({ success: false, message: 'Cannot delete: options have been used in sessions.' });
     await opt.deleteOne();
+    res.json({ success: true });
+  } catch (err) { next(err); }
+};
+
+// ── Users ────────────────────────────────────────────────────────────────────
+exports.listUsers = async (req, res, next) => {
+  try {
+    const { search, status, page = 1, limit = 10 } = req.query;
+    const filter = {};
+    if (search) {
+      filter.$or = [
+        { name: new RegExp(search, 'i') },
+        { email: new RegExp(search, 'i') },
+        { sharedCode: new RegExp(search, 'i') },
+      ];
+    }
+    if (status === 'verified') filter.isVerified = true;
+    if (status === 'unverified') filter.isVerified = false;
+    if (status === 'completed') filter.hasCompletedAssessment = true;
+
+    const [total, totalUsers, verifiedUsers, completedUsers, data] = await Promise.all([
+      User.countDocuments(filter),
+      User.countDocuments(),
+      User.countDocuments({ isVerified: true }),
+      User.countDocuments({ hasCompletedAssessment: true }),
+      User.find(filter)
+        .select('-passwordHash -otpCode -otpExpiry -activeToken')
+        .sort({ createdAt: -1 })
+        .skip((+page - 1) * +limit)
+        .limit(+limit),
+    ]);
+
+    res.json({
+      success: true,
+      data,
+      total,
+      page: +page,
+      pages: Math.ceil(total / +limit),
+      stats: { totalUsers, verifiedUsers, completedUsers, pendingUsers: totalUsers - verifiedUsers },
+    });
+  } catch (err) { next(err); }
+};
+
+async function generateCandidateId() {
+  let candidateId, exists = true;
+  while (exists) {
+    candidateId = `TBT-ID-${Math.floor(1000 + Math.random() * 9000)}`;
+    exists = await User.exists({ candidateId });
+  }
+  return candidateId;
+}
+
+exports.generateCandidateId = async (req, res, next) => {
+  try {
+    res.json({ success: true, candidateId: await generateCandidateId() });
+  } catch (err) { next(err); }
+};
+
+exports.createUser = async (req, res, next) => {
+  try {
+    const { name, email, password, sharedCode, phone, batch, accessExpiry, restrictedAccess, candidateId: requestedCandidateId } = req.body;
+    const lEmail = email.toLowerCase();
+
+    const existing = await User.findOne({ email: lEmail });
+    if (existing) return res.status(409).json({ success: false, message: 'Email already registered.' });
+
+    const shared = await SharedUserID.findOne({ code: sharedCode.toUpperCase() });
+    if (!shared) return res.status(400).json({ success: false, message: 'Invalid shared code.' });
+
+    if (requestedCandidateId && await User.exists({ candidateId: requestedCandidateId }))
+      return res.status(409).json({ success: false, message: 'Candidate ID already in use.' });
+
+    const passwordHash = await bcrypt.hash(password, 10);
+    const candidateId = requestedCandidateId || await generateCandidateId();
+    const user = await User.create({
+      name: name.trim(), email: lEmail, passwordHash,
+      sharedUserID: shared._id, sharedCode: shared.code,
+      isVerified: true,
+      candidateId,
+      phone: phone?.trim() || undefined,
+      batch: batch?.trim() || undefined,
+      accessExpiry: accessExpiry || undefined,
+      restrictedAccess: !!restrictedAccess,
+    });
+    await SharedUserID.findByIdAndUpdate(shared._id, { $inc: { usageCount: 1 } });
+
+    res.status(201).json({ success: true, data: { _id: user._id, name: user.name, email: user.email, sharedCode: user.sharedCode, candidateId: user.candidateId } });
+  } catch (err) { next(err); }
+};
+
+exports.deleteUser = async (req, res, next) => {
+  try {
+    const user = await User.findById(req.params.id);
+    if (!user) return res.status(404).json({ success: false, message: 'Not found.' });
+    await user.deleteOne();
     res.json({ success: true });
   } catch (err) { next(err); }
 };

@@ -11,6 +11,11 @@ const userSchema = new mongoose.Schema({
   otpExpiry:              { type: Date },
   activeToken:            { type: String },
   hasCompletedAssessment: { type: Boolean, default: false },
+  phone:                  { type: String, trim: true },
+  candidateId:            { type: String, unique: true, sparse: true },
+  batch:                  { type: String, trim: true },
+  accessExpiry:           { type: Date },
+  restrictedAccess:       { type: Boolean, default: false },
 }, { timestamps: true });
 
 userSchema.index({ sharedUserID: 1 });

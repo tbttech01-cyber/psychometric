@@ -10,12 +10,13 @@ router.post('/login',
   ctrl.login
 );
 
-router.post('/verify-otp',
-  [body('email').isEmail(), body('otp').isLength({ min: 6, max: 6 }).isNumeric()],
-  validate,
-  ctrl.verifyOTP
-);
-
 router.post('/logout', adminAuth, ctrl.logout);
+router.get('/profile', adminAuth, ctrl.getProfile);
+router.post('/change-password',
+  adminAuth,
+  [body('currentPassword').notEmpty(), body('newPassword').isLength({ min: 6 })],
+  validate,
+  ctrl.changePassword
+);
 
 module.exports = router;

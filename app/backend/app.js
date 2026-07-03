@@ -8,7 +8,7 @@ const path = require('path');
 const app = express();
 
 app.use(helmet({ contentSecurityPolicy: false }));
-const corsOrigins = [process.env.USER_APP_URL, process.env.ADMIN_APP_URL].filter(Boolean);
+const corsOrigins = [process.env.USER_APP_URL, process.env.ADMIN_APP_URL, process.env.ADMIN_WEB_URL].filter(Boolean);
 app.use(cors(corsOrigins.length ? { origin: corsOrigins } : {}));
 app.use(express.json());
 if (process.env.NODE_ENV !== 'test') {
@@ -18,10 +18,17 @@ if (process.env.NODE_ENV !== 'test') {
 // Serve frontend static files
 app.use(express.static(path.join(__dirname, '../frontend')));
 
+// The legacy vanilla admin UI has been retired — admin-web (Next.js) is the
+// single admin application now. Send old bookmarks/links there instead of
+// falling through to the user-app SPA fallback below.
+app.get(['/admin', '/admin/*'], (req, res) => {
+  if (process.env.ADMIN_WEB_URL) return res.redirect(process.env.ADMIN_WEB_URL);
+  res.status(404).send('The admin UI has moved. Set ADMIN_WEB_URL to enable redirecting here.');
+});
+
 // Rate limiting on auth endpoints
 const authLimiter = rateLimit({ windowMs: 60 * 1000, max: 10, message: { success: false, message: 'Too many requests. Please wait a minute.' } });
 app.use('/api/v1/admin/login', authLimiter);
-app.use('/api/v1/admin/verify-otp', authLimiter);
 app.use('/api/v1/user/login', authLimiter);
 app.use('/api/v1/user/verify-otp', authLimiter);
 
@@ -29,6 +36,7 @@ app.use('/api/v1/user/verify-otp', authLimiter);
 app.use('/api/v1/admin', require('./routes/adminAuth'));
 app.use('/api/v1/admin', require('./routes/adminCRUD'));
 app.use('/api/v1/admin', require('./routes/adminDashboard'));
+app.use('/api/v1/admin', require('./routes/adminBusinessMatrix'));
 app.use('/api/v1/user', require('./routes/userAuth'));
 app.use('/api/v1/assessment', require('./routes/assessment'));
 

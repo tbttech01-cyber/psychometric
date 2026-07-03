@@ -58,9 +58,16 @@ exports.getDashboard = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
+const SORT_OPTIONS = {
+  'date-desc': { createdAt: -1 },
+  'date-asc': { createdAt: 1 },
+  'score-desc': { totalMarks: -1 },
+  'score-asc': { totalMarks: 1 },
+};
+
 exports.getResults = async (req, res, next) => {
   try {
-    const { page = 1, limit = 25, search, dateFrom, dateTo, level, business } = req.query;
+    const { page = 1, limit = 25, search, dateFrom, dateTo, level, business, sortBy } = req.query;
     const filter = {};
     if (level) filter.level = level;
     if (business) filter.recommendedBusiness = new RegExp(business, 'i');
@@ -86,7 +93,7 @@ exports.getResults = async (req, res, next) => {
 
     const total = await Result.countDocuments(filter);
     const results = await query
-      .sort({ createdAt: -1 })
+      .sort(SORT_OPTIONS[sortBy] || SORT_OPTIONS['date-desc'])
       .skip((+page - 1) * +limit)
       .limit(+limit);
 
@@ -96,8 +103,9 @@ exports.getResults = async (req, res, next) => {
 
 exports.exportPDF = async (req, res, next) => {
   try {
-    const { dateFrom, dateTo, level, business } = req.query;
+    const { dateFrom, dateTo, level, business, ids } = req.query;
     const filter = {};
+    if (ids) filter._id = { $in: ids.split(',') };
     if (level) filter.level = level;
     if (business) filter.recommendedBusiness = new RegExp(business, 'i');
     if (dateFrom || dateTo) {
@@ -120,8 +128,9 @@ exports.exportPDF = async (req, res, next) => {
 
 exports.exportCSV = async (req, res, next) => {
   try {
-    const { dateFrom, dateTo, level, business } = req.query;
+    const { dateFrom, dateTo, level, business, ids } = req.query;
     const filter = {};
+    if (ids) filter._id = { $in: ids.split(',') };
     if (level) filter.level = level;
     if (business) filter.recommendedBusiness = new RegExp(business, 'i');
     if (dateFrom || dateTo) {

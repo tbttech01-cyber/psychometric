@@ -7,6 +7,8 @@
     "start": "node backend/server.js",
     "dev": "nodemon backend/server.js",
     "seed": "node backend/scripts/seed.js",
+    "seed:dummy": "node backend/scripts/seedDummyData.js",
+    "seed:matrix": "node backend/scripts/seedBusinessMatrixDummy.js",
     "test": "jest --runInBand"
   },
   "dependencies": {

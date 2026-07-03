@@ -1,0 +1,83 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { Users, CheckCircle2, BarChart3, KeyRound } from "lucide-react";
+import { api, getToken, API_BASE_URL } from "@/lib/api";
+import { useToast } from "@/components/ToastProvider";
+import StatCard from "@/components/StatCard";
+import DoughnutChart from "@/components/DoughnutChart";
+import type { DashboardData } from "@/lib/types";
+
+const LEVELS = [
+  { key: "Excellent", color: "#10B981" },
+  { key: "Good", color: "#3B82F6" },
+  { key: "Average", color: "#F59E0B" },
+  { key: "Needs Improvement", color: "#EF4444" },
+];
+
+export default function ReportsPage() {
+  const showToast = useToast();
+  const token = getToken();
+  const [dash, setDash] = useState<DashboardData | null>(null);
+  const [levelCounts, setLevelCounts] = useState<{ key: string; color: string; count: number }[]>([]);
+
+  useEffect(() => {
+    (async () => {
+      const [dashRes, ...levelResArr] = await Promise.all([
+        api.get<DashboardData>("/admin/dashboard", token),
+        ...LEVELS.map((l) => api.get(`/admin/results?level=${encodeURIComponent(l.key)}&limit=1`, token)),
+      ]);
+      if (!dashRes.ok) { showToast("Failed to load report data.", "error"); return; }
+      setDash(dashRes.data);
+      setLevelCounts(LEVELS.map((l, i) => ({ ...l, count: levelResArr[i].ok ? levelResArr[i].data.total : 0 })));
+    })();
+  }, [token, showToast]);
+
+  const maxCount = Math.max(1, ...levelCounts.map((l) => l.count));
+
+  return (
+    <>
+      <header className="bg-white border-b px-6 py-4 flex justify-between items-center">
+        <h1 className="text-xl font-bold" style={{ color: "var(--tbt-primary)" }}>Reports</h1>
+        <div className="flex gap-2">
+          <a href={`${API_BASE_URL}/admin/export/pdf`} className="btn btn-primary btn-sm">Export Full Report (PDF)</a>
+          <a href={`${API_BASE_URL}/admin/export/csv`} className="btn btn-outline btn-sm">Export Full Report (CSV)</a>
+        </div>
+      </header>
+      <main className="p-6 space-y-6">
+        {!dash ? (
+          <div className="text-center py-20"><div className="spinner mx-auto" /></div>
+        ) : (
+          <div className="space-y-6">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+              <StatCard icon={Users} value={dash.cards.totalUsersRegistered} label="Registered Users" />
+              <StatCard icon={CheckCircle2} value={dash.cards.totalAssessmentsCompleted} label="Completed Assessments" />
+              <StatCard icon={BarChart3} value={`${dash.cards.averageScore}/200`} label="Average Score" />
+              <StatCard icon={KeyRound} value={dash.cards.activeSharedCodes} label="Active Access Codes" />
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="card">
+                <h3 className="font-bold mb-4" style={{ color: "var(--tbt-primary)" }}>Results by Level</h3>
+                <div className="space-y-3">
+                  {levelCounts.map((l) => (
+                    <div key={l.key}>
+                      <div className="flex justify-between text-sm mb-1">
+                        <span className="font-semibold">{l.key}</span><span>{l.count}</span>
+                      </div>
+                      <div className="cat-bar"><div className="cat-bar-fill" style={{ width: `${(l.count / maxCount) * 100}%`, background: l.color }} /></div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div className="card">
+                <h3 className="font-bold mb-4" style={{ color: "var(--tbt-primary)" }}>Business Distribution</h3>
+                <DoughnutChart labels={dash.pieChart.labels} data={dash.pieChart.data} />
+              </div>
+            </div>
+          </div>
+        )}
+      </main>
+    </>
+  );
+}

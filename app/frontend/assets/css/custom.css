@@ -1,6 +1,7 @@
 :root {
-  --tbt-primary: #1E3A5F;
-  --tbt-accent: #F59E0B;
+  --tbt-primary: #CB1417;
+  --tbt-primary-dark: #970F12;
+  --tbt-accent: #1F2937;
   --tbt-success: #10B981;
   --tbt-danger: #EF4444;
   --tbt-text: #1F2937;
@@ -72,10 +73,10 @@ body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; back
 /* Btn */
 .btn { display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem; padding: 0.625rem 1.25rem; border-radius: 0.5rem; font-size: 0.9rem; font-weight: 600; cursor: pointer; transition: all 0.2s; border: none; }
 .btn-primary { background: var(--tbt-primary); color: white; }
-.btn-primary:hover { background: #162d4a; }
+.btn-primary:hover { background: var(--tbt-primary-dark); }
 .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
 .btn-accent { background: var(--tbt-accent); color: white; }
-.btn-accent:hover { background: #d97706; }
+.btn-accent:hover { background: #111827; }
 .btn-outline { background: transparent; border: 2px solid var(--tbt-primary); color: var(--tbt-primary); }
 .btn-outline:hover { background: var(--tbt-primary); color: white; }
 .btn-danger { background: var(--tbt-danger); color: white; }
