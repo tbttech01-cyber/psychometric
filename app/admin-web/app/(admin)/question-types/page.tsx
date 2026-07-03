@@ -51,9 +51,15 @@ export default function QuestionTypesPage() {
 
   useEffect(() => { load(); }, [load]);
 
+  function nextAvailableOrder() {
+    const used = new Set(types.map((t) => t.order));
+    for (let i = 1; i <= 8; i++) if (!used.has(i)) return i;
+    return types.length + 1;
+  }
+
   function openAdd() {
     setEditingId(null);
-    setForm({ ...EMPTY_FORM, order: types.length + 1 });
+    setForm({ ...EMPTY_FORM, order: nextAvailableOrder() });
     setShowForm(true);
   }
 
@@ -95,7 +101,16 @@ export default function QuestionTypesPage() {
       <PageHeader
         title="Question Types"
         breadcrumb="Manage the 8 psychometric dimensions of the assessment"
-        actions={<button onClick={openAdd} className="btn btn-primary btn-sm">+ Add Category</button>}
+        actions={
+          <button
+            onClick={openAdd}
+            disabled={activeCount >= 8}
+            title={activeCount >= 8 ? "Maximum 8 active categories — deactivate one first." : undefined}
+            className="btn btn-primary btn-sm"
+          >
+            + Add Category
+          </button>
+        }
       />
       <main className="p-6 space-y-4">
         <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">

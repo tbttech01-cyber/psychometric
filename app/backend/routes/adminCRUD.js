@@ -33,7 +33,10 @@ router.get('/shared-ids/:id/stats', ctrl.sharedIDStats);
 // Question Types
 router.get('/question-types', ctrl.listQuestionTypes);
 router.post('/question-types',
-  [body('name').notEmpty(), body('order').isInt({ min: 1, max: 8 })],
+  [
+    body('name').notEmpty().withMessage('Category name is required.'),
+    body('order').isInt({ min: 1, max: 8 }).withMessage('Display order must be a number from 1 to 8.'),
+  ],
   validate, ctrl.createQuestionType
 );
 router.put('/question-types/:id', ctrl.updateQuestionType);
