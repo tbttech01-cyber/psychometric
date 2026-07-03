@@ -10,7 +10,12 @@ router.use(adminAuth);
 router.get('/users', ctrl.listUsers);
 router.get('/users/generate-candidate-id', ctrl.generateCandidateId);
 router.post('/users',
-  [body('name').notEmpty(), body('email').isEmail(), body('password').isLength({ min: 6 }), body('sharedCode').notEmpty()],
+  [
+    body('name').notEmpty().withMessage('Name is required.'),
+    body('email').isEmail().withMessage('A valid email address is required.'),
+    body('password').isLength({ min: 6 }).withMessage('Password must be at least 6 characters.'),
+    body('sharedCode').notEmpty().withMessage('Access code is required.'),
+  ],
   validate, ctrl.createUser
 );
 router.delete('/users/:id', ctrl.deleteUser);

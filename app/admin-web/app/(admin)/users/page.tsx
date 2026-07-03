@@ -68,6 +68,14 @@ export default function UsersPage() {
       showToast("Name, email, password, and access code are required.", "error");
       return;
     }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) {
+      showToast("Please enter a valid email address.", "error");
+      return;
+    }
+    if (form.password.length < 6) {
+      showToast("Password must be at least 6 characters.", "error");
+      return;
+    }
     const { ok, data } = await api.post("/admin/users", {
       name: form.name, email: form.email, password: form.password,
       sharedCode: form.sharedCode, phone: form.phone, batch: form.batch,
