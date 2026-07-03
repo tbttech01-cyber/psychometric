@@ -42,6 +42,7 @@ export default function QuestionTypesPage() {
     if (questionsRes.ok) {
       const c: Record<string, number> = {};
       for (const q of questionsRes.data.data) {
+        if (!q.isActive) continue; // matches the backend's own linked-questions check
         const id = q.typeId?._id || q.typeId;
         c[id] = (c[id] || 0) + 1;
       }
@@ -175,7 +176,14 @@ export default function QuestionTypesPage() {
                 <div className="flex gap-2 items-center">
                   <Link href={`/questions?typeId=${t._id}`} className="text-sm font-semibold" style={{ color: "var(--tbt-primary)" }}>View Questions →</Link>
                   <button onClick={() => openEdit(t)} className="btn btn-outline btn-sm">Edit</button>
-                  <button onClick={() => setDeleteTarget(t)} className="btn btn-danger btn-sm">Delete</button>
+                  <button
+                    onClick={() => setDeleteTarget(t)}
+                    disabled={!!counts[t._id]}
+                    title={counts[t._id] ? "Cannot deactivate: active questions are linked. Deactivate or reassign them first." : undefined}
+                    className="btn btn-danger btn-sm"
+                  >
+                    Delete
+                  </button>
                 </div>
               </div>
             </div>
