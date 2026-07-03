@@ -53,7 +53,7 @@ body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; back
 .badge-pending { background: #FEF3C7; color: #B45309; }
 
 /* Sidebar */
-.sidebar { width: 248px; min-height: 100vh; background: var(--tbt-sidebar-bg); color: white; flex-shrink: 0; }
+.sidebar { width: 248px; height: 100vh; position: sticky; top: 0; background: var(--tbt-sidebar-bg); color: white; flex-shrink: 0; }
 .sidebar a { display: flex; align-items: center; gap: 0.75rem; margin: 0.125rem 0.75rem; padding: 0.625rem 0.75rem; color: var(--tbt-sidebar-text); text-decoration: none; font-size: 0.875rem; font-weight: 500; transition: all 0.2s; border-radius: 0.625rem; border-left: 3px solid transparent; }
 .sidebar a:hover { color: white; background: rgba(255,255,255,0.06); }
 .sidebar a.active { color: white; background: var(--tbt-sidebar-active-bg); border-left-color: var(--tbt-primary); }
