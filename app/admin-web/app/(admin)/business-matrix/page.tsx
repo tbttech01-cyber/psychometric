@@ -178,6 +178,7 @@ export default function BusinessMatrixPage() {
               value={formName}
               onChange={(e) => setFormName(e.target.value)}
               placeholder="e.g. Strategic Branding"
+              maxLength={80}
               className="border rounded-xl px-3.5 py-2.5 w-full focus:outline-none mb-4"
               style={{ borderColor: "var(--tbt-border)" }}
             />

@@ -46,6 +46,7 @@ function QuestionsPageInner() {
   const [qActive, setQActive] = useState(true);
   const [options, setOptions] = useState<Option[]>(DEFAULT_OPTIONS);
   const [deleteTarget, setDeleteTarget] = useState<Question | null>(null);
+  const [usedOrders, setUsedOrders] = useState<number[]>([]);
 
   const loadTypes = useCallback(async () => {
     const { ok, data } = await api.get("/admin/question-types", token);
@@ -59,14 +60,28 @@ function QuestionsPageInner() {
     setRows(data.data);
   }, [fType, token]);
 
+  // Independent of the category filter above — needed to know the true
+  // total (for the 40-question cap) and which order slots are free.
+  const loadAllOrders = useCallback(async () => {
+    const { ok, data } = await api.get("/admin/questions", token);
+    if (ok) setUsedOrders(data.data.map((q: Question) => q.order));
+  }, [token]);
+
   useEffect(() => { loadTypes(); }, [loadTypes]);
   useEffect(() => { load(); }, [load]);
+  useEffect(() => { loadAllOrders(); }, [loadAllOrders]);
+
+  function nextAvailableOrder() {
+    const used = new Set(usedOrders);
+    for (let i = 1; i <= 40; i++) if (!used.has(i)) return i;
+    return "";
+  }
 
   function resetForm() {
     setEditingId(null);
     setEditingOptionIds([]);
     setQType(fType || types[0]?._id || "");
-    setQOrder("");
+    setQOrder(nextAvailableOrder());
     setQText("");
     setQActive(true);
     setOptions(DEFAULT_OPTIONS);
@@ -118,6 +133,7 @@ function QuestionsPageInner() {
     }
     setShowForm(false);
     load();
+    loadAllOrders();
   }
 
   async function confirmDelete() {
@@ -127,6 +143,7 @@ function QuestionsPageInner() {
     if (!ok) { showToast(data.message || "Delete failed.", "error"); return; }
     showToast("Question deleted.", "success");
     load();
+    loadAllOrders();
   }
 
   const filteredRows = rows.filter((q) => {
@@ -145,7 +162,16 @@ function QuestionsPageInner() {
       <PageHeader
         title="Questions"
         breadcrumb="Manage all 40 assessment questions across categories"
-        actions={<button onClick={openAdd} className="btn btn-primary btn-sm">+ Add Question</button>}
+        actions={
+          <button
+            onClick={openAdd}
+            disabled={usedOrders.length >= 40}
+            title={usedOrders.length >= 40 ? "Maximum 40 questions — delete one first." : undefined}
+            className="btn btn-primary btn-sm"
+          >
+            + Add Question
+          </button>
+        }
       />
       <main className="p-6 space-y-4">
         {showForm && (

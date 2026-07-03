@@ -42,6 +42,7 @@ export default function SharedIdsPage() {
 
   async function createCode() {
     if (!newCode || !newLabel) { showToast("Code and label required.", "error"); return; }
+    if (!/^[A-Z0-9]+$/.test(newCode)) { showToast("Code must contain only letters and numbers.", "error"); return; }
     const { ok, data } = await api.post("/admin/shared-ids", { code: newCode.toUpperCase(), label: newLabel }, token);
     if (!ok) { showToast(data.message || "Failed.", "error"); return; }
     showToast("Code created!", "success");

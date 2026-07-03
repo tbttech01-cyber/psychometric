@@ -23,7 +23,10 @@ router.delete('/users/:id', ctrl.deleteUser);
 // Shared User IDs
 router.get('/shared-ids', ctrl.listSharedIDs);
 router.post('/shared-ids',
-  [body('code').notEmpty().isAlphanumeric(), body('label').notEmpty()],
+  [
+    body('code').notEmpty().withMessage('Code is required.').isAlphanumeric().withMessage('Code must contain only letters and numbers.'),
+    body('label').notEmpty().withMessage('Label is required.'),
+  ],
   validate, ctrl.createSharedID
 );
 router.put('/shared-ids/:id', ctrl.updateSharedID);
@@ -46,7 +49,11 @@ router.delete('/question-types/:id', ctrl.deleteQuestionType);
 router.get('/questions', ctrl.listQuestions);
 router.get('/questions/:id', ctrl.getQuestion);
 router.post('/questions',
-  [body('typeId').notEmpty(), body('text').notEmpty(), body('order').isInt({ min: 1, max: 40 })],
+  [
+    body('typeId').notEmpty().withMessage('Category is required.'),
+    body('text').notEmpty().withMessage('Question text is required.'),
+    body('order').isInt({ min: 1, max: 40 }).withMessage('Display order must be a number from 1 to 40.'),
+  ],
   validate, ctrl.createQuestion
 );
 router.put('/questions/:id', ctrl.updateQuestion);
@@ -56,10 +63,10 @@ router.delete('/questions/:id', ctrl.deleteQuestion);
 router.get('/answer-options', [query('questionId').notEmpty()], validate, ctrl.listAnswerOptions);
 router.post('/answer-options',
   [
-    body('questionId').notEmpty(),
-    body('label').notEmpty(),
-    body('marks').isInt({ min: 1, max: 5 }),
-    body('order').isInt({ min: 1, max: 5 }),
+    body('questionId').notEmpty().withMessage('Question is required.'),
+    body('label').notEmpty().withMessage('Option label is required.'),
+    body('marks').isInt({ min: 1, max: 5 }).withMessage('Marks must be a number from 1 to 5.'),
+    body('order').isInt({ min: 1, max: 5 }).withMessage('Order must be a number from 1 to 5.'),
   ],
   validate, ctrl.createAnswerOption
 );
