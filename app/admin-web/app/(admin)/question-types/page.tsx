@@ -72,6 +72,10 @@ export default function QuestionTypesPage() {
 
   async function save() {
     if (!form.name || !form.description) { showToast("Name and description are required.", "error"); return; }
+    if (types.some((t) => t._id !== editingId && t.name.toLowerCase() === form.name.trim().toLowerCase())) {
+      showToast("A category with that name already exists.", "error");
+      return;
+    }
     if (editingId) {
       const { ok, data } = await api.put(`/admin/question-types/${editingId}`, form, token);
       if (!ok) { showToast(data.message || "Update failed.", "error"); return; }
@@ -131,7 +135,7 @@ export default function QuestionTypesPage() {
               {editingId ? "Edit Category" : "Add New Category"}
             </h3>
             <div className="grid md:grid-cols-2 gap-3 mb-3">
-              <input placeholder="Category name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })}
+              <input placeholder="Category name" value={form.name} maxLength={60} onChange={(e) => setForm({ ...form, name: e.target.value })}
                 className="border rounded-xl px-3.5 py-2.5 focus:outline-none" style={{ borderColor: "var(--tbt-border)" }} />
               <input type="number" min={1} max={8} placeholder="Display order (1-8)" value={form.order}
                 onChange={(e) => setForm({ ...form, order: +e.target.value })}
@@ -141,7 +145,7 @@ export default function QuestionTypesPage() {
               <input type="color" value={form.color} onChange={(e) => setForm({ ...form, color: e.target.value })}
                 className="border rounded-xl px-3.5 py-2.5 h-11 focus:outline-none" style={{ borderColor: "var(--tbt-border)" }} />
             </div>
-            <textarea placeholder="Description" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })}
+            <textarea placeholder="Description" value={form.description} maxLength={300} onChange={(e) => setForm({ ...form, description: e.target.value })}
               className="border rounded-xl px-3.5 py-2.5 w-full focus:outline-none mb-3" rows={2} style={{ borderColor: "var(--tbt-border)" }} />
             {types.some((t) => t.order === form.order && t._id !== editingId) && (
               <p className="text-xs mb-3 flex items-center gap-1.5" style={{ color: "var(--tbt-accent)" }}>

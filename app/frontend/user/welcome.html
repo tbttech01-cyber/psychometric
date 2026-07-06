@@ -37,8 +37,10 @@
       const btn = document.getElementById('btn-start');
       btn.disabled = true; btn.textContent = 'Starting...';
       const { ok, data } = await api.post('/assessment/start', {}, token);
-      if (!ok && data.sessionId) { window.location.href = '/user/assessment.html'; return; }
-      if (!ok) { showToast(data.message || 'Failed to start.', 'error'); btn.disabled = false; btn.textContent = 'Start Assessment'; return; }
+      if (!ok && !data.sessionId) { showToast(data.message || 'Failed to start.', 'error'); btn.disabled = false; btn.textContent = 'Start Assessment'; return; }
+      // A 409 "already in progress" response still carries the existing session's
+      // id/expiry — resume it instead of leaving assessment.html's localStorage
+      // guard with nothing to find (which would just bounce the user back here).
       localStorage.setItem('tbt_session_id', data.sessionId);
       localStorage.setItem('tbt_session_expires', data.expiresAt);
       window.location.href = '/user/assessment.html';

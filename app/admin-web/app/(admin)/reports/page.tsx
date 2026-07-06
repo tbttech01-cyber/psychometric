@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Users, CheckCircle2, BarChart3, KeyRound } from "lucide-react";
-import { api, getToken, API_BASE_URL } from "@/lib/api";
+import { api, getToken, downloadFile } from "@/lib/api";
 import { useToast } from "@/components/ToastProvider";
 import StatCard from "@/components/StatCard";
 import DoughnutChart from "@/components/DoughnutChart";
@@ -35,13 +35,19 @@ export default function ReportsPage() {
 
   const maxCount = Math.max(1, ...levelCounts.map((l) => l.count));
 
+  async function doExport(kind: "pdf" | "csv") {
+    const date = new Date().toISOString().split("T")[0];
+    const { ok, message } = await downloadFile(`/admin/export/${kind}`, token, `tbt_results_${date}.${kind}`);
+    if (!ok) showToast(message || "Export failed.", "error");
+  }
+
   return (
     <>
       <header className="bg-white border-b px-6 py-4 flex justify-between items-center">
         <h1 className="text-xl font-bold" style={{ color: "var(--tbt-primary)" }}>Reports</h1>
         <div className="flex gap-2">
-          <a href={`${API_BASE_URL}/admin/export/pdf`} className="btn btn-primary btn-sm">Export Full Report (PDF)</a>
-          <a href={`${API_BASE_URL}/admin/export/csv`} className="btn btn-outline btn-sm">Export Full Report (CSV)</a>
+          <button onClick={() => doExport("pdf")} className="btn btn-primary btn-sm">Export Full Report (PDF)</button>
+          <button onClick={() => doExport("csv")} className="btn btn-outline btn-sm">Export Full Report (CSV)</button>
         </div>
       </header>
       <main className="p-6 space-y-6">

@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { BarChart3, Trophy, CheckSquare, Search } from "lucide-react";
-import { api, getToken, API_BASE_URL } from "@/lib/api";
+import { api, getToken, downloadFile } from "@/lib/api";
 import { useToast } from "@/components/ToastProvider";
 import StatCard from "@/components/StatCard";
 import PageHeader from "@/components/PageHeader";
@@ -97,6 +97,12 @@ export default function ResultsPage() {
   const exportQS = buildQS().replace(/page=\d+&?/, "").replace(/limit=\d+&?/, "");
   const selectedIds = [...selected].join(",");
 
+  async function doExport(kind: "pdf" | "csv", qs: string) {
+    const date = new Date().toISOString().split("T")[0];
+    const { ok, message } = await downloadFile(`/admin/export/${kind}?${qs}`, token, `tbt_results_${date}.${kind}`);
+    if (!ok) showToast(message || "Export failed.", "error");
+  }
+
   return (
     <>
       <PageHeader
@@ -104,8 +110,8 @@ export default function ResultsPage() {
         breadcrumb="Review, filter, and export psychometric performance metrics"
         actions={
           <div className="flex gap-2">
-            <a href={`${API_BASE_URL}/admin/export/pdf?${exportQS}`} className="btn btn-primary btn-sm">Export PDF</a>
-            <a href={`${API_BASE_URL}/admin/export/csv?${exportQS}`} className="btn btn-outline btn-sm">Export CSV</a>
+            <button onClick={() => doExport("pdf", exportQS)} className="btn btn-primary btn-sm">Export PDF</button>
+            <button onClick={() => doExport("csv", exportQS)} className="btn btn-outline btn-sm">Export CSV</button>
           </div>
         }
       />
@@ -195,8 +201,8 @@ export default function ResultsPage() {
         <div className="fixed bottom-0 left-0 right-0 md:left-[248px] bg-white border-t px-6 py-3 flex items-center justify-between shadow-lg">
           <span className="text-sm font-semibold">{selected.size} result(s) selected</span>
           <div className="flex gap-2">
-            <a href={`${API_BASE_URL}/admin/export/pdf?ids=${selectedIds}`} className="btn btn-primary btn-sm">Export Selected PDF</a>
-            <a href={`${API_BASE_URL}/admin/export/csv?ids=${selectedIds}`} className="btn btn-outline btn-sm">Export Selected CSV</a>
+            <button onClick={() => doExport("pdf", `ids=${selectedIds}`)} className="btn btn-primary btn-sm">Export Selected PDF</button>
+            <button onClick={() => doExport("csv", `ids=${selectedIds}`)} className="btn btn-outline btn-sm">Export Selected CSV</button>
             <button onClick={() => setSelected(new Set())} className="btn btn-outline btn-sm">Clear Selection</button>
           </div>
         </div>

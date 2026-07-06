@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { api, getToken } from "@/lib/api";
 
-type Question = { _id: string; order: number; text: string };
+type Question = { _id: string; order: number; text: string; isActive: boolean };
 type Option = { _id: string; order: number; label: string; marks: number };
 
 export default function AnswerOptionsPage() {
@@ -15,7 +15,7 @@ export default function AnswerOptionsPage() {
   useEffect(() => {
     (async () => {
       const { ok, data } = await api.get("/admin/questions", token);
-      if (ok) setQuestions(data.data);
+      if (ok) setQuestions(data.data.filter((q: Question) => q.isActive));
     })();
   }, [token]);
 

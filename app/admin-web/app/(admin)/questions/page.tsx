@@ -62,9 +62,11 @@ function QuestionsPageInner() {
 
   // Independent of the category filter above — needed to know the true
   // total (for the 40-question cap) and which order slots are free.
+  // Only active questions occupy a slot: deleted questions are soft-deactivated
+  // (kept for historical/audit reasons) and must not permanently block their order.
   const loadAllOrders = useCallback(async () => {
     const { ok, data } = await api.get("/admin/questions", token);
-    if (ok) setUsedOrders(data.data.map((q: Question) => q.order));
+    if (ok) setUsedOrders(data.data.filter((q: Question) => q.isActive).map((q: Question) => q.order));
   }, [token]);
 
   useEffect(() => { loadTypes(); }, [loadTypes]);

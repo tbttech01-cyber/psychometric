@@ -28,7 +28,7 @@ exports.createSharedID = async (req, res, next) => {
 
 exports.updateSharedID = async (req, res, next) => {
   try {
-    const doc = await SharedUserID.findByIdAndUpdate(req.params.id, { $set: req.body }, { new: true });
+    const doc = await SharedUserID.findByIdAndUpdate(req.params.id, { $set: req.body }, { new: true, runValidators: true });
     if (!doc) return res.status(404).json({ success: false, message: 'Not found.' });
     res.json({ success: true, data: doc });
   } catch (err) { next(err); }
@@ -82,7 +82,7 @@ exports.updateQuestionType = async (req, res, next) => {
         }
       }
     }
-    const doc = await QuestionType.findByIdAndUpdate(req.params.id, { $set: req.body }, { new: true });
+    const doc = await QuestionType.findByIdAndUpdate(req.params.id, { $set: req.body }, { new: true, runValidators: true });
     if (!doc) return res.status(404).json({ success: false, message: 'Not found.' });
     res.json({ success: true, data: doc });
   } catch (err) { next(err); }
@@ -129,7 +129,7 @@ exports.createQuestion = async (req, res, next) => {
 
 exports.updateQuestion = async (req, res, next) => {
   try {
-    const doc = await Question.findByIdAndUpdate(req.params.id, { $set: req.body }, { new: true });
+    const doc = await Question.findByIdAndUpdate(req.params.id, { $set: req.body }, { new: true, runValidators: true });
     if (!doc) return res.status(404).json({ success: false, message: 'Not found.' });
     res.json({ success: true, data: doc });
   } catch (err) { next(err); }
@@ -137,7 +137,10 @@ exports.updateQuestion = async (req, res, next) => {
 
 exports.deleteQuestion = async (req, res, next) => {
   try {
-    await Question.findByIdAndUpdate(req.params.id, { isActive: false });
+    // order has a global-unique index, so a soft-deleted question must vacate its
+    // 1-40 slot (via an out-of-range sentinel) or that slot can never be reused.
+    const sentinelOrder = -Date.now();
+    await Question.findByIdAndUpdate(req.params.id, { isActive: false, order: sentinelOrder });
     await AnswerOption.updateMany({ questionId: req.params.id }, { $set: { order: 0 } }); // soft deactivate
     res.json({ success: true });
   } catch (err) { next(err); }
@@ -162,7 +165,7 @@ exports.createAnswerOption = async (req, res, next) => {
 
 exports.updateAnswerOption = async (req, res, next) => {
   try {
-    const doc = await AnswerOption.findByIdAndUpdate(req.params.id, { $set: req.body }, { new: true });
+    const doc = await AnswerOption.findByIdAndUpdate(req.params.id, { $set: req.body }, { new: true, runValidators: true });
     if (!doc) return res.status(404).json({ success: false, message: 'Not found.' });
     res.json({ success: true, data: doc });
   } catch (err) { next(err); }

@@ -66,3 +66,27 @@ export function setStoredAdmin(admin: { _id: string; email: string }) {
 }
 
 export const API_BASE_URL = API_BASE;
+
+// Export endpoints require the admin's bearer token, so they can't be plain
+// <a href> links (a browser navigation carries no Authorization header — the
+// user would just get redirected to a raw 401 JSON response). Fetch the file
+// with the token attached and trigger the download via a blob URL instead.
+export async function downloadFile(path: string, token: string | null, filename: string): Promise<{ ok: boolean; message?: string }> {
+  const headers: Record<string, string> = {};
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+  const res = await fetch(`${API_BASE}${path}`, { headers });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    return { ok: false, message: data.message || "Export failed." };
+  }
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+  return { ok: true };
+}

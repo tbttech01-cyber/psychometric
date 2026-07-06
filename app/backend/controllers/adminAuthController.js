@@ -39,7 +39,10 @@ exports.changePassword = async (req, res, next) => {
     const { currentPassword, newPassword } = req.body;
     const admin = await Admin.findById(req.admin._id);
     const match = await bcrypt.compare(currentPassword, admin.passwordHash);
-    if (!match) return res.status(401).json({ success: false, message: 'Current password is incorrect.' });
+    // 400, not 401: the admin's session is valid (adminAuth already passed) — this is a
+    // wrong-form-input error, not an auth failure. A 401 here would trip the frontend's
+    // "session expired" interceptor and force-logout the admin over a typo.
+    if (!match) return res.status(400).json({ success: false, message: 'Current password is incorrect.' });
 
     admin.passwordHash = await bcrypt.hash(newPassword, 10);
     admin.activeToken = undefined;

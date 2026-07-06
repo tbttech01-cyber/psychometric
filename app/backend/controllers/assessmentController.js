@@ -49,7 +49,7 @@ exports.startSession = async (req, res, next) => {
 
     const inProgress = await AssessmentSession.findOne({ userId, status: 'in-progress' });
     if (inProgress)
-      return res.status(409).json({ success: false, sessionId: inProgress._id, message: 'Assessment already in progress.' });
+      return res.status(409).json({ success: false, sessionId: inProgress._id, expiresAt: inProgress.expiresAt, message: 'Assessment already in progress.' });
 
     const startedAt = new Date();
     const expiresAt = new Date(startedAt.getTime() + 30 * 60 * 1000);
