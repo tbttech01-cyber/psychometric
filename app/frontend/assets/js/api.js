@@ -1,4 +1,4 @@
-const API_BASE = '/api/v1';
+const API_BASE = (window.TBT_API_BASE || '') + '/api/v1';
 
 const _req = async (method, path, body, token) => {
   const headers = { 'Content-Type': 'application/json' };
