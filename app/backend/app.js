@@ -4,13 +4,36 @@ const helmet = require('helmet');
 const morgan = require('morgan');
 const rateLimit = require('express-rate-limit');
 const path = require('path');
+const mongoose = require('mongoose');
 
 const app = express();
+
+// Running behind a reverse proxy (Vercel, Render) — trust its X-Forwarded-For
+// so express-rate-limit identifies real client IPs instead of throwing.
+app.set('trust proxy', 1);
 
 app.use(helmet({ contentSecurityPolicy: false }));
 const corsOrigins = [process.env.USER_APP_URL, process.env.ADMIN_APP_URL, process.env.ADMIN_WEB_URL].filter(Boolean);
 app.use(cors(corsOrigins.length ? { origin: corsOrigins } : {}));
 app.use(express.json());
+
+// On a persistent server (server.js), connectDB() already runs once at boot,
+// so this is a no-op (readyState is already 1). On a serverless platform
+// (e.g. Vercel), there's no boot-time hook — the connection has to be
+// established lazily on first request and cached across warm invocations.
+// Placed after cors() so CORS preflight (OPTIONS) is answered immediately
+// without waiting on — or failing because of — the database.
+app.use(async (req, res, next) => {
+  if (mongoose.connection.readyState === 1) return next();
+  try {
+    if (!global.__tbtMongoConnect) global.__tbtMongoConnect = mongoose.connect(process.env.MONGO_URI);
+    await global.__tbtMongoConnect;
+    next();
+  } catch (err) {
+    global.__tbtMongoConnect = undefined;
+    next(err);
+  }
+});
 if (process.env.NODE_ENV !== 'test') {
   app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));
 }
