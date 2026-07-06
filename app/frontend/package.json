@@ -1,0 +1,7 @@
+{
+  "name": "tbt-candidate-frontend",
+  "private": true,
+  "scripts": {
+    "build": "node build-env.js"
+  }
+}
