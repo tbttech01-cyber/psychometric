@@ -27,8 +27,15 @@ body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; back
 .toast.info { background: var(--tbt-primary); }
 
 /* OTP inputs */
+.otp-boxes { gap: 0.5rem; }
 .otp-box { width: 3rem; height: 3.5rem; text-align: center; font-size: 1.5rem; font-weight: 700; border: 2px solid var(--tbt-border); border-radius: 0.5rem; transition: border-color 0.2s; }
 .otp-box:focus { border-color: var(--tbt-primary); outline: none; box-shadow: 0 0 0 3px rgba(30,58,95,0.15); }
+
+/* 6 boxes at full size (48px + gap) overflow the card on phones narrower than ~420px */
+@media (max-width: 420px) {
+  .otp-boxes { gap: 0.3rem; }
+  .otp-box { width: 2.25rem; height: 2.75rem; font-size: 1.15rem; }
+}
 
 /* Assessment progress bar */
 .progress-bar-track { height: 8px; background: var(--tbt-border); border-radius: 999px; overflow: hidden; }

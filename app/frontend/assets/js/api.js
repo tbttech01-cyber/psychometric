@@ -28,7 +28,7 @@ const api = {
   requireAuth: (role = 'user') => {
     const token = localStorage.getItem(`tbt_${role}_token`);
     if (!token) {
-      window.location.href = role === 'admin' ? '/admin/login.html' : '/user/login.html';
+      window.location.href = '/user/login.html';
       return null;
     }
     return token;
