@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { api, getToken } from "@/lib/api";
 
 type Question = { _id: string; order: number; text: string; isActive: boolean };
-type Option = { _id: string; order: number; label: string; marks: number };
+type Option = { _id: string; order: number; optionText: string; score: number };
 
 export default function AnswerOptionsPage() {
   const token = getToken();
@@ -34,7 +34,7 @@ export default function AnswerOptionsPage() {
       </header>
       <main className="p-6 space-y-4">
         <div className="card text-sm" style={{ background: "#EFF6FF", borderColor: "#BFDBFE" }}>
-          All questions use a 5-point Likert scale. Select a question to view its options, or edit them from the Questions page.
+          Answer options vary by question type. Select a question to view its options, or edit them from the Questions page.
         </div>
         <div className="card flex gap-3">
           <label className="text-sm font-semibold self-center">Question:</label>
@@ -49,13 +49,13 @@ export default function AnswerOptionsPage() {
         {options && (
           <div className="card overflow-x-auto">
             <table className="data-table">
-              <thead><tr><th>Order</th><th>Label</th><th>Marks</th></tr></thead>
+              <thead><tr><th>Order</th><th>Option Text</th><th>Score</th></tr></thead>
               <tbody>
                 {options.map((o) => (
                   <tr key={o._id}>
                     <td>{o.order}</td>
-                    <td className="font-semibold">{o.label}</td>
-                    <td><span className="badge badge-good">{o.marks}</span></td>
+                    <td className="font-semibold">{o.optionText}</td>
+                    <td><span className="badge badge-good">{o.score}</span></td>
                   </tr>
                 ))}
               </tbody>

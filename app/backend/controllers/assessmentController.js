@@ -6,21 +6,24 @@ const Result = require('../models/Result');
 const User = require('../models/User');
 const QuestionType = require('../models/QuestionType');
 const { calculateResult } = require('../utils/scoreCalculator');
+const { evaluateAnswer } = require('../utils/evaluationEngine');
 
 exports.getQuestions = async (req, res, next) => {
   try {
     const types = await QuestionType.find({ isActive: true }).sort('order');
     const questions = await Question.find({ isActive: true }).sort('order');
     const questionIds = questions.map(q => q._id);
+    // Scoring secrets (score/isCorrect/dimensionScores) must never reach the
+    // candidate — same rule as the old `-marks` projection, generalized.
     const options = await AnswerOption.find({ questionId: { $in: questionIds } })
-      .select('-marks') // marks NEVER sent to users
+      .select('-score -isCorrect -dimensionScores')
       .sort('order');
 
     const optionsByQuestion = {};
     for (const opt of options) {
       const qId = opt.questionId.toString();
       if (!optionsByQuestion[qId]) optionsByQuestion[qId] = [];
-      optionsByQuestion[qId].push({ _id: opt._id, label: opt.label, order: opt.order });
+      optionsByQuestion[qId].push({ _id: opt._id, optionText: opt.optionText, optionImageUrl: opt.optionImageUrl, order: opt.order });
     }
 
     const result = types.map(type => ({
@@ -31,7 +34,12 @@ exports.getQuestions = async (req, res, next) => {
       questions: questions
         .filter(q => q.typeId.toString() === type._id.toString())
         .map(q => ({
+          // correctOptionId, explanation, idealOrder, correctOptionIds,
+          // scoringMode, isReverseScored are deliberately NOT included here.
           _id: q._id, text: q.text, order: q.order,
+          questionType: q.questionType, dimension: q.dimension, difficulty: q.difficulty,
+          timeLimitSeconds: q.timeLimitSeconds, imageUrl: q.imageUrl, instructionText: q.instructionText,
+          hasAudio: q.hasAudio, audioUrl: q.audioUrl,
           options: optionsByQuestion[q._id.toString()] || [],
         })),
     }));
@@ -77,8 +85,13 @@ exports.submitAssessment = async (req, res, next) => {
     if (!autoSubmitted && Date.now() > session.expiresAt.getTime() + BUFFER_MS)
       return res.status(400).json({ success: false, message: 'Assessment time has expired.' });
 
-    if (!autoSubmitted && answers.length !== 40)
-      return res.status(400).json({ success: false, message: 'All 40 questions must be answered.' });
+    // Fetched once up front and reused below to build categoryQuestionCounts —
+    // must reflect ALL active questions (not just this submission's answers),
+    // since an auto-submitted partial answer set would otherwise undercount
+    // each category's true max score.
+    const allActiveQuestions = await Question.find({ isActive: true });
+    if (!autoSubmitted && answers.length !== allActiveQuestions.length)
+      return res.status(400).json({ success: false, message: `All ${allActiveQuestions.length} questions must be answered.` });
 
     // Validate every answer
     const questionIds = answers.map(a => a.questionId);
@@ -89,6 +102,16 @@ exports.submitAssessment = async (req, res, next) => {
     const options = await AnswerOption.find({ _id: { $in: optionIds } });
     const optionMap = Object.fromEntries(options.map(o => [o._id.toString(), o]));
 
+    // All options for every answered question — evaluateAnswer needs the
+    // full option set (e.g. to validate the chosen id belongs to the
+    // question), not just the one the candidate picked.
+    const allOptionsForQuestions = await AnswerOption.find({ questionId: { $in: questionIds } });
+    const optionsByQuestion = {};
+    for (const o of allOptionsForQuestions) {
+      const qid = o.questionId.toString();
+      (optionsByQuestion[qid] ||= []).push(o);
+    }
+
     const userAnswerDocs = [];
     for (const a of answers) {
       const q = questionMap[a.questionId];
@@ -97,9 +120,18 @@ exports.submitAssessment = async (req, res, next) => {
       if (!opt || opt.questionId.toString() !== a.questionId)
         return res.status(400).json({ success: false, message: 'Invalid answer option for question.' });
 
+      let evalResult;
+      try {
+        evalResult = evaluateAnswer(q, optionsByQuestion[a.questionId] || [], a.answerOptionId);
+      } catch (evalErr) {
+        return res.status(400).json({ success: false, message: evalErr.message });
+      }
+
       userAnswerDocs.push({
         sessionId, userId, questionId: a.questionId,
-        answerOptionId: a.answerOptionId, marks: opt.marks,
+        answerOptionId: a.answerOptionId,
+        score: evalResult.score, maxScore: evalResult.maxScore, isCorrect: evalResult.isCorrect,
+        dimension: q.dimension, dimensionScores: evalResult.dimensionScores,
         questionOrder: q.order, answeredAt: new Date(),
       });
     }
@@ -111,8 +143,17 @@ exports.submitAssessment = async (req, res, next) => {
     const typeMap = Object.fromEntries(types.map(t => [t._id.toString(), t.name]));
     const questionTypeMap = Object.fromEntries(questions.map(q => [q._id.toString(), typeMap[q.typeId.toString()]]));
 
+    // Each category's live total marks, used to compute its max score —
+    // marks are now admin-configurable per question, not a fixed 5.
+    const categoryQuestionMax = {};
+    for (const q of allActiveQuestions) {
+      const name = typeMap[q.typeId.toString()];
+      if (!name) continue;
+      categoryQuestionMax[name] = (categoryQuestionMax[name] || 0) + q.marks;
+    }
+
     // Score calculation
-    const scored = calculateResult(userAnswerDocs, questionTypeMap);
+    const scored = calculateResult(userAnswerDocs, questionTypeMap, categoryQuestionMax);
 
     const resultDoc = await Result.create({
       userId, sessionId,

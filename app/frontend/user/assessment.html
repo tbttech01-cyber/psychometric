@@ -18,7 +18,7 @@
     <div class="max-w-3xl mx-auto px-4 py-3 flex items-center justify-between">
       <span class="font-bold text-lg" style="color:var(--tbt-primary)">Tamil Business Tribe</span>
       <div class="flex items-center gap-4">
-        <span id="progress-text" class="text-sm font-medium" style="color:var(--tbt-muted)">0 / 40</span>
+        <span id="progress-text" class="text-sm font-medium" style="color:var(--tbt-muted)"></span>
         <div class="flex items-center gap-1 font-bold text-lg" id="timer-display" style="color:var(--tbt-danger)">30:00</div>
       </div>
     </div>
@@ -56,12 +56,13 @@
     const expiresAt = localStorage.getItem('tbt_session_expires');
     if (!sessionId || !expiresAt) window.location.href = '/user/welcome.html';
 
-    let sections = [], answers = {}, currentSection = 0, timer;
+    let sections = [], renderUnits = [], answers = {}, timedOut = {}, currentSection = 0, timer, questionTimer = null;
 
     async function loadQuestions() {
       const { ok, data } = await api.get('/assessment/questions', token);
       if (!ok) { showToast('Failed to load questions.', 'error'); return; }
       sections = data.data;
+      renderUnits = buildRenderUnits(sections);
       renderQuestions();
       document.getElementById('loading').classList.add('hidden');
       document.getElementById('question-container').classList.remove('hidden');
@@ -80,53 +81,139 @@
       showSection(0);
     }
 
+    // Categories containing only LIKERT_SCALE questions batch into one
+    // section per category, exactly as before. Any single-correct-answer
+    // aptitude question (currently NUMERICAL_ABILITY) explodes into its own
+    // one-question "unit" so it gets a dedicated counter/timer/next-gate —
+    // both unit kinds still map 1:1 onto a `.q-section` div, so the
+    // dot-nav/prev-next/progress-bar machinery below needs no other changes.
+    function buildRenderUnits(sections) {
+      const units = [];
+      sections.forEach((section) => {
+        const batch = section.questions.filter((q) => q.questionType === 'LIKERT_SCALE' || !q.questionType);
+        const singles = section.questions.filter((q) => q.questionType && q.questionType !== 'LIKERT_SCALE');
+        if (batch.length) units.push({ kind: 'batch', typeName: section.typeName, typeIcon: section.typeIcon, questions: batch });
+        singles.forEach((q) => units.push({ kind: 'single', typeName: section.typeName, typeIcon: section.typeIcon, question: q }));
+      });
+      return units;
+    }
+
+    function allQuestionsFlat() {
+      return sections.flatMap((s) => s.questions);
+    }
+
+    function renderLikertBatch(unit, totalQuestions, questionOffset) {
+      return `
+        <div class="card mb-6">
+          <div class="flex items-center gap-3 mb-4">
+            <span class="text-2xl">${unit.typeIcon}</span>
+            <div>
+              <h3 class="font-bold text-lg" style="color:var(--tbt-primary)">${unit.typeName}</h3>
+              <p class="text-xs" style="color:var(--tbt-muted)">Questions ${questionOffset + 1}–${questionOffset + unit.questions.length} of ${totalQuestions}</p>
+            </div>
+          </div>
+          ${unit.questions.map((q, qi) => `
+            <div class="mb-5 pb-5 ${qi < unit.questions.length-1 ? 'border-b' : ''}" style="border-color:var(--tbt-border)">
+              <p class="font-semibold mb-3 text-sm leading-relaxed">
+                <span class="inline-block w-6 h-6 rounded-full text-center text-xs leading-6 font-bold text-white mr-2" style="background:var(--tbt-primary)">${questionOffset+qi+1}</span>
+                ${q.text}
+              </p>
+              <div class="space-y-2">
+                ${q.options.map(opt => `
+                  <div class="likert-option">
+                    <input type="radio" name="q_${q._id}" id="opt_${opt._id}" value="${opt._id}" onchange="recordAnswer('${q._id}','${opt._id}')" ${answers[q._id]===opt._id?'checked':''} />
+                    <label for="opt_${opt._id}">${opt.optionText}</label>
+                  </div>
+                `).join('')}
+              </div>
+            </div>
+          `).join('')}
+        </div>`;
+    }
+
+    function renderMcqSingle(q, globalIndex, totalQuestions) {
+      const timerHtml = q.timeLimitSeconds
+        ? `<span id="q-timer-${q._id}" class="text-sm font-bold" style="color:var(--tbt-danger)"></span>`
+        : '';
+      return `
+        <div class="card mb-6">
+          <div class="flex justify-between items-center mb-3">
+            <span class="text-xs font-semibold" style="color:var(--tbt-muted)">Question ${globalIndex}/${totalQuestions}</span>
+            ${timerHtml}
+          </div>
+          ${q.instructionText ? `<p class="text-xs italic mb-2" style="color:var(--tbt-muted)">${q.instructionText}</p>` : ''}
+          ${q.imageUrl ? `<img src="${q.imageUrl}" alt="" class="max-w-full rounded-lg mb-4" />` : ''}
+          <p class="font-semibold mb-4 text-base leading-relaxed">${q.text}</p>
+          <div class="space-y-2" id="options-${q._id}">
+            ${q.options.map(opt => `
+              <div class="likert-option">
+                <input type="radio" name="q_${q._id}" id="opt_${opt._id}" value="${opt._id}" onchange="recordAnswer('${q._id}','${opt._id}')" ${answers[q._id]===opt._id?'checked':''} />
+                <label for="opt_${opt._id}">${opt.optionText}</label>
+              </div>
+            `).join('')}
+          </div>
+        </div>`;
+    }
+
     function renderQuestions() {
       const container = document.getElementById('question-container');
       const dots = document.getElementById('section-dots');
-      sections.forEach((section, si) => {
+      const totalQuestions = allQuestionsFlat().length;
+      const flat = allQuestionsFlat();
+      let questionOffset = 0;
+      renderUnits.forEach((unit, ui) => {
         const sec = document.createElement('div');
         sec.className = 'q-section';
-        sec.id = `section-${si}`;
-        sec.innerHTML = `
-          <div class="card mb-6">
-            <div class="flex items-center gap-3 mb-4">
-              <span class="text-2xl">${section.typeIcon}</span>
-              <div>
-                <h3 class="font-bold text-lg" style="color:var(--tbt-primary)">${section.typeName}</h3>
-                <p class="text-xs" style="color:var(--tbt-muted)">Questions ${si*5+1}–${si*5+5} of 40</p>
-              </div>
-            </div>
-            ${section.questions.map((q, qi) => `
-              <div class="mb-5 pb-5 ${qi < section.questions.length-1 ? 'border-b' : ''}" style="border-color:var(--tbt-border)">
-                <p class="font-semibold mb-3 text-sm leading-relaxed">
-                  <span class="inline-block w-6 h-6 rounded-full text-center text-xs leading-6 font-bold text-white mr-2" style="background:var(--tbt-primary)">${si*5+qi+1}</span>
-                  ${q.text}
-                </p>
-                <div class="space-y-2">
-                  ${q.options.map(opt => `
-                    <div class="likert-option">
-                      <input type="radio" name="q_${q._id}" id="opt_${opt._id}" value="${opt._id}" onchange="recordAnswer('${q._id}','${opt._id}')" ${answers[q._id]===opt._id?'checked':''} />
-                      <label for="opt_${opt._id}">${opt.label}</label>
-                    </div>
-                  `).join('')}
-                </div>
-              </div>
-            `).join('')}
-          </div>`;
+        sec.id = `section-${ui}`;
+        if (unit.kind === 'batch') {
+          sec.innerHTML = renderLikertBatch(unit, totalQuestions, questionOffset);
+          questionOffset += unit.questions.length;
+        } else {
+          const globalIndex = flat.indexOf(unit.question) + 1;
+          sec.innerHTML = renderMcqSingle(unit.question, globalIndex, totalQuestions);
+          questionOffset += 1;
+        }
         container.appendChild(sec);
 
         const dot = document.createElement('button');
         dot.className = 'w-3 h-3 rounded-full transition-all';
         dot.style.background = 'var(--tbt-border)';
-        dot.id = `dot-${si}`;
-        dot.onclick = () => showSection(si);
+        dot.id = `dot-${ui}`;
+        dot.onclick = () => showSection(ui);
         dots.appendChild(dot);
       });
     }
 
     function recordAnswer(qId, optId) {
       answers[qId] = optId;
+      // Once answered, the per-question timer's only job (forcing an answer
+      // before time runs out) is done — stop it so it doesn't auto-advance
+      // the candidate away from a question they already answered and may
+      // still be reviewing.
+      const unit = renderUnits[currentSection];
+      if (unit && unit.kind === 'single' && unit.question._id === qId) stopQuestionTimer();
       updateProgress();
+    }
+
+    function stopQuestionTimer() {
+      if (questionTimer) { questionTimer.stop(); questionTimer = null; }
+    }
+
+    function startQuestionTimer(q) {
+      const qExpiresAt = new Date(Date.now() + q.timeLimitSeconds * 1000).toISOString();
+      questionTimer = new AssessmentTimer(qExpiresAt,
+        ({ minutes, seconds }) => {
+          const el = document.getElementById(`q-timer-${q._id}`);
+          if (el) el.textContent = `${String(minutes).padStart(2,'0')}:${String(seconds).padStart(2,'0')}`;
+        },
+        () => {
+          timedOut[q._id] = true;
+          document.querySelectorAll(`#options-${q._id} input`).forEach((inp) => inp.disabled = true);
+          if (currentSection < renderUnits.length - 1) showSection(currentSection + 1);
+          else updateProgress();
+        }
+      );
+      questionTimer.start();
     }
 
     function showSection(idx) {
@@ -136,27 +223,40 @@
         dot.style.background = i === idx ? 'var(--tbt-primary)' : 'var(--tbt-border)';
       });
       currentSection = idx;
+      stopQuestionTimer();
+      const unit = renderUnits[idx];
+      if (unit.kind === 'single' && unit.question.timeLimitSeconds && !answers[unit.question._id] && !timedOut[unit.question._id]) {
+        startQuestionTimer(unit.question);
+      }
       document.getElementById('btn-prev').style.display = idx === 0 ? 'none' : '';
-      document.getElementById('btn-next').style.display = idx === sections.length-1 ? 'none' : '';
-      document.getElementById('submit-section').classList.toggle('hidden', idx !== sections.length-1);
+      document.getElementById('btn-next').style.display = idx === renderUnits.length-1 ? 'none' : '';
+      document.getElementById('submit-section').classList.toggle('hidden', idx !== renderUnits.length-1);
       updateProgress();
     }
 
     function updateProgress() {
-      const total = sections.reduce((n,s) => n + s.questions.length, 0);
+      const total = allQuestionsFlat().length;
       const answered = Object.keys(answers).length;
       document.getElementById('progress-text').textContent = `${answered} / ${total}`;
       document.getElementById('progress-bar').style.width = `${(answered/total)*100}%`;
     }
 
     document.getElementById('btn-prev').addEventListener('click', () => showSection(currentSection - 1));
-    document.getElementById('btn-next').addEventListener('click', () => showSection(currentSection + 1));
+    document.getElementById('btn-next').addEventListener('click', () => {
+      const unit = renderUnits[currentSection];
+      if (unit.kind === 'single' && !answers[unit.question._id] && !timedOut[unit.question._id]) {
+        showToast('Please select an answer before continuing.', 'error');
+        return;
+      }
+      showSection(currentSection + 1);
+    });
 
     document.getElementById('btn-submit').addEventListener('click', () => submitAssessment(false));
 
     async function submitAssessment(auto) {
       if (timer) timer.stop();
-      const allQuestions = sections.flatMap(s => s.questions);
+      stopQuestionTimer();
+      const allQuestions = allQuestionsFlat();
       const answerPayload = allQuestions.map(q => ({
         questionId: q._id,
         answerOptionId: answers[q._id] || null,

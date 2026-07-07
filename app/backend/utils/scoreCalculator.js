@@ -20,10 +20,13 @@ const IMPROVEMENT_SUGGESTIONS = {
   'Teamwork':            'Participate in team projects, volunteer for collaborative initiatives, and study team dynamics and group psychology.',
 };
 
-function getLevel(totalMarks) {
-  if (totalMarks >= 160) return 'Excellent';
-  if (totalMarks >= 120) return 'Good';
-  if (totalMarks >= 80)  return 'Average';
+// Percentage-based (not absolute points) so these stay correct no matter how
+// many categories/questions exist — 80/60/40% matches the original 160/120/80
+// thresholds exactly for the default 8-category, 200-point setup.
+function getLevel(percentage) {
+  if (percentage >= 80) return 'Excellent';
+  if (percentage >= 60) return 'Good';
+  if (percentage >= 40) return 'Average';
   return 'Needs Improvement';
 }
 
@@ -38,29 +41,35 @@ function getLevelExplanation(level, highestCategory) {
   return map[level];
 }
 
-function calculateResult(userAnswers, questionTypeMap) {
-  // Group marks by category name
+// `categoryQuestionMax`: { categoryName: totalMarksAcrossActiveQuestionsInThatCategory }
+// — each question now carries its own admin-configurable `marks` instead of
+// a fixed 5, so both the per-category and overall max score are computed
+// from a live sum of `Question.marks` rather than `count * 5`.
+function calculateResult(userAnswers, questionTypeMap, categoryQuestionMax) {
+  // Group scores by category name
   const categoryMarks = {};
   for (const answer of userAnswers) {
     const typeName = questionTypeMap[answer.questionId.toString()];
     if (!typeName) continue;
     if (!categoryMarks[typeName]) categoryMarks[typeName] = 0;
-    categoryMarks[typeName] += answer.marks;
+    categoryMarks[typeName] += answer.score;
   }
 
   const categoryScores = {};
   const categoryPercentages = {};
   for (const [name, score] of Object.entries(categoryMarks)) {
     categoryScores[name] = score;
-    categoryPercentages[name] = parseFloat(((score / 25) * 100).toFixed(1));
+    const categoryMax = categoryQuestionMax[name] || 0;
+    categoryPercentages[name] = categoryMax ? parseFloat(((score / categoryMax) * 100).toFixed(1)) : 0;
   }
 
   const totalMarks = Object.values(categoryScores).reduce((a, b) => a + b, 0);
-  const percentage = parseFloat(((totalMarks / 200) * 100).toFixed(1));
-  const level = getLevel(totalMarks);
+  const maxScore = Object.values(categoryQuestionMax).reduce((a, b) => a + b, 0);
+  const percentage = maxScore ? parseFloat(((totalMarks / maxScore) * 100).toFixed(1)) : 0;
+  const level = getLevel(percentage);
 
-  const maxScore = Math.max(...Object.values(categoryScores));
-  const highestCategory = Object.keys(categoryScores).filter(k => categoryScores[k] === maxScore);
+  const highestCategoryScore = Math.max(...Object.values(categoryScores));
+  const highestCategory = Object.keys(categoryScores).filter(k => categoryScores[k] === highestCategoryScore);
 
   const recommendedBusiness = [...new Set(
     highestCategory.flatMap(cat => BUSINESS_MAP[cat] || [])
@@ -76,7 +85,7 @@ function calculateResult(userAnswers, questionTypeMap) {
   const explanation = getLevelExplanation(level, highestCategory);
 
   return {
-    totalMarks, percentage, level,
+    totalMarks, maxScore, percentage, level,
     categoryScores, categoryPercentages,
     highestCategory, recommendedBusiness,
     explanation, improvementAreas,

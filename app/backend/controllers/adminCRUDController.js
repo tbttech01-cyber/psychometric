@@ -113,18 +113,59 @@ exports.getQuestion = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
+// Diffs an incoming options[] array against a question's existing
+// AnswerOption documents: updates ones that carry a known _id, creates the
+// rest, and deletes any existing option that's no longer present. This lets
+// the admin form save a question and all its options in one call instead of
+// the old N sequential per-option requests.
+async function upsertOptions(questionId, incomingOptions, existingIds) {
+  const keepIds = new Set();
+  for (const opt of incomingOptions) {
+    const { _id, ...fields } = opt;
+    if (_id && existingIds.has(_id)) {
+      await AnswerOption.findByIdAndUpdate(_id, { $set: { ...fields, questionId } }, { runValidators: true });
+      keepIds.add(_id);
+    } else {
+      const created = await AnswerOption.create({ ...fields, questionId });
+      keepIds.add(created._id.toString());
+    }
+  }
+  const toDelete = [...existingIds].filter((id) => !keepIds.has(id));
+  if (toDelete.length) await AnswerOption.deleteMany({ _id: { $in: toDelete } });
+  return AnswerOption.find({ questionId }).sort('order');
+}
+
 exports.createQuestion = async (req, res, next) => {
   try {
-    const doc = await Question.create(req.body);
-    res.status(201).json({ success: true, data: doc });
+    // correctOptionId can't be known by the client yet — new options don't
+    // have an _id until they're created below. It's always derived from
+    // whichever saved option has isCorrect:true instead.
+    const { options, correctOptionId, ...questionFields } = req.body;
+    const doc = await Question.create(questionFields);
+    let savedOptions = [];
+    if (Array.isArray(options)) {
+      savedOptions = await upsertOptions(doc._id, options, new Set());
+      const correct = savedOptions.find((o) => o.isCorrect);
+      if (correct) { doc.correctOptionId = correct._id; await doc.save(); }
+    }
+    res.status(201).json({ success: true, data: { ...doc.toObject(), options: savedOptions } });
   } catch (err) { next(err); }
 };
 
 exports.updateQuestion = async (req, res, next) => {
   try {
-    const doc = await Question.findByIdAndUpdate(req.params.id, { $set: req.body }, { new: true, runValidators: true });
+    const { options, correctOptionId, ...questionFields } = req.body;
+    const doc = await Question.findByIdAndUpdate(req.params.id, { $set: questionFields }, { new: true, runValidators: true });
     if (!doc) return res.status(404).json({ success: false, message: 'Not found.' });
-    res.json({ success: true, data: doc });
+    let savedOptions = await AnswerOption.find({ questionId: doc._id }).sort('order');
+    if (Array.isArray(options)) {
+      const existingIds = new Set(savedOptions.map((o) => o._id.toString()));
+      savedOptions = await upsertOptions(doc._id, options, existingIds);
+      const correct = savedOptions.find((o) => o.isCorrect);
+      doc.correctOptionId = correct ? correct._id : null;
+      await doc.save();
+    }
+    res.json({ success: true, data: { ...doc.toObject(), options: savedOptions } });
   } catch (err) { next(err); }
 };
 
@@ -149,8 +190,11 @@ exports.listAnswerOptions = async (req, res, next) => {
 
 exports.createAnswerOption = async (req, res, next) => {
   try {
-    const count = await AnswerOption.countDocuments({ questionId: req.body.questionId });
-    if (count >= 5) return res.status(400).json({ success: false, message: 'Max 5 options per question.' });
+    // No cap on option count — question types vary (Likert may have >5,
+    // MCQ-style aptitude questions typically have ~4). Kept as a standalone
+    // endpoint for backward compatibility; the Questions admin page now
+    // saves options embedded in the question payload instead (see
+    // createQuestion/updateQuestion's upsertOptions).
     const doc = await AnswerOption.create(req.body);
     res.status(201).json({ success: true, data: doc });
   } catch (err) { next(err); }
