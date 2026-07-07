@@ -63,7 +63,13 @@
   <script src="/assets/js/charts.js"></script>
   <script>
     const token = api.requireAuth('user');
-    const CAT_COLORS = ['#3B82F6','#8B5CF6','#F59E0B','#EF4444','#EC4899','#10B981','#F97316','#06B6D4'];
+    // A fixed palette looks better for small counts, but the category count
+    // is admin-configurable and unbounded, so it must not run out or repeat.
+    const CAT_COLORS_BASE = ['#3B82F6','#8B5CF6','#F59E0B','#EF4444','#EC4899','#10B981','#F97316','#06B6D4'];
+    function catColor(i, total) {
+      if (total <= CAT_COLORS_BASE.length) return CAT_COLORS_BASE[i];
+      return `hsl(${Math.round((i * 360) / total)}, 65%, 55%)`;
+    }
 
     async function loadResult() {
       const { ok, data } = await api.get('/assessment/result', token);
@@ -73,14 +79,15 @@
       document.getElementById('result-content').classList.remove('hidden');
 
       document.getElementById('result-name').textContent = `${r.userId?.name || ''} — ${r.userId?.sharedCode || ''}`;
-      document.getElementById('total-marks').textContent = `Total: ${r.totalMarks} / 200`;
+      document.getElementById('total-marks').textContent = `Total: ${r.totalMarks} / ${r.maxScore}`;
       document.getElementById('pct-value').textContent = `${r.percentage}%`;
       document.getElementById('gauge').style.setProperty('--pct', `${r.percentage * 3.6}deg`);
       document.getElementById('gauge').style.background = `conic-gradient(var(--tbt-primary) ${r.percentage * 3.6}deg, var(--tbt-border) 0deg)`;
 
+      const LEVEL_KEYS = { 'Excellent': 'excellent', 'Good': 'good', 'Average': 'average', 'Needs Improvement': 'needs' };
       const lb = document.getElementById('level-badge');
       lb.textContent = r.level;
-      lb.className = `badge badge-${r.level.toLowerCase().replace(' ','').replace('improvement','needs')}`;
+      lb.className = `badge badge-${LEVEL_KEYS[r.level] || 'average'}`;
 
       document.getElementById('explanation').textContent = r.explanation;
 
@@ -93,7 +100,7 @@
       cats.forEach(([name, pct], i) => {
         barsEl.innerHTML += `<div>
           <div class="flex justify-between text-sm mb-1"><span class="font-medium">${name}</span><span style="color:var(--tbt-muted)">${pct}%</span></div>
-          <div class="cat-bar"><div class="cat-bar-fill" style="width:${pct}%;background:${CAT_COLORS[i%8]}"></div></div>
+          <div class="cat-bar"><div class="cat-bar-fill" style="width:${pct}%;background:${catColor(i, cats.length)}"></div></div>
         </div>`;
       });
 
