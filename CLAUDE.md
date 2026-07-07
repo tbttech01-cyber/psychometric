@@ -105,7 +105,7 @@ backend/
 ```
 frontend/
   user/       # 7 HTML pages: index, register, otp-register, login, welcome, assessment, result
-  assets/js/  # api.js (fetch wrapper), timer.js, charts.js (Chart.js), validator.js
+  assets/js/  # api.js (fetch wrapper — reads `window.TBT_API_BASE` for the API origin, see Deployment), timer.js, charts.js (Chart.js), validator.js
   assets/css/ # Tailwind-based styles
               # (there is no admin/ subfolder — the admin UI lives entirely in app/admin-web/)
 ```
@@ -151,4 +151,9 @@ There is no other admin frontend — do not add HTML pages under `app/frontend/`
 
 ## Deployment
 
-Single Render web service via `render.yaml` at the repo root (rootDir `app/`); auto-deploys on push to `main`. Full walkthrough (MongoDB Atlas, Gmail app password, Render env vars, production seeding) is in `DEPLOYMENT.md`. Note `admin-web` — the only admin frontend — is not part of this blueprint; it's a separate deploy target (e.g. Vercel) not yet wired up.
+Two independent deploy paths exist for the Express app (`app/`), both driven by the same `backend/app.js`:
+
+- **Render** (primary): single web service via `render.yaml` at the repo root (rootDir `app/`), running `backend/server.js`; auto-deploys on push to `main`. Full walkthrough (MongoDB Atlas, Gmail app password, Render env vars, production seeding) is in `DEPLOYMENT.md`.
+- **Vercel** (standalone/serverless): `app/api/index.js` re-exports `backend/app.js` as the serverless entrypoint; `app/vercel.json` rewrites all requests to it. Since there's no boot-time hook on a serverless platform, `backend/app.js` connects to MongoDB lazily on first request and caches the connection on `global.__tbtMongoConnect` for warm invocations (`backend/server.js`'s `connectDB()` call is a no-op in this mode since the connection is already established). The candidate frontend (`frontend/`) reads its API origin from `window.TBT_API_BASE` (`frontend/assets/js/api.js`) so it can be hosted standalone on Vercel pointing at a separately-hosted API — set that global (e.g. injected via env at build/deploy time) when the frontend and API aren't on the same origin.
+
+`admin-web` is not part of either blueprint above — it's always a separate deploy target (e.g. Vercel) calling the API cross-origin; see its `ADMIN_WEB_URL` CORS requirement above.
