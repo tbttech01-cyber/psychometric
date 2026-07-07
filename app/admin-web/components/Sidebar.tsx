@@ -15,6 +15,7 @@ import {
   Settings as SettingsIcon,
   Grid3x3,
   LogOut,
+  X,
   type LucideIcon,
 } from "lucide-react";
 import { api, getToken, removeToken } from "@/lib/api";
@@ -32,7 +33,7 @@ const NAV_ITEMS: { href: string; label: string; icon: LucideIcon }[] = [
   { href: "/business-matrix", label: "Business Matrix", icon: Grid3x3 },
 ];
 
-export default function Sidebar() {
+export default function Sidebar({ mobileOpen = false, onClose }: { mobileOpen?: boolean; onClose?: () => void }) {
   const pathname = usePathname();
   const router = useRouter();
 
@@ -44,34 +45,48 @@ export default function Sidebar() {
   }
 
   return (
-    <nav className="sidebar hidden md:flex flex-col">
-      <div className="p-5 pb-4" style={{ borderBottom: "1px solid var(--tbt-sidebar-border)" }}>
-        <div className="mb-2 px-1">
-          <Image src="/tbt-logo.png" alt="Tamil Business Tribe" width={160} height={44} priority style={{ height: "auto", width: "140px" }} />
+    <>
+      {mobileOpen && (
+        <div className="fixed inset-0 bg-black/50 z-40 md:hidden" onClick={onClose} />
+      )}
+      <nav
+        className={`sidebar flex flex-col fixed md:static inset-y-0 left-0 z-50 transition-transform duration-200 ${
+          mobileOpen ? "translate-x-0" : "-translate-x-full"
+        } md:translate-x-0`}
+      >
+        <div className="p-5 pb-4 flex items-center justify-between" style={{ borderBottom: "1px solid var(--tbt-sidebar-border)" }}>
+          <div>
+            <div className="mb-2 px-1">
+              <Image src="/tbt-logo.png" alt="Tamil Business Tribe" width={160} height={44} priority style={{ height: "auto", width: "140px" }} />
+            </div>
+            <p className="text-xs uppercase tracking-widest font-semibold" style={{ color: "var(--tbt-sidebar-text)" }}>Admin Portal</p>
+          </div>
+          <button onClick={onClose} className="md:hidden p-1" style={{ color: "var(--tbt-sidebar-text)" }} aria-label="Close menu">
+            <X size={20} />
+          </button>
         </div>
-        <p className="text-xs uppercase tracking-widest font-semibold" style={{ color: "var(--tbt-sidebar-text)" }}>Admin Portal</p>
-      </div>
-      <div className="flex-1 py-3 overflow-y-auto">
-        {NAV_ITEMS.map((item) => {
-          const Icon = item.icon;
-          const active = pathname === item.href;
-          return (
-            <Link key={item.href} href={item.href} className={active ? "active" : ""}>
-              <Icon size={18} strokeWidth={2} />
-              {item.label}
-            </Link>
-          );
-        })}
-      </div>
-      <div className="p-4" style={{ borderTop: "1px solid var(--tbt-sidebar-border)" }}>
-        <button
-          onClick={handleLogout}
-          className="flex items-center gap-2 text-sm font-medium w-full px-2 py-1.5"
-          style={{ color: "var(--tbt-sidebar-text)" }}
-        >
-          <LogOut size={16} /> Logout
-        </button>
-      </div>
-    </nav>
+        <div className="flex-1 py-3 overflow-y-auto">
+          {NAV_ITEMS.map((item) => {
+            const Icon = item.icon;
+            const active = pathname === item.href;
+            return (
+              <Link key={item.href} href={item.href} className={active ? "active" : ""} onClick={onClose}>
+                <Icon size={18} strokeWidth={2} />
+                {item.label}
+              </Link>
+            );
+          })}
+        </div>
+        <div className="p-4" style={{ borderTop: "1px solid var(--tbt-sidebar-border)" }}>
+          <button
+            onClick={handleLogout}
+            className="flex items-center gap-2 text-sm font-medium w-full px-2 py-1.5"
+            style={{ color: "var(--tbt-sidebar-text)" }}
+          >
+            <LogOut size={16} /> Logout
+          </button>
+        </div>
+      </nav>
+    </>
   );
 }
