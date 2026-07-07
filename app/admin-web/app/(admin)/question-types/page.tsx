@@ -94,7 +94,7 @@ export default function QuestionTypesPage() {
     const { ok, data } = await api.delete(`/admin/question-types/${deleteTarget._id}`, token);
     setDeleteTarget(null);
     if (!ok) { showToast(data.message || "Delete failed.", "error"); return; }
-    showToast("Category deactivated.", "success");
+    showToast("Category deleted.", "success");
     load();
   }
 
@@ -121,7 +121,7 @@ export default function QuestionTypesPage() {
 
         <div className="card text-sm flex items-start gap-2.5" style={{ background: "var(--tbt-primary-light)", borderColor: "#FBD5D5", color: "var(--tbt-primary-dark)" }}>
           <AlertTriangle size={16} className="shrink-0 mt-0.5" />
-          <span>Each question is worth up to 5 marks — max score scales automatically with however many active questions exist. Deactivating a category also deactivates its linked questions.</span>
+          <span>Each question is worth up to 5 marks — max score scales automatically with however many active questions exist. Deleting a category also deletes its linked questions.</span>
         </div>
 
         {showForm && (
@@ -190,14 +190,14 @@ export default function QuestionTypesPage() {
 
       {deleteTarget && (
         <ConfirmModal
-          title="Deactivate This Category?"
-          message={`This deactivates "${deleteTarget.name}". It will no longer accept new questions.`}
+          title="Delete This Category?"
+          message={`This deletes "${deleteTarget.name}". It will no longer accept new questions.`}
           warning={
             counts[deleteTarget._id]
-              ? `This will also deactivate its ${counts[deleteTarget._id]} linked question${counts[deleteTarget._id] > 1 ? "s" : ""}.`
+              ? `This will also delete its ${counts[deleteTarget._id]} linked question${counts[deleteTarget._id] > 1 ? "s" : ""}.`
               : undefined
           }
-          confirmLabel="Yes, Deactivate"
+          confirmLabel="Yes, Delete"
           onConfirm={confirmDelete}
           onCancel={() => setDeleteTarget(null)}
         />
