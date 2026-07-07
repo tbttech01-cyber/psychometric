@@ -60,8 +60,6 @@ exports.listQuestionTypes = async (req, res, next) => {
 
 exports.createQuestionType = async (req, res, next) => {
   try {
-    const activeCount = await QuestionType.countDocuments({ isActive: true });
-    if (activeCount >= 8) return res.status(400).json({ success: false, message: 'Maximum 8 active question types allowed.' });
     const doc = await QuestionType.create(req.body);
     res.status(201).json({ success: true, data: doc });
   } catch (err) { next(err); }
@@ -90,8 +88,7 @@ exports.updateQuestionType = async (req, res, next) => {
 
 exports.deleteQuestionType = async (req, res, next) => {
   try {
-    const hasQ = await Question.exists({ typeId: req.params.id, isActive: true });
-    if (hasQ) return res.status(400).json({ success: false, message: 'Cannot delete: active questions are linked.' });
+    await Question.updateMany({ typeId: req.params.id, isActive: true }, { isActive: false });
     await QuestionType.findByIdAndUpdate(req.params.id, { isActive: false });
     res.json({ success: true });
   } catch (err) { next(err); }
@@ -118,10 +115,6 @@ exports.getQuestion = async (req, res, next) => {
 
 exports.createQuestion = async (req, res, next) => {
   try {
-    const { typeId } = req.body;
-    const activeCount = await Question.countDocuments({ typeId, isActive: true });
-    if (activeCount >= 5)
-      return res.status(400).json({ success: false, message: 'This category already has 5 active questions.' });
     const doc = await Question.create(req.body);
     res.status(201).json({ success: true, data: doc });
   } catch (err) { next(err); }

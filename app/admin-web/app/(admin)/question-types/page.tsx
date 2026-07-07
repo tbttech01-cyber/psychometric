@@ -54,7 +54,7 @@ export default function QuestionTypesPage() {
 
   function nextAvailableOrder() {
     const used = new Set(types.map((t) => t.order));
-    for (let i = 1; i <= 8; i++) if (!used.has(i)) return i;
+    for (let i = 1; i <= types.length + 1; i++) if (!used.has(i)) return i;
     return types.length + 1;
   }
 
@@ -105,28 +105,23 @@ export default function QuestionTypesPage() {
     <>
       <PageHeader
         title="Question Types"
-        breadcrumb="Manage the 8 psychometric dimensions of the assessment"
+        breadcrumb="Manage the psychometric dimensions of the assessment"
         actions={
-          <button
-            onClick={openAdd}
-            disabled={activeCount >= 8}
-            title={activeCount >= 8 ? "Maximum 8 active categories — deactivate one first." : undefined}
-            className="btn btn-primary btn-sm"
-          >
+          <button onClick={openAdd} className="btn btn-primary btn-sm">
             + Add Category
           </button>
         }
       />
       <main className="p-6 space-y-4">
         <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
-          <StatCard icon={FolderKanban} value={`${activeCount}/8`} label="Active Categories" />
-          <StatCard icon={HelpCircle} value={`${totalQuestions}/40`} label="Total Questions" />
-          <StatCard icon={Award} value="200" label="Max Score" />
+          <StatCard icon={FolderKanban} value={activeCount} label="Active Categories" />
+          <StatCard icon={HelpCircle} value={totalQuestions} label="Total Questions" />
+          <StatCard icon={Award} value={totalQuestions * 5} label="Max Score" />
         </div>
 
         <div className="card text-sm flex items-start gap-2.5" style={{ background: "var(--tbt-primary-light)", borderColor: "#FBD5D5", color: "var(--tbt-primary-dark)" }}>
           <AlertTriangle size={16} className="shrink-0 mt-0.5" />
-          <span>8 dimensions × 5 questions each = 40 total questions × 5 marks = 200 max score. Do not deactivate categories with attached questions.</span>
+          <span>Each question is worth up to 5 marks — max score scales automatically with however many active questions exist. Deactivating a category also deactivates its linked questions.</span>
         </div>
 
         {showForm && (
@@ -137,7 +132,7 @@ export default function QuestionTypesPage() {
             <div className="grid md:grid-cols-2 gap-3 mb-3">
               <input placeholder="Category name" value={form.name} maxLength={60} onChange={(e) => setForm({ ...form, name: e.target.value })}
                 className="border rounded-xl px-3.5 py-2.5 focus:outline-none" style={{ borderColor: "var(--tbt-border)" }} />
-              <input type="number" min={1} max={8} placeholder="Display order (1-8)" value={form.order}
+              <input type="number" min={1} placeholder="Display order" value={form.order}
                 onChange={(e) => setForm({ ...form, order: +e.target.value })}
                 className="border rounded-xl px-3.5 py-2.5 focus:outline-none" style={{ borderColor: "var(--tbt-border)" }} />
               <input placeholder="Icon (emoji)" value={form.icon} onChange={(e) => setForm({ ...form, icon: e.target.value })}
@@ -182,8 +177,6 @@ export default function QuestionTypesPage() {
                   <button onClick={() => openEdit(t)} className="btn btn-outline btn-sm">Edit</button>
                   <button
                     onClick={() => setDeleteTarget(t)}
-                    disabled={!!counts[t._id]}
-                    title={counts[t._id] ? "Cannot deactivate: active questions are linked. Deactivate or reassign them first." : undefined}
                     className="btn btn-danger btn-sm"
                   >
                     Delete
@@ -199,7 +192,11 @@ export default function QuestionTypesPage() {
         <ConfirmModal
           title="Deactivate This Category?"
           message={`This deactivates "${deleteTarget.name}". It will no longer accept new questions.`}
-          warning="Categories with active questions attached cannot be deactivated."
+          warning={
+            counts[deleteTarget._id]
+              ? `This will also deactivate its ${counts[deleteTarget._id]} linked question${counts[deleteTarget._id] > 1 ? "s" : ""}.`
+              : undefined
+          }
           confirmLabel="Yes, Deactivate"
           onConfirm={confirmDelete}
           onCancel={() => setDeleteTarget(null)}
