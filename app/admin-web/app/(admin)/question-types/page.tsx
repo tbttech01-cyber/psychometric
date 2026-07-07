@@ -155,7 +155,7 @@ export default function QuestionTypesPage() {
         )}
 
         <div className="grid md:grid-cols-2 gap-4">
-          {types.map((t) => (
+          {types.filter((t) => t.isActive).map((t) => (
             <div key={t._id} className="card">
               <div className="flex justify-between items-start mb-2">
                 <div className="flex items-center gap-3">
@@ -167,7 +167,6 @@ export default function QuestionTypesPage() {
                   </span>
                   <h3 className="font-bold" style={{ color: "var(--tbt-text)" }}>{t.icon} {t.name}</h3>
                 </div>
-                <span className={`badge ${t.isActive ? "badge-active" : "badge-inactive"}`}>{t.isActive ? "Active" : "Inactive"}</span>
               </div>
               <p className="text-sm mb-3" style={{ color: "var(--tbt-muted)" }}>{t.description}</p>
               <div className="flex justify-between items-center">
