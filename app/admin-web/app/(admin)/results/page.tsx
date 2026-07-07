@@ -6,11 +6,13 @@ import { api, getToken, downloadFile } from "@/lib/api";
 import { useToast } from "@/components/ToastProvider";
 import StatCard from "@/components/StatCard";
 import PageHeader from "@/components/PageHeader";
+import ConfirmModal from "@/components/ConfirmModal";
 import { levelBadgeClass } from "@/lib/badges";
 
 type ResultRow = {
   _id: string;
   totalMarks: number;
+  maxScore: number;
   percentage: number;
   level: string;
   highestCategory?: string[];
@@ -47,6 +49,8 @@ export default function ResultsPage() {
   const [sortBy, setSortBy] = useState("date-desc");
 
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [deleteTarget, setDeleteTarget] = useState<ResultRow | null>(null);
+  const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState(false);
 
   const buildQS = useCallback((forPage = page) => {
     const p = new URLSearchParams();
@@ -101,6 +105,28 @@ export default function ResultsPage() {
     const date = new Date().toISOString().split("T")[0];
     const { ok, message } = await downloadFile(`/admin/export/${kind}?${qs}`, token, `tbt_results_${date}.${kind}`);
     if (!ok) showToast(message || "Export failed.", "error");
+  }
+
+  async function confirmDelete() {
+    if (!deleteTarget) return;
+    const { ok, data } = await api.delete(`/admin/results/${deleteTarget._id}`, token);
+    setDeleteTarget(null);
+    if (!ok) { showToast(data.message || "Delete failed.", "error"); return; }
+    showToast("Result deleted.", "success");
+    setSelected((s) => { const next = new Set(s); next.delete(deleteTarget._id); return next; });
+    load();
+    loadStats();
+  }
+
+  async function confirmBulkDelete() {
+    setBulkDeleteConfirm(false);
+    const results = await Promise.all([...selected].map((id) => api.delete(`/admin/results/${id}`, token)));
+    const failed = results.filter((r) => !r.ok).length;
+    if (failed) showToast(`${failed} of ${results.length} deletions failed.`, "error");
+    else showToast(`${results.length} result(s) deleted.`, "success");
+    setSelected(new Set());
+    load();
+    loadStats();
   }
 
   return (
@@ -163,7 +189,7 @@ export default function ResultsPage() {
             <thead>
               <tr>
                 <th><input type="checkbox" checked={rows.length > 0 && selected.size === rows.length} onChange={(e) => toggleAll(e.target.checked)} /></th>
-                <th>Name</th><th>Email</th><th>Code</th><th>Score</th><th>%</th><th>Level</th><th>Top Category</th><th>Date</th>
+                <th>Name</th><th>Email</th><th>Code</th><th>Score</th><th>%</th><th>Level</th><th>Top Category</th><th>Date</th><th>Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -173,11 +199,12 @@ export default function ResultsPage() {
                   <td>{r.userId?.name || ""}</td>
                   <td className="text-xs">{r.userId?.email || ""}</td>
                   <td><span className="font-mono text-xs">{r.userId?.sharedCode || ""}</span></td>
-                  <td className="font-bold">{r.totalMarks}/200</td>
+                  <td className="font-bold">{r.totalMarks}/{r.maxScore}</td>
                   <td>{r.percentage}%</td>
                   <td><span className={levelBadgeClass(r.level)}>{r.level}</span></td>
                   <td className="text-xs">{(r.highestCategory || []).join(", ")}</td>
                   <td className="text-xs">{new Date(r.createdAt).toLocaleDateString()}</td>
+                  <td><button onClick={() => setDeleteTarget(r)} className="btn btn-danger btn-sm">Delete</button></td>
                 </tr>
               ))}
             </tbody>
@@ -203,9 +230,30 @@ export default function ResultsPage() {
           <div className="flex gap-2">
             <button onClick={() => doExport("pdf", `ids=${selectedIds}`)} className="btn btn-primary btn-sm">Export Selected PDF</button>
             <button onClick={() => doExport("csv", `ids=${selectedIds}`)} className="btn btn-outline btn-sm">Export Selected CSV</button>
+            <button onClick={() => setBulkDeleteConfirm(true)} className="btn btn-danger btn-sm">Delete Selected</button>
             <button onClick={() => setSelected(new Set())} className="btn btn-outline btn-sm">Clear Selection</button>
           </div>
         </div>
+      )}
+
+      {deleteTarget && (
+        <ConfirmModal
+          title="Delete This Result?"
+          message={`This permanently deletes the result for "${deleteTarget.userId?.name || "this candidate"}". This cannot be undone.`}
+          confirmLabel="Yes, Delete"
+          onConfirm={confirmDelete}
+          onCancel={() => setDeleteTarget(null)}
+        />
+      )}
+
+      {bulkDeleteConfirm && (
+        <ConfirmModal
+          title="Delete Selected Results?"
+          message={`This permanently deletes ${selected.size} result(s). This cannot be undone.`}
+          confirmLabel="Yes, Delete"
+          onConfirm={confirmBulkDelete}
+          onCancel={() => setBulkDeleteConfirm(false)}
+        />
       )}
     </>
   );

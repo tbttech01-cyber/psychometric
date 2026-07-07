@@ -14,7 +14,10 @@ exports.getDashboard = async (req, res, next) => {
       Result.find().sort({ createdAt: -1 }),
     ]);
 
-    const scores = results.map(r => r.totalMarks);
+    // Percentage, not raw points — categories/questions can be added or
+    // removed over time, so different results may have different maxScore
+    // values, making raw totalMarks not directly comparable across them.
+    const scores = results.map(r => r.percentage);
     const avgScore = scores.length ? parseFloat((scores.reduce((a, b) => a + b, 0) / scores.length).toFixed(1)) : 0;
     const highestScore = scores.length ? Math.max(...scores) : 0;
     const lowestScore = scores.length ? Math.min(...scores) : 0;
@@ -98,6 +101,14 @@ exports.getResults = async (req, res, next) => {
       .limit(+limit);
 
     res.json({ success: true, data: results, total, page: +page, pages: Math.ceil(total / +limit) });
+  } catch (err) { next(err); }
+};
+
+exports.deleteResult = async (req, res, next) => {
+  try {
+    const doc = await Result.findByIdAndDelete(req.params.id);
+    if (!doc) return res.status(404).json({ success: false, message: 'Not found.' });
+    res.json({ success: true });
   } catch (err) { next(err); }
 };
 

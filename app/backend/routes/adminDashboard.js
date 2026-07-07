@@ -6,6 +6,7 @@ router.use(adminAuth);
 
 router.get('/dashboard', ctrl.getDashboard);
 router.get('/results', ctrl.getResults);
+router.delete('/results/:id', ctrl.deleteResult);
 router.get('/export/pdf', ctrl.exportPDF);
 router.get('/export/csv', ctrl.exportCSV);
 
