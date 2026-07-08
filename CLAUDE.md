@@ -91,7 +91,9 @@ backend/
   utils/
     otpGenerator.js       # generates 6-digit OTP
     emailSender.js        # Nodemailer (Gmail)
-    scoreCalculator.js    # scoring logic and level thresholds
+    evaluationEngine.js   # per-questionType answer scoring — the ONLY place scoring rules live
+    scoreCalculator.js    # aggregates evaluationEngine output into category + dimension results
+    businessRecommendationEngine.js # rule-based business suggestions, driven by dimension percentages
     exportHelper.js       # PDF (pdfkit) and CSV (json2csv) export
   scripts/
     seed.js                # main seeder — admin account, question types, questions, answer options
@@ -123,13 +125,16 @@ Admin and user auth are **not** symmetric:
 ### Key Domain Concepts
 
 - **SharedUserID** — an alphanumeric access code given to users; scoped to a particular assessment cohort.
-- **QuestionType** — 8 categories (e.g., verbal, numerical). Each has an `order` 1–8.
-- **Question** — 40 questions total, each belongs to a `QuestionType`, has `order` 1–40.
-- **AnswerOption** — 1–5 options per question, each carrying a `marks` value (1–5).
+- **QuestionType** — the category grouping shown to admins/users (e.g., verbal, numerical). Each has a unique `order`. Distinct from `Question.questionType` below — the naming collision is real, don't conflate them.
+- **Question** — belongs to a `QuestionType` category (`typeId`) and additionally carries a `questionType` enum describing its *answer shape*: `LIKERT_SCALE`, `SITUATIONAL`, `NUMERICAL_ABILITY`, `PERCENTAGE_TYPE`, `PUZZLE_TYPE`, `LOGICAL_ABILITY`, `VERBAL_ABILITY`, `IMAGE_BASED`, `MULTI_SELECT`, `RANKING` (see `models/Question.js`'s `QUESTION_TYPES`). Each question also has a `dimension` (one of 12 psychometric traits in `Question.DIMENSIONS` — Communication, Leadership, Problem Solving, etc.) that its score rolls up into for the report's dimension breakdown, independent of its `QuestionType` category. Type-specific fields (`correctOptionId`, `correctOptionIds`, `idealOrder`, `scoringMode`) are all on one schema rather than split across models.
+- **AnswerOption** — options carry a `score` (not a fixed `marks` value); `SITUATIONAL` options additionally carry `dimensionScores` (one option maps to multiple dimensions at once, e.g. `{Communication: 5, Teamwork: 4}`).
+- **evaluationEngine.js** — one evaluator function per `questionType`, dispatched by `evaluateAnswer(question, options, userAnswer)`. This is the only place scoring rules live; controllers must never inline per-type logic. `NUMERICAL_ABILITY`/`PERCENTAGE_TYPE`/`PUZZLE_TYPE`/`LOGICAL_ABILITY`/`VERBAL_ABILITY`/`IMAGE_BASED` all share `evaluateSingleCorrect` (correct option → full marks, else 0).
+- **UserAnswer** — exactly one of `answerOptionId` (single-select types), `selectedOptionIds` (`MULTI_SELECT`), or `rankingOrder` (`RANKING`) is populated, depending on the question's `questionType`.
 - **AssessmentSession** — tracks in-progress / submitted / expired state with a timer (`expiresAt`).
-- **Result** — one per submitted session; stores total/percentage/level, per-category scores (`Map`), recommended business areas, and improvement suggestions.
-- **scoreCalculator** — aggregates marks per question type, maps totals to named levels via `BUSINESS_MAP`.
-- **BusinessMatrixCell** — admin-editable `rowTypeId` × `colTypeId` (both `QuestionType` refs) → recommended `businessName` + `rating` (1–5), unique per pair; managed via `adminBusinessMatrix.js`, separate from the static `BUSINESS_MAP` in `scoreCalculator`.
+- **scoreCalculator.calculateResult** — aggregates `UserAnswer` scores two ways: per `QuestionType` category (unchanged legacy behavior) and per `dimension` (summed across whatever dimensions each answer's `dimensionScores` touches — most types touch one, `SITUATIONAL` touches several). Also derives `aptitudeScore`/`personalityScore`/`businessMindsetScore`/`financialAwarenessScore` as averages over fixed dimension groupings, and calls `businessRecommendationEngine` for recommendations.
+- **businessRecommendationEngine.getRecommendations(dimensionPercentages)** — ordered rule list matched against dimension percentages (e.g. high Communication + Leadership + Risk Taking → sales/marketing businesses), deduped and capped at 5, with a fallback set if nothing matches. Replaces the old static `BUSINESS_MAP` (still present in `scoreCalculator.js` but superseded for new results).
+- **Result** — one per submitted session. Original fields (total/percentage/level, per-category scores, `recommendedBusiness`, `improvementAreas`) plus additive fields for dimension scoring (`dimensionScores`, `dimensionPercentages`, `strongDimensions`/`weakDimensions`, the four composite scores, `recommendations`) — the additive fields are absent on Result documents created before this was introduced, so treat them as optional when reading.
+- **BusinessMatrixCell** — admin-editable `rowTypeId` × `colTypeId` (both `QuestionType` refs) → recommended `businessName` + `rating` (1–5), unique per pair; managed via `adminBusinessMatrix.js`, separate from both `BUSINESS_MAP` and `businessRecommendationEngine`.
 
 ---
 
