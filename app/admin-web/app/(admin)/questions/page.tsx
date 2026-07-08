@@ -2,17 +2,20 @@
 
 import { Suspense, useEffect, useState, useCallback } from "react";
 import { useSearchParams } from "next/navigation";
-import { Search, ShieldCheck } from "lucide-react";
+import { Search, ShieldCheck, ArrowUp, ArrowDown } from "lucide-react";
 import { api, getToken } from "@/lib/api";
 import { useToast } from "@/components/ToastProvider";
 import PageHeader from "@/components/PageHeader";
 import ConfirmModal from "@/components/ConfirmModal";
 import LikertOptionsEditor from "@/components/questions/LikertOptionsEditor";
 import McqOptionsEditor from "@/components/questions/McqOptionsEditor";
+import SituationalOptionsEditor from "@/components/questions/SituationalOptionsEditor";
+import MultiSelectOptionsEditor from "@/components/questions/MultiSelectOptionsEditor";
+import RankingOptionsEditor from "@/components/questions/RankingOptionsEditor";
 import QuestionPreview from "@/components/questions/QuestionPreview";
 import { validateQuestion } from "@/lib/questionValidation";
 import {
-  QUESTION_TYPES, PHASE1_ENABLED_TYPES, QUESTION_TYPE_LABELS, DIMENSIONS,
+  QUESTION_TYPES, ENABLED_TYPES, SINGLE_CORRECT_TYPES, QUESTION_TYPE_LABELS, DIMENSIONS,
   type Question, type QCategory, type AnswerOption, type QuestionTypeKind, type Dimension, type Difficulty,
 } from "@/lib/types";
 import { questionTypeBadgeStyle, difficultyBadgeClass } from "@/lib/badges";
@@ -32,8 +35,30 @@ const DEFAULT_MCQ_OPTIONS: AnswerOption[] = [
   { optionText: "", score: 0, isCorrect: false, order: 4 },
 ];
 
+const DEFAULT_SITUATIONAL_OPTIONS: AnswerOption[] = [
+  { optionText: "", score: 0, dimensionScores: {}, order: 1 },
+  { optionText: "", score: 0, dimensionScores: {}, order: 2 },
+];
+
+const DEFAULT_MULTISELECT_OPTIONS: AnswerOption[] = [
+  { optionText: "", score: 0, isCorrect: false, order: 1 },
+  { optionText: "", score: 0, isCorrect: false, order: 2 },
+  { optionText: "", score: 0, isCorrect: false, order: 3 },
+  { optionText: "", score: 0, isCorrect: false, order: 4 },
+];
+
+const DEFAULT_RANKING_OPTIONS: AnswerOption[] = [
+  { optionText: "", score: 0, order: 1 },
+  { optionText: "", score: 0, order: 2 },
+  { optionText: "", score: 0, order: 3 },
+];
+
 function defaultOptionsFor(type: QuestionTypeKind): AnswerOption[] {
-  return type === "NUMERICAL_ABILITY" ? DEFAULT_MCQ_OPTIONS.map((o) => ({ ...o })) : DEFAULT_LIKERT_OPTIONS.map((o) => ({ ...o }));
+  if (SINGLE_CORRECT_TYPES.includes(type)) return DEFAULT_MCQ_OPTIONS.map((o) => ({ ...o }));
+  if (type === "SITUATIONAL") return DEFAULT_SITUATIONAL_OPTIONS.map((o) => ({ ...o, dimensionScores: {} }));
+  if (type === "MULTI_SELECT") return DEFAULT_MULTISELECT_OPTIONS.map((o) => ({ ...o }));
+  if (type === "RANKING") return DEFAULT_RANKING_OPTIONS.map((o) => ({ ...o }));
+  return DEFAULT_LIKERT_OPTIONS.map((o) => ({ ...o }));
 }
 
 function QuestionsPageInner() {
@@ -55,11 +80,17 @@ function QuestionsPageInner() {
   const [qActive, setQActive] = useState(true);
   const [qQuestionType, setQQuestionType] = useState<QuestionTypeKind>("LIKERT_SCALE");
   const [qDimension, setQDimension] = useState<Dimension | "">("");
+  const [qSubDimension, setQSubDimension] = useState("");
   const [qDifficulty, setQDifficulty] = useState<Difficulty>("medium");
   const [qMarks, setQMarks] = useState<number | "">(5);
   const [qTimeLimitSeconds, setQTimeLimitSeconds] = useState<number | "">("");
   const [qExplanation, setQExplanation] = useState("");
   const [qIsReverseScored, setQIsReverseScored] = useState(false);
+  const [qHasAudio, setQHasAudio] = useState(false);
+  const [qAudioUrl, setQAudioUrl] = useState("");
+  const [qImageUrl, setQImageUrl] = useState("");
+  const [qInstructionText, setQInstructionText] = useState("");
+  const [qScoringMode, setQScoringMode] = useState<"exact" | "partial" | "">("");
   const [options, setOptions] = useState<AnswerOption[]>(defaultOptionsFor("LIKERT_SCALE"));
   const [deleteTarget, setDeleteTarget] = useState<Question | null>(null);
   const [usedOrders, setUsedOrders] = useState<number[]>([]);
@@ -104,11 +135,17 @@ function QuestionsPageInner() {
     setQActive(true);
     setQQuestionType("LIKERT_SCALE");
     setQDimension("");
+    setQSubDimension("");
     setQDifficulty("medium");
     setQMarks(5);
     setQTimeLimitSeconds("");
     setQExplanation("");
     setQIsReverseScored(false);
+    setQHasAudio(false);
+    setQAudioUrl("");
+    setQImageUrl("");
+    setQInstructionText("");
+    setQScoringMode("");
     setOptions(defaultOptionsFor("LIKERT_SCALE"));
   }
 
@@ -120,6 +157,7 @@ function QuestionsPageInner() {
   function onQuestionTypeChange(next: QuestionTypeKind) {
     setQQuestionType(next);
     setOptions(defaultOptionsFor(next));
+    if (next !== "MULTI_SELECT") setQScoringMode("");
   }
 
   async function openEdit(id: string) {
@@ -133,27 +171,39 @@ function QuestionsPageInner() {
     setQActive(q.isActive);
     setQQuestionType(q.questionType || "LIKERT_SCALE");
     setQDimension(q.dimension || "");
+    setQSubDimension(q.subDimension || "");
     setQDifficulty(q.difficulty || "medium");
     setQMarks(q.marks ?? 5);
     setQTimeLimitSeconds(q.timeLimitSeconds || "");
     setQExplanation(q.explanation || "");
     setQIsReverseScored(!!q.isReverseScored);
+    setQHasAudio(!!q.hasAudio);
+    setQAudioUrl(q.audioUrl || "");
+    setQImageUrl(q.imageUrl || "");
+    setQInstructionText(q.instructionText || "");
+    setQScoringMode(q.scoringMode || "");
     setOptions(q.options && q.options.length ? q.options : defaultOptionsFor(q.questionType || "LIKERT_SCALE"));
     setShowForm(true);
   }
 
   async function save() {
-    const errors = validateQuestion(qType, qDimension, qMarks, qQuestionType, options);
+    const errors = validateQuestion(qType, qDimension, qMarks, qQuestionType, options, { scoringMode: qScoringMode, imageUrl: qImageUrl });
     if (!qOrder) errors.push("Display order is required.");
     if (!qText.trim()) errors.push("Question text is required.");
     if (errors.length) { showToast(errors[0], "error"); return; }
 
     const payload = {
       typeId: qType, order: qOrder, text: qText, isActive: qActive,
-      questionType: qQuestionType, dimension: qDimension, difficulty: qDifficulty, marks: qMarks,
-      timeLimitSeconds: qQuestionType === "NUMERICAL_ABILITY" ? (qTimeLimitSeconds || undefined) : undefined,
-      explanation: qQuestionType === "NUMERICAL_ABILITY" ? qExplanation : undefined,
+      questionType: qQuestionType, dimension: qDimension, subDimension: qSubDimension.trim() || undefined,
+      difficulty: qDifficulty, marks: qMarks,
+      timeLimitSeconds: SINGLE_CORRECT_TYPES.includes(qQuestionType) ? (qTimeLimitSeconds || undefined) : undefined,
+      explanation: SINGLE_CORRECT_TYPES.includes(qQuestionType) ? (qExplanation || undefined) : undefined,
       isReverseScored: qQuestionType === "LIKERT_SCALE" ? qIsReverseScored : undefined,
+      hasAudio: qHasAudio || undefined,
+      audioUrl: qAudioUrl.trim() || undefined,
+      imageUrl: qImageUrl.trim() || undefined,
+      instructionText: qInstructionText.trim() || undefined,
+      scoringMode: qQuestionType === "MULTI_SELECT" ? (qScoringMode || undefined) : undefined,
       options: options.map((o, i) => ({ ...o, order: i + 1 })),
     };
 
@@ -186,6 +236,18 @@ function QuestionsPageInner() {
     return true;
   });
 
+  async function moveQuestion(i: number, dir: -1 | 1) {
+    const j = i + dir;
+    if (j < 0 || j >= filteredRows.length) return;
+    const a = filteredRows[i], b = filteredRows[j];
+    const { ok, data } = await api.post("/admin/questions/reorder", {
+      orders: [{ id: a._id, order: b.order }, { id: b._id, order: a.order }],
+    }, token);
+    if (!ok) { showToast(data.message || "Reorder failed.", "error"); return; }
+    load();
+    loadAllOrders();
+  }
+
   function typeOf(q: Question): QCategory | undefined {
     return typeof q.typeId === "object" ? q.typeId : types.find((t) => t._id === q.typeId);
   }
@@ -213,8 +275,8 @@ function QuestionsPageInner() {
               <select value={qQuestionType} onChange={(e) => onQuestionTypeChange(e.target.value as QuestionTypeKind)}
                 className="border rounded-xl px-3.5 py-2.5 focus:outline-none w-full mb-3" style={{ borderColor: "var(--tbt-border)" }}>
                 {QUESTION_TYPES.map((t) => (
-                  <option key={t} value={t} disabled={!PHASE1_ENABLED_TYPES.includes(t)}>
-                    {QUESTION_TYPE_LABELS[t]}{PHASE1_ENABLED_TYPES.includes(t) ? "" : " (coming soon)"}
+                  <option key={t} value={t} disabled={!ENABLED_TYPES.includes(t)}>
+                    {QUESTION_TYPE_LABELS[t]}{ENABLED_TYPES.includes(t) ? "" : " (coming soon)"}
                   </option>
                 ))}
               </select>
@@ -230,6 +292,8 @@ function QuestionsPageInner() {
                   <option value="">Select dimension</option>
                   {DIMENSIONS.map((d) => <option key={d} value={d}>{d}</option>)}
                 </select>
+                <input placeholder="Sub-dimension (optional)" value={qSubDimension} onChange={(e) => setQSubDimension(e.target.value)}
+                  className="border rounded-xl px-3.5 py-2.5 focus:outline-none" style={{ borderColor: "var(--tbt-border)" }} />
                 <input type="number" min={1} placeholder="Order" value={qOrder}
                   onChange={(e) => setQOrder(e.target.value ? +e.target.value : "")}
                   className="border rounded-xl px-3.5 py-2.5 focus:outline-none" style={{ borderColor: "var(--tbt-border)" }} />
@@ -249,7 +313,26 @@ function QuestionsPageInner() {
               </div>
 
               <textarea placeholder="Enter question text..." value={qText} onChange={(e) => setQText(e.target.value)} maxLength={500}
-                rows={2} className="border rounded-xl px-3.5 py-2.5 w-full focus:outline-none mb-4" style={{ borderColor: "var(--tbt-border)" }} />
+                rows={2} className="border rounded-xl px-3.5 py-2.5 w-full focus:outline-none mb-3" style={{ borderColor: "var(--tbt-border)" }} />
+
+              <textarea placeholder="Instruction text shown above the question (optional)" value={qInstructionText} onChange={(e) => setQInstructionText(e.target.value)} maxLength={500}
+                rows={2} className="border rounded-xl px-3.5 py-2.5 w-full focus:outline-none mb-3" style={{ borderColor: "var(--tbt-border)" }} />
+
+              <div className="grid md:grid-cols-2 gap-3 mb-3">
+                <input placeholder={qQuestionType === "IMAGE_BASED" ? "Image URL (required)" : "Image URL (optional)"} value={qImageUrl}
+                  onChange={(e) => setQImageUrl(e.target.value)}
+                  className="border rounded-xl px-3.5 py-2.5 focus:outline-none" style={{ borderColor: "var(--tbt-border)" }} />
+                <div className="flex items-center gap-2">
+                  <label className="flex items-center gap-2 shrink-0">
+                    <input type="checkbox" checked={qHasAudio} onChange={(e) => setQHasAudio(e.target.checked)} className="w-5 h-5" />
+                    <span className="text-sm font-semibold">Has audio</span>
+                  </label>
+                  {qHasAudio && (
+                    <input placeholder="Audio URL" value={qAudioUrl} onChange={(e) => setQAudioUrl(e.target.value)}
+                      className="border rounded-xl px-3.5 py-2.5 flex-1 focus:outline-none" style={{ borderColor: "var(--tbt-border)" }} />
+                  )}
+                </div>
+              </div>
 
               <div className="card text-xs mb-4 flex items-start gap-2" style={{ background: "var(--tbt-primary-light)", borderColor: "#FBD5D5", color: "var(--tbt-primary-dark)", padding: "0.75rem 1rem" }}>
                 <ShieldCheck size={15} className="shrink-0 mt-0.5" />
@@ -266,7 +349,7 @@ function QuestionsPageInner() {
                 </>
               )}
 
-              {qQuestionType === "NUMERICAL_ABILITY" && (
+              {SINGLE_CORRECT_TYPES.includes(qQuestionType) && (
                 <>
                   <div className="grid md:grid-cols-2 gap-3 mb-3">
                     <input type="number" min={1} placeholder="Time limit (seconds, optional)" value={qTimeLimitSeconds}
@@ -279,6 +362,18 @@ function QuestionsPageInner() {
                 </>
               )}
 
+              {qQuestionType === "SITUATIONAL" && (
+                <SituationalOptionsEditor options={options} onChange={setOptions} />
+              )}
+
+              {qQuestionType === "MULTI_SELECT" && (
+                <MultiSelectOptionsEditor options={options} onChange={setOptions} scoringMode={qScoringMode} onScoringModeChange={setQScoringMode} />
+              )}
+
+              {qQuestionType === "RANKING" && (
+                <RankingOptionsEditor options={options} onChange={setOptions} />
+              )}
+
               <div className="flex gap-2 mt-4">
                 <button onClick={save} disabled={saving} className="btn btn-primary">{saving ? "Saving..." : "Save Question"}</button>
                 <button onClick={() => setShowForm(false)} className="btn btn-outline">Cancel</button>
@@ -288,7 +383,8 @@ function QuestionsPageInner() {
             <QuestionPreview
               question={{
                 text: qText, questionType: qQuestionType, timeLimitSeconds: qTimeLimitSeconds || null,
-                instructionText: "", options,
+                instructionText: qInstructionText, imageUrl: qImageUrl, hasAudio: qHasAudio, audioUrl: qAudioUrl,
+                options,
               }}
               category={previewCategory}
             />
@@ -328,11 +424,23 @@ function QuestionsPageInner() {
           <table className="data-table">
             <thead><tr><th>#</th><th>Category</th><th>Type</th><th>Dimension</th><th>Difficulty</th><th>Marks</th><th>Question Text</th><th>Status</th><th>Actions</th></tr></thead>
             <tbody>
-              {filteredRows.map((q) => {
+              {filteredRows.map((q, i) => {
                 const t = typeOf(q);
                 return (
                   <tr key={q._id}>
-                    <td className="font-bold">{q.order}</td>
+                    <td className="font-bold">
+                      <div className="flex items-center gap-1">
+                        <span>{q.order}</span>
+                        <div className="flex flex-col">
+                          <button onClick={() => moveQuestion(i, -1)} disabled={i === 0} className="icon-btn disabled:opacity-30" title="Move up" style={{ padding: 0 }}>
+                            <ArrowUp size={12} />
+                          </button>
+                          <button onClick={() => moveQuestion(i, 1)} disabled={i === filteredRows.length - 1} className="icon-btn disabled:opacity-30" title="Move down" style={{ padding: 0 }}>
+                            <ArrowDown size={12} />
+                          </button>
+                        </div>
+                      </div>
+                    </td>
                     <td><span className="inline-block px-2 py-0.5 rounded text-xs font-semibold text-white" style={{ background: t?.color || "#1E3A5F" }}>{t?.name || ""}</span></td>
                     <td><span className="inline-block px-2 py-0.5 rounded text-xs font-semibold text-white" style={questionTypeBadgeStyle(q.questionType)}>{QUESTION_TYPE_LABELS[q.questionType] || q.questionType}</span></td>
                     <td className="text-xs">{q.dimension}</td>

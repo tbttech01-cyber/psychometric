@@ -1,3 +1,5 @@
+const { getRecommendations } = require('./businessRecommendationEngine');
+
 const BUSINESS_MAP = {
   'Communication':       ['Consulting', 'Coaching', 'Sales Business', 'Public Speaking Business'],
   'Creativity':          ['Digital Marketing', 'Event Management', 'Content Creation', 'Design Agency'],
@@ -41,12 +43,63 @@ function getLevelExplanation(level, highestCategory) {
   return map[level];
 }
 
+// Dimension groupings for the composite scores shown on the final report.
+// These groupings aren't specified anywhere else — they're a deliberate,
+// documented choice: aptitude = the 3 timed/aptitude dimensions, personality
+// = the "soft skill" EQ-style dimensions, business mindset = the two most
+// directly business-risk-related dimensions, financial awareness stands
+// alone since nothing else measures it.
+const APTITUDE_DIMENSIONS = ['Numerical Ability', 'Logical Ability', 'Verbal Ability'];
+const PERSONALITY_DIMENSIONS = ['Communication', 'Leadership', 'Teamwork', 'Creativity', 'Emotional Intelligence'];
+const BUSINESS_MINDSET_DIMENSIONS = ['Business Mindset', 'Risk Taking'];
+const FINANCIAL_AWARENESS_DIMENSIONS = ['Financial Awareness'];
+
+// Shared by assessmentController.submitAssessment (the real submit path) and
+// seedDummyData.js (so dummy fixtures are scored with the exact same logic
+// instead of a hand-rolled duplicate). `situationalOptsByQ` maps a
+// SITUATIONAL question's id to its full AnswerOption list — every other
+// type's max is just its own `marks` added to its single `dimension`.
+function computeQuestionMaxes(allActiveQuestions, typeMap, situationalOptsByQ = {}) {
+  const categoryQuestionMax = {};
+  for (const q of allActiveQuestions) {
+    const name = typeMap[q.typeId.toString()];
+    if (!name) continue;
+    categoryQuestionMax[name] = (categoryQuestionMax[name] || 0) + q.marks;
+  }
+
+  const dimensionQuestionMax = {};
+  for (const q of allActiveQuestions) {
+    if (q.questionType === 'SITUATIONAL') {
+      const opts = situationalOptsByQ[q._id.toString()] || [];
+      const dims = new Set();
+      opts.forEach((o) => Object.keys(o.dimensionScores || {}).forEach((d) => dims.add(d)));
+      for (const dim of dims) {
+        const maxForDim = Math.max(0, ...opts.map((o) => (o.dimensionScores && o.dimensionScores[dim]) || 0));
+        dimensionQuestionMax[dim] = (dimensionQuestionMax[dim] || 0) + maxForDim;
+      }
+    } else if (q.dimension) {
+      dimensionQuestionMax[q.dimension] = (dimensionQuestionMax[q.dimension] || 0) + q.marks;
+    }
+  }
+
+  return { categoryQuestionMax, dimensionQuestionMax };
+}
+
+function avgOf(dimensionPercentages, dims) {
+  if (!dims.length) return 0;
+  const sum = dims.reduce((a, d) => a + (dimensionPercentages[d] || 0), 0);
+  return parseFloat((sum / dims.length).toFixed(1));
+}
+
 // `categoryQuestionMax`: { categoryName: totalMarksAcrossActiveQuestionsInThatCategory }
-// — each question now carries its own admin-configurable `marks` instead of
-// a fixed 5, so both the per-category and overall max score are computed
-// from a live sum of `Question.marks` rather than `count * 5`.
-function calculateResult(userAnswers, questionTypeMap, categoryQuestionMax) {
-  // Group scores by category name
+// `dimensionQuestionMax`: { dimensionName: totalMaxContributionAcrossActiveQuestionsTouchingThatDimension }
+// — both computed live from `Question.marks` (or, for SITUATIONAL, the best
+// option's per-dimension values) rather than a fixed per-question amount,
+// since marks/dimension mappings are now admin-configurable per question.
+// `totalActiveQuestions` is needed to derive skippedCount (auto-submits can
+// leave some questions unanswered).
+function calculateResult(userAnswers, questionTypeMap, categoryQuestionMax, dimensionQuestionMax, totalActiveQuestions) {
+  // Group scores by category name (unchanged from Phase 1)
   const categoryMarks = {};
   for (const answer of userAnswers) {
     const typeName = questionTypeMap[answer.questionId.toString()];
@@ -71,10 +124,6 @@ function calculateResult(userAnswers, questionTypeMap, categoryQuestionMax) {
   const highestCategoryScore = Math.max(...Object.values(categoryScores));
   const highestCategory = Object.keys(categoryScores).filter(k => categoryScores[k] === highestCategoryScore);
 
-  const recommendedBusiness = [...new Set(
-    highestCategory.flatMap(cat => BUSINESS_MAP[cat] || [])
-  )];
-
   const sortedCats = Object.entries(categoryScores).sort((a, b) => a[1] - b[1]);
   const improvementAreas = sortedCats.slice(0, 2).map(([cat, score]) => ({
     category: cat,
@@ -84,12 +133,62 @@ function calculateResult(userAnswers, questionTypeMap, categoryQuestionMax) {
 
   const explanation = getLevelExplanation(level, highestCategory);
 
+  // Dimension aggregation — most answers contribute to a single dimension
+  // ({[question.dimension]: score}), but SITUATIONAL answers contribute to
+  // several at once, so this just sums whatever keys each answer's
+  // dimensionScores object actually has.
+  const dimensionMarks = {};
+  for (const answer of userAnswers) {
+    for (const [dim, val] of Object.entries(answer.dimensionScores || {})) {
+      dimensionMarks[dim] = (dimensionMarks[dim] || 0) + val;
+    }
+  }
+  const dimensionScores = {};
+  const dimensionPercentages = {};
+  for (const dim of Object.keys(dimensionQuestionMax)) {
+    const score = dimensionMarks[dim] || 0;
+    const max = dimensionQuestionMax[dim] || 0;
+    dimensionScores[dim] = score;
+    dimensionPercentages[dim] = max ? parseFloat(((score / max) * 100).toFixed(1)) : 0;
+  }
+
+  // Only rank dimensions that were actually tested (max > 0) — otherwise an
+  // untouched dimension would misleadingly show up as "weak" at 0%.
+  const testedDimensions = Object.entries(dimensionPercentages).filter(([dim]) => dimensionQuestionMax[dim] > 0);
+  const sortedDims = [...testedDimensions].sort((a, b) => b[1] - a[1]);
+  const strongDimensions = sortedDims.slice(0, 3).map(([dim]) => dim);
+  const weakDimensions = sortedDims.slice(-3).reverse().map(([dim]) => dim);
+
+  const correctCount = userAnswers.filter((a) => a.isCorrect === true).length;
+  const wrongCount = userAnswers.filter((a) => a.isCorrect === false).length;
+  // Every active question now gets an explicit UserAnswer row (real answer,
+  // or a synthesized 'skipped'/'timeout' one) — so skippedCount comes from
+  // status, not a length difference. The totalActiveQuestions-based fallback
+  // stays for any caller not yet passing status-tagged rows.
+  const skippedCount = userAnswers.some((a) => a.status)
+    ? userAnswers.filter((a) => a.status === 'skipped' || a.status === 'timeout').length
+    : Math.max(0, totalActiveQuestions - userAnswers.length);
+
+  const aptitudeScore = avgOf(dimensionPercentages, APTITUDE_DIMENSIONS);
+  const personalityScore = avgOf(dimensionPercentages, PERSONALITY_DIMENSIONS);
+  const businessMindsetScore = avgOf(dimensionPercentages, BUSINESS_MINDSET_DIMENSIONS);
+  const financialAwarenessScore = avgOf(dimensionPercentages, FINANCIAL_AWARENESS_DIMENSIONS);
+
+  const recommendations = getRecommendations(dimensionPercentages);
+  const recommendedBusiness = recommendations.map((r) => r.business);
+
   return {
     totalMarks, maxScore, percentage, level,
     categoryScores, categoryPercentages,
     highestCategory, recommendedBusiness,
     explanation, improvementAreas,
+    dimensionScores, dimensionPercentages,
+    correctCount, wrongCount, skippedCount,
+    businessReadinessPercent: percentage,
+    recommendations,
+    strongDimensions, weakDimensions,
+    aptitudeScore, personalityScore, businessMindsetScore, financialAwarenessScore,
   };
 }
 
-module.exports = { calculateResult, BUSINESS_MAP };
+module.exports = { calculateResult, computeQuestionMaxes, BUSINESS_MAP };

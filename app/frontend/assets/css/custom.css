@@ -41,11 +41,17 @@ body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; back
 .progress-bar-track { height: 8px; background: var(--tbt-border); border-radius: 999px; overflow: hidden; }
 .progress-bar-fill { height: 100%; background: var(--tbt-primary); border-radius: 999px; transition: width 0.4s ease; }
 
-/* Likert radio buttons */
-.likert-option input[type="radio"] { display: none; }
+/* Likert radio buttons (also used for MULTI_SELECT checkboxes) */
+.likert-option input[type="radio"], .likert-option input[type="checkbox"] { display: none; }
 .likert-option label { display: flex; align-items: center; gap: 0.75rem; padding: 0.75rem 1rem; border: 2px solid var(--tbt-border); border-radius: 0.5rem; cursor: pointer; transition: all 0.2s; font-size: 0.9rem; }
 .likert-option input:checked + label { border-color: var(--tbt-primary); background: rgba(30,58,95,0.06); font-weight: 600; }
 .likert-option label:hover { border-color: #93C5FD; }
+
+/* Ranking reorder controls */
+.rank-item { display: flex; align-items: center; gap: 0.75rem; padding: 0.75rem 1rem; border: 2px solid var(--tbt-border); border-radius: 0.5rem; }
+.rank-btn { width: 1.75rem; height: 1.5rem; display: flex; align-items: center; justify-content: center; border: 1px solid var(--tbt-border); border-radius: 0.25rem; background: white; cursor: pointer; font-size: 0.7rem; line-height: 1; }
+.rank-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+.rank-btn:not(:disabled):hover { border-color: var(--tbt-primary); color: var(--tbt-primary); }
 
 /* Result gauge */
 .gauge-circle { width: 160px; height: 160px; border-radius: 50%; background: conic-gradient(var(--tbt-primary) var(--pct, 0%), var(--tbt-border) 0%); display: flex; align-items: center; justify-content: center; position: relative; }

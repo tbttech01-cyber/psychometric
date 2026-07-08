@@ -82,24 +82,40 @@
     }
 
     // Categories containing only LIKERT_SCALE questions batch into one
-    // section per category, exactly as before. Any single-correct-answer
-    // aptitude question (currently NUMERICAL_ABILITY) explodes into its own
-    // one-question "unit" so it gets a dedicated counter/timer/next-gate —
-    // both unit kinds still map 1:1 onto a `.q-section` div, so the
-    // dot-nav/prev-next/progress-bar machinery below needs no other changes.
+    // section per category, exactly as before. Every other question type
+    // explodes into its own one-question "unit" so it gets a dedicated
+    // counter/next-gate — MULTI_SELECT and RANKING get their own kind since
+    // they render and record answers differently from the single-select
+    // (radio) family (NUMERICAL_ABILITY, PERCENTAGE_TYPE, PUZZLE_TYPE,
+    // LOGICAL_ABILITY, VERBAL_ABILITY, IMAGE_BASED, SITUATIONAL). All unit
+    // kinds still map 1:1 onto a `.q-section` div, so the dot-nav/prev-next/
+    // progress-bar machinery below needs no other changes.
     function buildRenderUnits(sections) {
       const units = [];
       sections.forEach((section) => {
         const batch = section.questions.filter((q) => q.questionType === 'LIKERT_SCALE' || !q.questionType);
-        const singles = section.questions.filter((q) => q.questionType && q.questionType !== 'LIKERT_SCALE');
+        const others = section.questions.filter((q) => q.questionType && q.questionType !== 'LIKERT_SCALE');
         if (batch.length) units.push({ kind: 'batch', typeName: section.typeName, typeIcon: section.typeIcon, questions: batch });
-        singles.forEach((q) => units.push({ kind: 'single', typeName: section.typeName, typeIcon: section.typeIcon, question: q }));
+        others.forEach((q) => {
+          const kind = q.questionType === 'MULTI_SELECT' ? 'multiselect' : q.questionType === 'RANKING' ? 'ranking' : 'single';
+          units.push({ kind, typeName: section.typeName, typeIcon: section.typeIcon, question: q });
+        });
       });
       return units;
     }
 
     function allQuestionsFlat() {
       return sections.flatMap((s) => s.questions);
+    }
+
+    // Whether a non-batch unit currently has a submittable answer. A
+    // MULTI_SELECT needs >=1 checked box; a RANKING is always "answered"
+    // once its section has been visited (showSection seeds `answers` with
+    // the displayed order — reordering is an optional refinement, not a
+    // forced interaction, same as a real-world ranking exercise). Delegates
+    // to isAnswered(), defined further down (function declarations hoist).
+    function hasAnswer(unit) {
+      return unit.kind === 'batch' || isAnswered(unit.question);
     }
 
     function renderLikertBatch(unit, totalQuestions, questionOffset) {
@@ -131,16 +147,25 @@
         </div>`;
     }
 
-    function renderMcqSingle(q, globalIndex, totalQuestions) {
+    function questionHeader(unit, globalIndex, totalQuestions, timerHtml) {
+      return `
+        <div class="flex justify-between items-center mb-3">
+          <span class="text-xs font-semibold" style="color:var(--tbt-muted)">
+            <span class="mr-2">${unit.typeIcon || ''} ${unit.typeName || ''}</span>
+            &middot; Question ${globalIndex}/${totalQuestions}
+          </span>
+          ${timerHtml || ''}
+        </div>`;
+    }
+
+    function renderMcqSingle(unit, globalIndex, totalQuestions) {
+      const q = unit.question;
       const timerHtml = q.timeLimitSeconds
         ? `<span id="q-timer-${q._id}" class="text-sm font-bold" style="color:var(--tbt-danger)"></span>`
         : '';
       return `
         <div class="card mb-6">
-          <div class="flex justify-between items-center mb-3">
-            <span class="text-xs font-semibold" style="color:var(--tbt-muted)">Question ${globalIndex}/${totalQuestions}</span>
-            ${timerHtml}
-          </div>
+          ${questionHeader(unit, globalIndex, totalQuestions, timerHtml)}
           ${q.instructionText ? `<p class="text-xs italic mb-2" style="color:var(--tbt-muted)">${q.instructionText}</p>` : ''}
           ${q.imageUrl ? `<img src="${q.imageUrl}" alt="" class="max-w-full rounded-lg mb-4" />` : ''}
           <p class="font-semibold mb-4 text-base leading-relaxed">${q.text}</p>
@@ -153,6 +178,59 @@
             `).join('')}
           </div>
         </div>`;
+    }
+
+    function renderMultiSelect(unit, globalIndex, totalQuestions) {
+      const q = unit.question;
+      const selected = new Set(answers[q._id] || []);
+      return `
+        <div class="card mb-6">
+          ${questionHeader(unit, globalIndex, totalQuestions)}
+          ${q.instructionText ? `<p class="text-xs italic mb-2" style="color:var(--tbt-muted)">${q.instructionText}</p>` : ''}
+          ${q.imageUrl ? `<img src="${q.imageUrl}" alt="" class="max-w-full rounded-lg mb-4" />` : ''}
+          <p class="font-semibold mb-1 text-base leading-relaxed">${q.text}</p>
+          <p class="text-xs mb-3" style="color:var(--tbt-muted)">Select all that apply.</p>
+          <div class="space-y-2" id="options-${q._id}">
+            ${q.options.map(opt => `
+              <div class="likert-option">
+                <input type="checkbox" name="q_${q._id}" id="opt_${opt._id}" value="${opt._id}"
+                  onchange="toggleMultiSelect('${q._id}','${opt._id}', this.checked)" ${selected.has(opt._id) ? 'checked' : ''} />
+                <label for="opt_${opt._id}">${opt.optionText}</label>
+              </div>
+            `).join('')}
+          </div>
+        </div>`;
+    }
+
+    function renderRanking(unit, globalIndex, totalQuestions) {
+      const q = unit.question;
+      const order = answers[q._id] || q.options.map(o => o._id);
+      const optionById = Object.fromEntries(q.options.map(o => [o._id, o]));
+      return `
+        <div class="card mb-6">
+          ${questionHeader(unit, globalIndex, totalQuestions)}
+          ${q.instructionText ? `<p class="text-xs italic mb-2" style="color:var(--tbt-muted)">${q.instructionText}</p>` : ''}
+          <p class="font-semibold mb-1 text-base leading-relaxed">${q.text}</p>
+          <p class="text-xs mb-3" style="color:var(--tbt-muted)">Use the arrows to arrange in your preferred order (top = first).</p>
+          <div class="space-y-2" id="options-${q._id}">
+            ${order.map((optId, i) => `
+              <div class="rank-item">
+                <span class="inline-flex items-center justify-center w-6 h-6 rounded-full text-xs font-bold text-white shrink-0" style="background:var(--tbt-primary)">${i + 1}</span>
+                <span class="flex-1 text-sm">${optionById[optId].optionText}</span>
+                <div class="flex flex-col gap-1 shrink-0">
+                  <button type="button" class="rank-btn" onclick="moveRankingItem('${q._id}', ${i}, -1)" ${i === 0 ? 'disabled' : ''}>▲</button>
+                  <button type="button" class="rank-btn" onclick="moveRankingItem('${q._id}', ${i}, 1)" ${i === order.length - 1 ? 'disabled' : ''}>▼</button>
+                </div>
+              </div>
+            `).join('')}
+          </div>
+        </div>`;
+    }
+
+    function renderUnitHTML(unit, globalIndex, totalQuestions) {
+      if (unit.kind === 'multiselect') return renderMultiSelect(unit, globalIndex, totalQuestions);
+      if (unit.kind === 'ranking') return renderRanking(unit, globalIndex, totalQuestions);
+      return renderMcqSingle(unit, globalIndex, totalQuestions);
     }
 
     function renderQuestions() {
@@ -170,7 +248,7 @@
           questionOffset += unit.questions.length;
         } else {
           const globalIndex = flat.indexOf(unit.question) + 1;
-          sec.innerHTML = renderMcqSingle(unit.question, globalIndex, totalQuestions);
+          sec.innerHTML = renderUnitHTML(unit, globalIndex, totalQuestions);
           questionOffset += 1;
         }
         container.appendChild(sec);
@@ -193,6 +271,29 @@
       const unit = renderUnits[currentSection];
       if (unit && unit.kind === 'single' && unit.question._id === qId) stopQuestionTimer();
       updateProgress();
+    }
+
+    function toggleMultiSelect(qId, optId, checked) {
+      const set = new Set(answers[qId] || []);
+      if (checked) set.add(optId); else set.delete(optId);
+      answers[qId] = [...set];
+      const unit = renderUnits[currentSection];
+      if (unit && unit.kind === 'multiselect' && unit.question._id === qId && set.size > 0) stopQuestionTimer();
+      updateProgress();
+    }
+
+    function moveRankingItem(qId, idx, dir) {
+      const order = answers[qId];
+      if (!order) return;
+      const j = idx + dir;
+      if (j < 0 || j >= order.length) return;
+      [order[idx], order[j]] = [order[j], order[idx]];
+      const unit = renderUnits[currentSection];
+      if (unit && unit.kind === 'ranking' && unit.question._id === qId) {
+        const flat = allQuestionsFlat();
+        document.getElementById(`section-${currentSection}`).innerHTML =
+          renderRanking(unit, flat.indexOf(unit.question) + 1, flat.length);
+      }
     }
 
     function stopQuestionTimer() {
@@ -225,6 +326,12 @@
       currentSection = idx;
       stopQuestionTimer();
       const unit = renderUnits[idx];
+      // A RANKING question is seeded with its displayed order the first time
+      // its section is shown — reordering from there is optional, not a
+      // forced interaction (see hasAnswer()).
+      if (unit.kind === 'ranking' && !answers[unit.question._id]) {
+        answers[unit.question._id] = unit.question.options.map((o) => o._id);
+      }
       if (unit.kind === 'single' && unit.question.timeLimitSeconds && !answers[unit.question._id] && !timedOut[unit.question._id]) {
         startQuestionTimer(unit.question);
       }
@@ -234,17 +341,27 @@
       updateProgress();
     }
 
+    // Whether a raw question (not a render unit) currently has a
+    // submittable answer — used for the progress bar and for gating manual
+    // submission, mirroring hasAnswer()'s per-type rules.
+    function isAnswered(q) {
+      const val = answers[q._id];
+      if (q.questionType === 'MULTI_SELECT') return Array.isArray(val) && val.length > 0;
+      if (q.questionType === 'RANKING') return Array.isArray(val) && val.length === q.options.length;
+      return !!val;
+    }
+
     function updateProgress() {
-      const total = allQuestionsFlat().length;
-      const answered = Object.keys(answers).length;
-      document.getElementById('progress-text').textContent = `${answered} / ${total}`;
-      document.getElementById('progress-bar').style.width = `${(answered/total)*100}%`;
+      const all = allQuestionsFlat();
+      const answered = all.filter(isAnswered).length;
+      document.getElementById('progress-text').textContent = `${answered} / ${all.length}`;
+      document.getElementById('progress-bar').style.width = `${(answered / all.length) * 100}%`;
     }
 
     document.getElementById('btn-prev').addEventListener('click', () => showSection(currentSection - 1));
     document.getElementById('btn-next').addEventListener('click', () => {
       const unit = renderUnits[currentSection];
-      if (unit.kind === 'single' && !answers[unit.question._id] && !timedOut[unit.question._id]) {
+      if (unit.kind !== 'batch' && !hasAnswer(unit) && !timedOut[unit.question._id]) {
         showToast('Please select an answer before continuing.', 'error');
         return;
       }
@@ -253,21 +370,42 @@
 
     document.getElementById('btn-submit').addEventListener('click', () => submitAssessment(false));
 
+    // Builds one payload entry per active question, in the shape the
+    // backend's per-questionType `referencedOptionIds` expects: a single
+    // answerOptionId for LIKERT/SITUATIONAL/single-correct-answer types, an
+    // answerOptionIds array for MULTI_SELECT, an orderedOptionIds array for
+    // RANKING — or, for anything unanswered, a bare {questionId, status}
+    // marker so a per-question timeout (or an auto-submit cutoff) is
+    // recorded explicitly rather than silently dropped from the submission.
+    function buildAnswerPayload(allQuestions) {
+      return allQuestions.map((q) => {
+        const entry = { questionId: q._id };
+        if (timedOut[q._id]) entry.status = 'timeout';
+
+        if (q.questionType === 'MULTI_SELECT') {
+          if (Array.isArray(answers[q._id]) && answers[q._id].length) entry.answerOptionIds = answers[q._id];
+        } else if (q.questionType === 'RANKING') {
+          if (Array.isArray(answers[q._id]) && answers[q._id].length) entry.orderedOptionIds = answers[q._id];
+        } else if (answers[q._id]) {
+          entry.answerOptionId = answers[q._id];
+        }
+        return entry;
+      });
+    }
+
     async function submitAssessment(auto) {
       if (timer) timer.stop();
       stopQuestionTimer();
       const allQuestions = allQuestionsFlat();
-      const answerPayload = allQuestions.map(q => ({
-        questionId: q._id,
-        answerOptionId: answers[q._id] || null,
-      })).filter(a => a.answerOptionId);
+      const answeredCount = allQuestions.filter(isAnswered).length;
 
-      if (!auto && answerPayload.length < allQuestions.length) {
-        const unanswered = allQuestions.length - answerPayload.length;
+      if (!auto && answeredCount < allQuestions.length) {
+        const unanswered = allQuestions.length - answeredCount;
         document.getElementById('unanswered-msg').textContent = `⚠️ ${unanswered} question(s) unanswered. Please answer all questions before submitting.`;
         return;
       }
 
+      const answerPayload = buildAnswerPayload(allQuestions);
       const btn = document.getElementById('btn-submit');
       btn.disabled = true; btn.textContent = 'Submitting...';
       const { ok, data } = await api.post('/assessment/submit', { sessionId, answers: answerPayload, autoSubmitted: auto }, token);

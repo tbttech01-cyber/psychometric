@@ -13,7 +13,15 @@ const app = express();
 app.set('trust proxy', 1);
 
 app.use(helmet({ contentSecurityPolicy: false }));
-const corsOrigins = [process.env.USER_APP_URL, process.env.ADMIN_APP_URL, process.env.ADMIN_WEB_URL].filter(Boolean);
+// Each of these can be a comma-separated list — Vercel assigns several valid
+// domains (team alias, personal alias, deployment-specific alias, etc.) to
+// every project, and any of them may be the one a browser actually loads.
+const splitOrigins = (v) => (v || '').split(',').map(s => s.trim()).filter(Boolean);
+const corsOrigins = [
+  ...splitOrigins(process.env.USER_APP_URL),
+  ...splitOrigins(process.env.ADMIN_APP_URL),
+  ...splitOrigins(process.env.ADMIN_WEB_URL),
+];
 app.use(cors(corsOrigins.length ? { origin: corsOrigins } : {}));
 app.use(express.json());
 

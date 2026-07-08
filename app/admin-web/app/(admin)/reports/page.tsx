@@ -58,7 +58,7 @@ export default function ReportsPage() {
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
               <StatCard icon={Users} value={dash.cards.totalUsersRegistered} label="Registered Users" />
               <StatCard icon={CheckCircle2} value={dash.cards.totalAssessmentsCompleted} label="Completed Assessments" />
-              <StatCard icon={BarChart3} value={`${dash.cards.averageScore}/200`} label="Average Score" />
+              <StatCard icon={BarChart3} value={`${dash.cards.averageScore}%`} label="Average Score" />
               <StatCard icon={KeyRound} value={dash.cards.activeSharedCodes} label="Active Access Codes" />
             </div>
 

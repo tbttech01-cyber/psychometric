@@ -5,7 +5,7 @@ const questionTypeSchema = new mongoose.Schema({
   description: { type: String, required: true, maxlength: 300 },
   icon:        { type: String, default: '' },
   color:       { type: String, default: '#2563EB' },
-  order:       { type: Number, required: true, unique: true, min: 1, max: 8 },
+  order:       { type: Number, required: true, unique: true, min: 1 },
   isActive:    { type: Boolean, default: true },
 }, { timestamps: true });
 

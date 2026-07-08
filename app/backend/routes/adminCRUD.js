@@ -5,6 +5,8 @@ const ctrl = require('../controllers/adminCRUDController');
 const adminAuth = require('../middleware/adminAuth');
 const { QUESTION_TYPES, DIMENSIONS } = require('../models/Question');
 
+const SINGLE_CORRECT_TYPES = ['NUMERICAL_ABILITY', 'PERCENTAGE_TYPE', 'PUZZLE_TYPE', 'LOGICAL_ABILITY', 'VERBAL_ABILITY', 'IMAGE_BASED'];
+
 router.use(adminAuth);
 
 // Users
@@ -47,33 +49,58 @@ router.put('/question-types/:id', ctrl.updateQuestionType);
 router.delete('/question-types/:id', ctrl.deleteQuestionType);
 
 // Questions
+// Shared by both create and update — a question's per-type shape rules must
+// hold on every save, not just the first one.
+const questionValidators = [
+  body('typeId').notEmpty().withMessage('Category is required.'),
+  body('text').notEmpty().withMessage('Question text is required.'),
+  body('order').isInt({ min: 1 }).withMessage('Display order must be a positive number.'),
+  body('questionType').isIn(QUESTION_TYPES).withMessage('A valid question type is required.'),
+  body('dimension').isIn(DIMENSIONS).withMessage('A valid dimension is required.'),
+  body('marks').isFloat({ gt: 0 }).withMessage('Marks must be a positive number.'),
+  body('options').isArray({ min: 1 }).withMessage('At least one answer option is required.'),
+  body('imageUrl').custom((imageUrl, { req }) => {
+    if (req.body.questionType === 'IMAGE_BASED' && !imageUrl)
+      throw new Error('Image-based questions require an image URL.');
+    return true;
+  }),
+  body('options').custom((options, { req }) => {
+    const type = req.body.questionType;
+    if (type === 'LIKERT_SCALE' && options.length < 5)
+      throw new Error('Likert-scale questions need at least 5 scored options.');
+
+    if (SINGLE_CORRECT_TYPES.includes(type)) {
+      const correctCount = options.filter((o) => o.isCorrect).length;
+      if (correctCount !== 1)
+        throw new Error('Select exactly one correct answer.');
+    }
+
+    if (type === 'SITUATIONAL' && !options.every((o) => o.dimensionScores && Object.keys(o.dimensionScores).length))
+      throw new Error('Every situational option needs at least one dimension score.');
+
+    if (type === 'MULTI_SELECT') {
+      if (!['exact', 'partial'].includes(req.body.scoringMode))
+        throw new Error('Select a scoring mode (exact or partial) for multi-select questions.');
+      if (!options.some((o) => o.isCorrect))
+        throw new Error('Select at least one correct answer.');
+    }
+
+    if (type === 'RANKING' && options.length < 2)
+      throw new Error('Ranking questions need at least 2 items to order.');
+
+    return true;
+  }),
+];
+
 router.get('/questions', ctrl.listQuestions);
 router.get('/questions/:id', ctrl.getQuestion);
-router.post('/questions',
-  [
-    body('typeId').notEmpty().withMessage('Category is required.'),
-    body('text').notEmpty().withMessage('Question text is required.'),
-    body('order').isInt({ min: 1 }).withMessage('Display order must be a positive number.'),
-    body('questionType').isIn(QUESTION_TYPES).withMessage('A valid question type is required.'),
-    body('dimension').isIn(DIMENSIONS).withMessage('A valid dimension is required.'),
-    body('marks').isFloat({ gt: 0 }).withMessage('Marks must be a positive number.'),
-    body('options').isArray({ min: 1 }).withMessage('At least one answer option is required.'),
-    body('options').custom((options, { req }) => {
-      const type = req.body.questionType;
-      if (type === 'LIKERT_SCALE' && options.length < 5)
-        throw new Error('Likert-scale questions need at least 5 scored options.');
-      if (type === 'NUMERICAL_ABILITY') {
-        const correctCount = options.filter((o) => o.isCorrect).length;
-        if (correctCount !== 1)
-          throw new Error('Select exactly one correct answer.');
-      }
-      return true;
-    }),
-  ],
-  validate, ctrl.createQuestion
-);
-router.put('/questions/:id', ctrl.updateQuestion);
+router.post('/questions', questionValidators, validate, ctrl.createQuestion);
+router.put('/questions/:id', questionValidators, validate, ctrl.updateQuestion);
 router.delete('/questions/:id', ctrl.deleteQuestion);
+router.post('/questions/reorder',
+  [body('orders').isArray({ min: 1 }).withMessage('orders must be a non-empty array.')],
+  validate, ctrl.reorderQuestions
+);
 
 // Answer Options
 router.get('/answer-options', [query('questionId').notEmpty()], validate, ctrl.listAnswerOptions);

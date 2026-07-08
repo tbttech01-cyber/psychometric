@@ -5,7 +5,14 @@ import { Chart, ArcElement, DoughnutController, Legend, Tooltip } from "chart.js
 
 Chart.register(ArcElement, DoughnutController, Legend, Tooltip);
 
-const COLORS = ["#CB1417", "#1F2937", "#3B82F6", "#F59E0B", "#10B981", "#8B5CF6", "#EC4899", "#06B6D4"];
+// A fixed palette looks better for small counts, but this chart's slice count
+// depends on how many distinct recommended businesses exist, which grows
+// with the number of question-type categories — so it must not run out.
+const BASE_COLORS = ["#CB1417", "#1F2937", "#3B82F6", "#F59E0B", "#10B981", "#8B5CF6", "#EC4899", "#06B6D4"];
+function colorsFor(count: number): string[] {
+  if (count <= BASE_COLORS.length) return BASE_COLORS.slice(0, count);
+  return Array.from({ length: count }, (_, i) => `hsl(${Math.round((i * 360) / count)}, 65%, 55%)`);
+}
 
 export default function DoughnutChart({ labels, data }: { labels: string[]; data: number[] }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -18,7 +25,7 @@ export default function DoughnutChart({ labels, data }: { labels: string[]; data
       type: "doughnut",
       data: {
         labels,
-        datasets: [{ data, backgroundColor: COLORS.slice(0, data.length), borderWidth: 2, borderColor: "#fff" }],
+        datasets: [{ data, backgroundColor: colorsFor(data.length), borderWidth: 2, borderColor: "#fff" }],
       },
       options: { responsive: true, cutout: "65%", plugins: { legend: { position: "right" } } },
     });

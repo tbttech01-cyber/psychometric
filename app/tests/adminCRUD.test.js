@@ -62,10 +62,10 @@ describe('Admin CRUD: shared IDs', () => {
 });
 
 describe('Admin CRUD: question types', () => {
-  it('lists all 8 seeded question types', async () => {
+  it('lists all seeded question types (8 personality categories + 3 aptitude categories)', async () => {
     const res = await request(app).get('/api/v1/admin/question-types').set(auth());
     expect(res.status).toBe(200);
-    expect(res.body.data.length).toBe(8);
+    expect(res.body.data.length).toBe(11);
   });
 });
 

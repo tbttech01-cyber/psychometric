@@ -38,10 +38,10 @@ export default function DashboardPage() {
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
               <StatCard icon={Users} value={data.cards.totalUsersRegistered} label="Registered Users" />
               <StatCard icon={CheckCircle2} value={data.cards.totalAssessmentsCompleted} label="Completed" />
-              <StatCard icon={BarChart3} value={`${data.cards.averageScore}/200`} label="Avg Score" />
+              <StatCard icon={BarChart3} value={`${data.cards.averageScore}%`} label="Avg Score" />
               <StatCard icon={KeyRound} value={data.cards.activeSharedCodes} label="Active Codes" />
-              <StatCard icon={Trophy} value={`${data.cards.highestScore}/200`} label="Highest Score" tone="success" />
-              <StatCard icon={AlertTriangle} value={`${data.cards.lowestScore}/200`} label="Lowest Score" tone="danger" />
+              <StatCard icon={Trophy} value={`${data.cards.highestScore}%`} label="Highest Score" tone="success" />
+              <StatCard icon={AlertTriangle} value={`${data.cards.lowestScore}%`} label="Lowest Score" tone="danger" />
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -71,7 +71,7 @@ export default function DashboardPage() {
                         <td>{r.userId?.name || ""}</td>
                         <td>{r.userId?.email || ""}</td>
                         <td><span className="font-mono text-xs">{r.userId?.sharedCode || ""}</span></td>
-                        <td className="font-bold">{r.totalMarks}/200</td>
+                        <td className="font-bold">{r.totalMarks}/{r.maxScore}</td>
                         <td><span className={levelBadgeClass(r.level)}>{r.level}</span></td>
                         <td>{new Date(r.createdAt).toLocaleDateString()}</td>
                       </tr>

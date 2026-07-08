@@ -6,6 +6,9 @@ router.use(adminAuth);
 
 router.get('/dashboard', ctrl.getDashboard);
 router.get('/results', ctrl.getResults);
+// Must precede /results/:id — otherwise "user" would be matched as an :id.
+router.get('/results/user/:userId', ctrl.getResultsByUser);
+router.get('/results/:id', ctrl.getResultById);
 router.delete('/results/:id', ctrl.deleteResult);
 router.get('/export/pdf', ctrl.exportPDF);
 router.get('/export/csv', ctrl.exportCSV);

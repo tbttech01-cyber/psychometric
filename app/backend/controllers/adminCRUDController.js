@@ -135,18 +135,38 @@ async function upsertOptions(questionId, incomingOptions, existingIds) {
   return AnswerOption.find({ questionId }).sort('order');
 }
 
+const SINGLE_CORRECT_TYPES = ['NUMERICAL_ABILITY', 'PERCENTAGE_TYPE', 'PUZZLE_TYPE', 'LOGICAL_ABILITY', 'VERBAL_ABILITY', 'IMAGE_BASED'];
+
+// The answer key (correctOptionId / correctOptionIds / idealOrder) can never
+// be trusted from the client for brand-new options — they don't have an
+// _id until AnswerOption.create() runs above. Instead it's always derived
+// from the saved options themselves: isCorrect flags for single/multi-
+// correct types, and for RANKING, the order the admin arranged the options
+// in (upsertOptions already returns them sorted by `order`) — the admin
+// authors a ranking question by putting the options in their correct order.
+function deriveAnswerKeyFields(questionType, savedOptions) {
+  if (SINGLE_CORRECT_TYPES.includes(questionType)) {
+    const correct = savedOptions.find((o) => o.isCorrect);
+    return { correctOptionId: correct ? correct._id : null, correctOptionIds: undefined, idealOrder: undefined };
+  }
+  if (questionType === 'MULTI_SELECT') {
+    return { correctOptionId: null, correctOptionIds: savedOptions.filter((o) => o.isCorrect).map((o) => o._id), idealOrder: undefined };
+  }
+  if (questionType === 'RANKING') {
+    return { correctOptionId: null, correctOptionIds: undefined, idealOrder: savedOptions.map((o) => o._id) };
+  }
+  return { correctOptionId: null, correctOptionIds: undefined, idealOrder: undefined };
+}
+
 exports.createQuestion = async (req, res, next) => {
   try {
-    // correctOptionId can't be known by the client yet — new options don't
-    // have an _id until they're created below. It's always derived from
-    // whichever saved option has isCorrect:true instead.
-    const { options, correctOptionId, ...questionFields } = req.body;
+    const { options, correctOptionId, correctOptionIds, idealOrder, ...questionFields } = req.body;
     const doc = await Question.create(questionFields);
     let savedOptions = [];
     if (Array.isArray(options)) {
       savedOptions = await upsertOptions(doc._id, options, new Set());
-      const correct = savedOptions.find((o) => o.isCorrect);
-      if (correct) { doc.correctOptionId = correct._id; await doc.save(); }
+      Object.assign(doc, deriveAnswerKeyFields(doc.questionType, savedOptions));
+      await doc.save();
     }
     res.status(201).json({ success: true, data: { ...doc.toObject(), options: savedOptions } });
   } catch (err) { next(err); }
@@ -154,18 +174,33 @@ exports.createQuestion = async (req, res, next) => {
 
 exports.updateQuestion = async (req, res, next) => {
   try {
-    const { options, correctOptionId, ...questionFields } = req.body;
+    const { options, correctOptionId, correctOptionIds, idealOrder, ...questionFields } = req.body;
     const doc = await Question.findByIdAndUpdate(req.params.id, { $set: questionFields }, { new: true, runValidators: true });
     if (!doc) return res.status(404).json({ success: false, message: 'Not found.' });
     let savedOptions = await AnswerOption.find({ questionId: doc._id }).sort('order');
     if (Array.isArray(options)) {
       const existingIds = new Set(savedOptions.map((o) => o._id.toString()));
       savedOptions = await upsertOptions(doc._id, options, existingIds);
-      const correct = savedOptions.find((o) => o.isCorrect);
-      doc.correctOptionId = correct ? correct._id : null;
+      Object.assign(doc, deriveAnswerKeyFields(doc.questionType, savedOptions));
       await doc.save();
     }
     res.json({ success: true, data: { ...doc.toObject(), options: savedOptions } });
+  } catch (err) { next(err); }
+};
+
+// `orders`: [{id, order}, ...] — the full desired final order for the given
+// subset of questions (e.g. a simple adjacent-pair swap from an up/down
+// button). Two passes avoid ever violating Question.order's unique index:
+// first move every affected question to a unique negative sentinel, then
+// assign each its real target order.
+exports.reorderQuestions = async (req, res, next) => {
+  try {
+    const { orders } = req.body;
+    const base = -Date.now();
+    await Promise.all(orders.map((o, i) => Question.findByIdAndUpdate(o.id, { order: base - i })));
+    await Promise.all(orders.map((o) => Question.findByIdAndUpdate(o.id, { order: o.order })));
+    const data = await Question.find({ _id: { $in: orders.map((o) => o.id) } }).sort('order');
+    res.json({ success: true, data });
   } catch (err) { next(err); }
 };
 

@@ -112,6 +112,23 @@ exports.deleteResult = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
+exports.getResultById = async (req, res, next) => {
+  try {
+    const doc = await Result.findById(req.params.id).populate('userId', 'name email sharedCode');
+    if (!doc) return res.status(404).json({ success: false, message: 'Not found.' });
+    res.json({ success: true, data: doc });
+  } catch (err) { next(err); }
+};
+
+exports.getResultsByUser = async (req, res, next) => {
+  try {
+    const data = await Result.find({ userId: req.params.userId })
+      .populate('userId', 'name email sharedCode')
+      .sort({ createdAt: -1 });
+    res.json({ success: true, data, total: data.length });
+  } catch (err) { next(err); }
+};
+
 exports.exportPDF = async (req, res, next) => {
   try {
     const { dateFrom, dateTo, level, business, ids } = req.query;

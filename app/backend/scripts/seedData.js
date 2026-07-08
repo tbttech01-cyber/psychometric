@@ -6,6 +6,9 @@ const Question = require('../models/Question');
 const AnswerOption = require('../models/AnswerOption');
 const SharedUserID = require('../models/SharedUserID');
 
+// The first 8 category names deliberately match 8 of the 12 Question.DIMENSIONS
+// values exactly, so each Likert question's `dimension` is just its category's
+// name — see QUESTIONS below.
 const QUESTION_TYPES = [
   { name: 'Communication', description: 'Ability to express ideas clearly and listen actively', icon: '💬', color: '#3B82F6', order: 1 },
   { name: 'Creativity', description: 'Ability to generate novel ideas and think outside the box', icon: '💡', color: '#8B5CF6', order: 2 },
@@ -15,6 +18,11 @@ const QUESTION_TYPES = [
   { name: 'Financial Awareness', description: 'Understanding of financial principles and money management', icon: '💰', color: '#10B981', order: 6 },
   { name: 'Business Mindset', description: 'Orientation towards opportunity identification and value creation', icon: '📊', color: '#F97316', order: 7 },
   { name: 'Teamwork', description: 'Ability to collaborate effectively within a group', icon: '🤝', color: '#06B6D4', order: 8 },
+  // House the aptitude question types — distinct from the personality/EQ
+  // categories above, which stay pure LIKERT_SCALE.
+  { name: 'Numerical Ability', description: 'Aptitude in numerical and quantitative reasoning', icon: '🔢', color: '#0EA5E9', order: 9 },
+  { name: 'Logical Ability', description: 'Aptitude in logical and pattern-based reasoning', icon: '🧩', color: '#22C55E', order: 10 },
+  { name: 'Verbal Ability', description: 'Aptitude in language and verbal reasoning', icon: '📝', color: '#A855F7', order: 11 },
 ];
 
 const QUESTIONS = [
@@ -76,11 +84,122 @@ const QUESTIONS = [
 ];
 
 const LIKERT = [
-  { label: 'Strongly Disagree', marks: 1, order: 1 },
-  { label: 'Disagree', marks: 2, order: 2 },
-  { label: 'Neutral', marks: 3, order: 3 },
-  { label: 'Agree', marks: 4, order: 4 },
-  { label: 'Strongly Agree', marks: 5, order: 5 },
+  { optionText: 'Strongly Disagree', score: 1, order: 1 },
+  { optionText: 'Disagree', score: 2, order: 2 },
+  { optionText: 'Neutral', score: 3, order: 3 },
+  { optionText: 'Agree', score: 4, order: 4 },
+  { optionText: 'Strongly Agree', score: 5, order: 5 },
+];
+
+// One example question per non-Likert questionType, so every type has real,
+// meaningful seed content instead of only ever being exercised via LIKERT_SCALE.
+// `typeIdx` refers to QUESTION_TYPES above (Business Mindset for the
+// decision/ranking-style types, the 3 aptitude categories for the rest).
+const EXTRA_QUESTIONS = [
+  {
+    // marks matches the best option's dimensionScores sum (14), not an
+    // arbitrary value — evaluateSituational scores/derives its max straight
+    // from the options themselves (see evaluationEngine.js), so `marks` here
+    // must agree with that ceiling for categoryQuestionMax to stay correct.
+    typeIdx: 6, order: 41, questionType: 'SITUATIONAL', dimension: 'Communication', marks: 14,
+    text: 'A customer is angry about a late delivery. What will you do?',
+    options: [
+      { optionText: 'Listen calmly and solve the issue', score: 14, dimensionScores: { Communication: 5, 'Emotional Intelligence': 5, 'Problem Solving': 4 }, order: 1 },
+      { optionText: 'Blame the delivery team', score: 2, dimensionScores: { Communication: 1, Leadership: 1 }, order: 2 },
+      { optionText: 'Ignore the customer', score: 0, dimensionScores: { Communication: 0 }, order: 3 },
+      { optionText: 'Cancel the order', score: 1, dimensionScores: { 'Risk Taking': 1 }, order: 4 },
+    ],
+  },
+  {
+    typeIdx: 8, order: 42, questionType: 'NUMERICAL_ABILITY', dimension: 'Numerical Ability', marks: 5, timeLimitSeconds: 60,
+    text: 'Sakshi completes a specified work in 20 days. Tanya is 25% more efficient than Sakshi. The number of days taken by Tanya to complete the work is:',
+    explanation: 'Efficiency ratio 5:4 means the time ratio is 4:5, so Tanya takes 20 × 4/5 = 16 days.',
+    options: [
+      { optionText: '15', score: 0, isCorrect: false, order: 1 },
+      { optionText: '16', score: 5, isCorrect: true, order: 2 },
+      { optionText: '18', score: 0, isCorrect: false, order: 3 },
+      { optionText: '19', score: 0, isCorrect: false, order: 4 },
+    ],
+  },
+  {
+    typeIdx: 8, order: 43, questionType: 'PERCENTAGE_TYPE', dimension: 'Numerical Ability', marks: 5, difficulty: 'easy',
+    text: 'Cost price ₹1000, profit 20%. What is the selling price?',
+    options: [
+      { optionText: '₹1000', score: 0, isCorrect: false, order: 1 },
+      { optionText: '₹1100', score: 0, isCorrect: false, order: 2 },
+      { optionText: '₹1200', score: 5, isCorrect: true, order: 3 },
+      { optionText: '₹1400', score: 0, isCorrect: false, order: 4 },
+    ],
+  },
+  {
+    typeIdx: 9, order: 44, questionType: 'PUZZLE_TYPE', dimension: 'Logical Ability', marks: 5,
+    text: 'Find the missing number in the series: 2, 6, 12, 20, ?, 42',
+    explanation: 'Each term is n×(n+1): 1×2, 2×3, 3×4, 4×5, 5×6=30, 6×7=42.',
+    options: [
+      { optionText: '28', score: 0, isCorrect: false, order: 1 },
+      { optionText: '30', score: 5, isCorrect: true, order: 2 },
+      { optionText: '32', score: 0, isCorrect: false, order: 3 },
+      { optionText: '36', score: 0, isCorrect: false, order: 4 },
+    ],
+  },
+  {
+    typeIdx: 9, order: 45, questionType: 'LOGICAL_ABILITY', dimension: 'Logical Ability', marks: 5, timeLimitSeconds: 45,
+    text: 'Find the missing term: ELFA, GLHA, ILJA, ____, MLNA',
+    explanation: 'First letters skip by 2 (E,G,I,K,M), second letter is always L, third letters skip by 2 (F,H,J,L,N), fourth letter is always A — so the missing term is KLLA.',
+    options: [
+      { optionText: 'OLPA', score: 0, isCorrect: false, order: 1 },
+      { optionText: 'KLMA', score: 0, isCorrect: false, order: 2 },
+      { optionText: 'LLMA', score: 0, isCorrect: false, order: 3 },
+      { optionText: 'KLLA', score: 5, isCorrect: true, order: 4 },
+    ],
+  },
+  {
+    typeIdx: 10, order: 46, questionType: 'VERBAL_ABILITY', dimension: 'Verbal Ability', marks: 5,
+    instructionText: 'Replace the underlined words with the right option.',
+    text: 'The results of this study are greater than any other study conducted previously.',
+    options: [
+      { optionText: 'greater than that of any other', score: 0, isCorrect: false, order: 1 },
+      { optionText: 'greatest among any other', score: 0, isCorrect: false, order: 2 },
+      { optionText: 'greater than all other', score: 0, isCorrect: false, order: 3 },
+      { optionText: 'greater than those of any other', score: 5, isCorrect: true, order: 4 },
+      { optionText: 'No correction required', score: 0, isCorrect: false, order: 5 },
+    ],
+  },
+  {
+    typeIdx: 9, order: 47, questionType: 'IMAGE_BASED', dimension: 'Logical Ability', marks: 5,
+    instructionText: 'What do you see in this image?',
+    text: 'Identify the number shown in the image below.',
+    imageUrl: 'https://placehold.co/400x300?text=74',
+    options: [
+      { optionText: '21', score: 0, isCorrect: false, order: 1 },
+      { optionText: '75', score: 0, isCorrect: false, order: 2 },
+      { optionText: '95', score: 0, isCorrect: false, order: 3 },
+      { optionText: '94', score: 0, isCorrect: false, order: 4 },
+      { optionText: '74', score: 5, isCorrect: true, order: 5 },
+    ],
+  },
+  {
+    typeIdx: 6, order: 48, questionType: 'MULTI_SELECT', dimension: 'Business Mindset', marks: 5, scoringMode: 'partial',
+    text: 'Which of the following are traits of a strong business mindset? (Select all that apply)',
+    options: [
+      { optionText: 'Identifying market gaps', score: 0, isCorrect: true, order: 1 },
+      { optionText: 'Avoiding all risks entirely', score: 0, isCorrect: false, order: 2 },
+      { optionText: 'Focusing on customer value creation', score: 0, isCorrect: true, order: 3 },
+      { optionText: 'Ignoring market trends', score: 0, isCorrect: false, order: 4 },
+    ],
+  },
+  {
+    typeIdx: 6, order: 49, questionType: 'RANKING', dimension: 'Business Mindset', marks: 5,
+    text: 'Rank these startup priorities from most important (1) to least important (4) when starting a new business.',
+    // Options are stored in their ideal order — deriveAnswerKeyFields (see
+    // adminCRUDController.js) reads idealOrder straight off this sequence.
+    options: [
+      { optionText: 'Validate the idea with real customers', score: 0, order: 1 },
+      { optionText: 'Build a minimum viable product', score: 0, order: 2 },
+      { optionText: 'Set up a company logo and branding', score: 0, order: 3 },
+      { optionText: 'Print business cards', score: 0, order: 4 },
+    ],
+  },
 ];
 
 async function seedDatabase({ adminEmail, adminPassword, log = () => {} } = {}) {
@@ -106,23 +225,51 @@ async function seedDatabase({ adminEmail, adminPassword, log = () => {} } = {}) 
 
   let qCount = 0, oCount = 0;
   for (const q of QUESTIONS) {
+    const dimension = QUESTION_TYPES[q.typeIdx].name;
     const existing = await Question.findOne({ order: q.order });
     if (existing) {
       const hasOptions = await AnswerOption.countDocuments({ questionId: existing._id });
       if (!hasOptions) {
         const opts = LIKERT.map(l => ({ questionId: existing._id, ...l }));
         await AnswerOption.insertMany(opts);
-        oCount += 5;
+        oCount += LIKERT.length;
       }
       continue;
     }
-    const doc = await Question.create({ typeId: typeIds[q.typeIdx], text: q.text, order: q.order });
+    const doc = await Question.create({ typeId: typeIds[q.typeIdx], text: q.text, order: q.order, dimension });
     const opts = LIKERT.map(l => ({ questionId: doc._id, ...l }));
     await AnswerOption.insertMany(opts);
     qCount++;
-    oCount += 5;
+    oCount += LIKERT.length;
   }
-  log(`Questions created: ${qCount} | Answer options created: ${oCount}`);
+  log(`Likert questions created: ${qCount} | Answer options created: ${oCount}`);
+
+  // Answer key fields (correctOptionId/correctOptionIds/idealOrder) are
+  // derived from the saved options exactly like adminCRUDController's
+  // deriveAnswerKeyFields does for admin-authored questions — kept as a
+  // small local copy here since importing a controller into a script is
+  // more coupling than this seed data needs.
+  const SINGLE_CORRECT_TYPES = ['NUMERICAL_ABILITY', 'PERCENTAGE_TYPE', 'PUZZLE_TYPE', 'LOGICAL_ABILITY', 'VERBAL_ABILITY', 'IMAGE_BASED'];
+  let extraCount = 0;
+  for (const q of EXTRA_QUESTIONS) {
+    const existing = await Question.findOne({ order: q.order });
+    if (existing) continue;
+    const { typeIdx, options, ...fields } = q;
+    const doc = await Question.create({ ...fields, typeId: typeIds[typeIdx] });
+    const savedOptions = await AnswerOption.insertMany(options.map(o => ({ ...o, questionId: doc._id })));
+
+    if (SINGLE_CORRECT_TYPES.includes(q.questionType)) {
+      const correct = savedOptions.find(o => o.isCorrect);
+      doc.correctOptionId = correct ? correct._id : null;
+    } else if (q.questionType === 'MULTI_SELECT') {
+      doc.correctOptionIds = savedOptions.filter(o => o.isCorrect).map(o => o._id);
+    } else if (q.questionType === 'RANKING') {
+      doc.idealOrder = savedOptions.sort((a, b) => a.order - b.order).map(o => o._id);
+    }
+    await doc.save();
+    extraCount++;
+  }
+  log(`Example questions created for all other question types: ${extraCount}`);
 
   const demoCode = await SharedUserID.findOne({ code: 'TBT2024' });
   if (!demoCode) {
@@ -132,4 +279,4 @@ async function seedDatabase({ adminEmail, adminPassword, log = () => {} } = {}) 
   }
 }
 
-module.exports = { seedDatabase, QUESTION_TYPES, QUESTIONS, LIKERT };
+module.exports = { seedDatabase, QUESTION_TYPES, QUESTIONS, LIKERT, EXTRA_QUESTIONS };

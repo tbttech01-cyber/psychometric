@@ -15,7 +15,7 @@ function generatePDF(results) {
   doc.moveDown(3);
 
   // Table header
-  const cols = { name: 40, email: 160, code: 310, score: 390, pct: 440, level: 490, date: 590 };
+  const cols = { name: 40, email: 150, code: 270, score: 330, pct: 375, level: 415, cws: 505, business: 590, date: 720 };
   doc.fillColor('#1B3A6B').fontSize(9).font('Helvetica-Bold');
   doc.text('Name', cols.name, doc.y);
   doc.text('Email', cols.email, doc.y - 9);
@@ -23,6 +23,8 @@ function generatePDF(results) {
   doc.text('Score', cols.score, doc.y - 9);
   doc.text('%', cols.pct, doc.y - 9);
   doc.text('Level', cols.level, doc.y - 9);
+  doc.text('C/W/S', cols.cws, doc.y - 9);
+  doc.text('Top Recommendation', cols.business, doc.y - 9);
   doc.text('Date', cols.date, doc.y - 9);
   doc.moveDown(0.4);
   doc.moveTo(40, doc.y).lineTo(doc.page.width - 40, doc.y).stroke('#1B3A6B');
@@ -31,15 +33,18 @@ function generatePDF(results) {
   // Rows
   results.forEach((r, i) => {
     if (doc.y > doc.page.height - 80) { doc.addPage(); }
-    const fill = i % 2 === 0 ? '#F8FAFC' : '#FFFFFF';
     doc.fillColor('#1e293b').fontSize(8).font('Helvetica');
     const y = doc.y;
-    doc.text(r.user?.name || '', cols.name, y, { width: 110 });
-    doc.text(r.user?.email || '', cols.email, y, { width: 140 });
-    doc.text(r.user?.sharedCode || '', cols.code, y, { width: 70 });
-    doc.text(`${r.totalMarks}/200`, cols.score, y, { width: 45 });
-    doc.text(`${r.percentage}%`, cols.pct, y, { width: 45 });
-    doc.text(r.level || '', cols.level, y, { width: 95 });
+    const topRecommendation = r.recommendations?.[0]?.business || r.recommendedBusiness?.[0] || '';
+    const cws = (r.correctCount != null) ? `${r.correctCount}/${r.wrongCount}/${r.skippedCount}` : '';
+    doc.text(r.userId?.name || '', cols.name, y, { width: 100 });
+    doc.text(r.userId?.email || '', cols.email, y, { width: 115 });
+    doc.text(r.userId?.sharedCode || '', cols.code, y, { width: 55 });
+    doc.text(`${r.totalMarks}/${r.maxScore}`, cols.score, y, { width: 40 });
+    doc.text(`${r.percentage}%`, cols.pct, y, { width: 35 });
+    doc.text(r.level || '', cols.level, y, { width: 85 });
+    doc.text(cws, cols.cws, y, { width: 55 });
+    doc.text(topRecommendation, cols.business, y, { width: 125 });
     doc.text(r.createdAt ? new Date(r.createdAt).toLocaleDateString() : '', cols.date, y, { width: 80 });
     doc.moveDown(0.9);
   });
@@ -57,23 +62,48 @@ function generatePDF(results) {
 }
 
 function generateCSV(results) {
+  // Category/dimension names are admin-configurable (not a fixed set), and
+  // can change over time, so both column lists are derived from whatever
+  // actually appears in this export rather than hardcoded.
+  const categoryNames = [...new Set(
+    results.flatMap(r => Array.from(r.categoryScores?.keys?.() || []))
+  )].sort();
+  const dimensionNames = [...new Set(
+    results.flatMap(r => Array.from(r.dimensionPercentages?.keys?.() || []))
+  )].sort();
+
   const fields = [
-    { label: 'Name',                       value: r => r.user?.name || '' },
-    { label: 'Email',                      value: r => r.user?.email || '' },
-    { label: 'Shared Code',                value: r => r.user?.sharedCode || '' },
+    { label: 'Name',                       value: r => r.userId?.name || '' },
+    { label: 'Email',                      value: r => r.userId?.email || '' },
+    { label: 'Shared Code',                value: r => r.userId?.sharedCode || '' },
     { label: 'Total Marks',                value: 'totalMarks' },
+    { label: 'Max Score',                  value: 'maxScore' },
     { label: 'Percentage',                 value: 'percentage' },
     { label: 'Level',                      value: 'level' },
-    { label: 'Communication Score',        value: r => r.categoryScores?.get?.('Communication') ?? '' },
-    { label: 'Creativity Score',           value: r => r.categoryScores?.get?.('Creativity') ?? '' },
-    { label: 'Problem Solving Score',      value: r => r.categoryScores?.get?.('Problem Solving') ?? '' },
-    { label: 'Leadership Score',           value: r => r.categoryScores?.get?.('Leadership') ?? '' },
-    { label: 'Risk Taking Score',          value: r => r.categoryScores?.get?.('Risk Taking') ?? '' },
-    { label: 'Financial Awareness Score',  value: r => r.categoryScores?.get?.('Financial Awareness') ?? '' },
-    { label: 'Business Mindset Score',     value: r => r.categoryScores?.get?.('Business Mindset') ?? '' },
-    { label: 'Teamwork Score',             value: r => r.categoryScores?.get?.('Teamwork') ?? '' },
+    ...categoryNames.map(name => ({
+      label: `${name} Score`,
+      value: r => r.categoryScores?.get?.(name) ?? '',
+    })),
     { label: 'Top Category',               value: r => (r.highestCategory || []).join('; ') },
+    { label: 'Business Readiness %',       value: r => r.businessReadinessPercent ?? '' },
+    { label: 'Aptitude Score',             value: r => r.aptitudeScore ?? '' },
+    { label: 'Personality Score',          value: r => r.personalityScore ?? '' },
+    { label: 'Business Mindset Score',     value: r => r.businessMindsetScore ?? '' },
+    { label: 'Financial Awareness Score',  value: r => r.financialAwarenessScore ?? '' },
+    ...dimensionNames.map(name => ({
+      label: `${name} %`,
+      value: r => r.dimensionPercentages?.get?.(name) ?? '',
+    })),
+    { label: 'Strong Dimensions',          value: r => (r.strongDimensions || []).join('; ') },
+    { label: 'Weak Dimensions',            value: r => (r.weakDimensions || []).join('; ') },
+    { label: 'Correct',                    value: r => r.correctCount ?? '' },
+    { label: 'Wrong',                      value: r => r.wrongCount ?? '' },
+    { label: 'Skipped',                    value: r => r.skippedCount ?? '' },
     { label: 'Recommended Business',       value: r => (r.recommendedBusiness || []).join('; ') },
+    {
+      label: 'Recommendations (business: explanation)',
+      value: r => (r.recommendations || []).map(rec => `${rec.business}: ${rec.explanation}`).join(' | '),
+    },
     { label: 'Assessment Date',            value: r => r.createdAt ? new Date(r.createdAt).toISOString() : '' },
   ];
 
