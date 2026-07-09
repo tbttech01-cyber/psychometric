@@ -190,6 +190,7 @@ function QuestionsPageInner() {
     const errors = validateQuestion(qType, qDimension, qMarks, qQuestionType, options, { scoringMode: qScoringMode, imageUrl: qImageUrl });
     if (!qOrder) errors.push("Display order is required.");
     if (!qText.trim()) errors.push("Question text is required.");
+    if (qHasAudio && !qAudioUrl.trim()) errors.push("Upload an audio file for this question, or turn off Has audio.");
     if (errors.length) { showToast(errors[0], "error"); return; }
 
     const payload = {
@@ -322,14 +323,38 @@ function QuestionsPageInner() {
                 <input placeholder={qQuestionType === "IMAGE_BASED" ? "Image URL (required)" : "Image URL (optional)"} value={qImageUrl}
                   onChange={(e) => setQImageUrl(e.target.value)}
                   className="border rounded-xl px-3.5 py-2.5 focus:outline-none" style={{ borderColor: "var(--tbt-border)" }} />
-                <div className="flex items-center gap-2">
+                <div>
                   <label className="flex items-center gap-2 shrink-0">
                     <input type="checkbox" checked={qHasAudio} onChange={(e) => setQHasAudio(e.target.checked)} className="w-5 h-5" />
                     <span className="text-sm font-semibold">Has audio</span>
                   </label>
                   {qHasAudio && (
-                    <input placeholder="Audio URL" value={qAudioUrl} onChange={(e) => setQAudioUrl(e.target.value)}
-                      className="border rounded-xl px-3.5 py-2.5 flex-1 focus:outline-none" style={{ borderColor: "var(--tbt-border)" }} />
+                    <div className="mt-2 space-y-2">
+                      <input type="file" accept="audio/*"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (!file) return;
+                          // Cap at 3MB so the base64 payload stays under the
+                          // API body limit / Vercel's request-size limit.
+                          if (file.size > 3 * 1024 * 1024) {
+                            showToast("Audio file is too large. Please use a clip under 3 MB.", "error");
+                            e.target.value = "";
+                            return;
+                          }
+                          const reader = new FileReader();
+                          reader.onload = () => setQAudioUrl(reader.result as string);
+                          reader.onerror = () => showToast("Could not read the audio file.", "error");
+                          reader.readAsDataURL(file);
+                        }}
+                        className="block w-full text-sm" />
+                      {qAudioUrl && (
+                        <div className="flex items-center gap-2">
+                          <audio controls src={qAudioUrl} className="flex-1 h-9" />
+                          <button type="button" onClick={() => setQAudioUrl("")} className="btn btn-outline btn-sm shrink-0">Remove</button>
+                        </div>
+                      )}
+                      <p className="text-xs" style={{ color: "var(--tbt-muted)" }}>Upload an audio clip (max 3 MB). Candidates get a play/pause/replay control.</p>
+                    </div>
                   )}
                 </div>
               </div>

@@ -69,6 +69,51 @@ describe('Admin CRUD: question types', () => {
   });
 });
 
+describe('Admin CRUD: question audio', () => {
+  let typeId;
+  const dataUri = 'data:audio/mpeg;base64,SGVsbG8gYXVkaW8=';
+  const basePayload = (over = {}) => ({
+    typeId, order: 9990, text: 'Listen and answer.', questionType: 'LIKERT_SCALE',
+    dimension: 'Communication', marks: 5,
+    options: [1, 2, 3, 4, 5].map((n) => ({ optionText: `opt${n}`, score: n, order: n })),
+    ...over,
+  });
+
+  beforeAll(async () => {
+    const res = await request(app).get('/api/v1/admin/question-types').set(auth());
+    typeId = res.body.data[0]._id;
+  });
+
+  it('rejects Has-Audio without an audio source', async () => {
+    const res = await request(app).post('/api/v1/admin/questions').set(auth()).send(basePayload({ hasAudio: true }));
+    expect(res.status).toBe(400);
+  });
+
+  it('stores an uploaded base64 audio data URI, omits it from the list, returns it on detail', async () => {
+    const res = await request(app).post('/api/v1/admin/questions').set(auth())
+      .send(basePayload({ hasAudio: true, audioUrl: dataUri }));
+    expect(res.status).toBe(201);
+    const id = res.body.data._id;
+
+    const one = await request(app).get(`/api/v1/admin/questions/${id}`).set(auth());
+    expect(one.body.data.audioUrl).toBe(dataUri);
+
+    const list = await request(app).get('/api/v1/admin/questions').set(auth());
+    const row = list.body.data.find((q) => q._id === id);
+    expect(row.hasAudio).toBe(true);
+    expect(row.audioUrl).toBeUndefined();
+
+    await request(app).delete(`/api/v1/admin/questions/${id}`).set(auth());
+  });
+
+  it('rejects an oversized audio payload', async () => {
+    const huge = 'data:audio/mpeg;base64,' + 'A'.repeat(4_700_000);
+    const res = await request(app).post('/api/v1/admin/questions').set(auth())
+      .send(basePayload({ order: 9991, hasAudio: true, audioUrl: huge }));
+    expect(res.status).toBe(400);
+  });
+});
+
 describe('Admin dashboard + export', () => {
   it('returns dashboard stats', async () => {
     const res = await request(app).get('/api/v1/admin/dashboard').set(auth());

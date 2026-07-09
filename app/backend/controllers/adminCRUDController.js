@@ -124,7 +124,11 @@ exports.listQuestions = async (req, res, next) => {
   try {
     const filter = {};
     if (req.query.typeId) filter.typeId = req.query.typeId;
-    const data = await Question.find(filter).sort('order').populate('typeId', 'name color');
+    // Exclude audioUrl from the list — it can hold a multi-MB base64 data URI,
+    // and shipping one per row would bloat the questions list (also consumed by
+    // the Question Set picker). `hasAudio` stays so the list can flag audio
+    // questions; the full audioUrl is loaded on demand by getQuestion (edit).
+    const data = await Question.find(filter).select('-audioUrl').sort('order').populate('typeId', 'name color');
     res.json({ success: true, data });
   } catch (err) { next(err); }
 };

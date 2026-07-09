@@ -67,6 +67,17 @@ const questionValidators = [
       throw new Error('Image-based questions require an image URL.');
     return true;
   }),
+  // When Has Audio is on, an audio source (uploaded base64 data URI or a URL)
+  // must be present. Bound the length so a runaway upload can't blow past the
+  // 8mb JSON body limit — ~4.6M chars ≈ a ~3.4MB decoded file, matching the
+  // client-side 3MB upload cap with headroom.
+  body('audioUrl').custom((audioUrl, { req }) => {
+    if (req.body.hasAudio && !audioUrl)
+      throw new Error('Enable-audio questions need an uploaded audio file or URL.');
+    if (audioUrl && audioUrl.length > 4_600_000)
+      throw new Error('Audio file is too large. Please use a clip under 3 MB.');
+    return true;
+  }),
   body('options').custom((options, { req }) => {
     const type = req.body.questionType;
     if (type === 'LIKERT_SCALE' && options.length < 5)

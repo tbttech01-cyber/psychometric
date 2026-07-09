@@ -47,7 +47,12 @@ app.use(cors({
     return callback(null, false);
   }
 }));
-app.use(express.json());
+// Raised from the 100kb default so admin-uploaded question audio (stored as a
+// base64 data URI on the Question — see adminCRUDController) fits in the body.
+// Uploads are capped client-side at ~3MB (→ ~4MB base64) to also stay under
+// Vercel's ~4.5MB serverless request-body limit; 8mb here leaves headroom for
+// the encoded audio plus the rest of the question payload (options, etc.).
+app.use(express.json({ limit: '8mb' }));
 
 // On a persistent server (server.js), connectDB() already runs once at boot,
 // so this is a no-op (readyState is already 1). On a serverless platform
@@ -92,6 +97,7 @@ app.use('/api/v1/admin', require('./routes/adminAuth'));
 app.use('/api/v1/admin', require('./routes/adminCRUD'));
 app.use('/api/v1/admin', require('./routes/adminDashboard'));
 app.use('/api/v1/admin', require('./routes/adminBusinessMatrix'));
+app.use('/api/v1/admin', require('./routes/adminQuestionSets'));
 app.use('/api/v1/user', require('./routes/userAuth'));
 app.use('/api/v1/assessment', require('./routes/assessment'));
 
