@@ -59,7 +59,7 @@ To run a single test file: `npx jest tests/adminAuth.test.js --runInBand`.
 
 ### Testing
 
-Tests live in `app/tests/` and run against a **real MongoDB**, not mocks — `globalSetup.js`/`globalTeardown.js` spin up a connection and `dbConnect.js` provides it to specs; `tests/setupEnv.js` loads `.env.test` first. The only thing mocked is outbound email (`tests/mocks/emailSender.js`, aliased over the real `utils/emailSender` via `jest.config.js`'s `moduleNameMapper`) so tests don't send real OTP mail. CI (`.github/workflows/ci.yml`) runs `npm test` in `app/` against a `mongo:7` service container on every push/PR to `main`.
+Tests live in `app/tests/` and run against a **real MongoDB**, not mocks — `globalSetup.js`/`globalTeardown.js` spin up a connection and `dbConnect.js` provides it to specs; `tests/setupEnv.js` loads `.env.test` first. The only thing mocked is outbound email (`tests/mocks/emailSender.js`, aliased over the real `utils/emailSender` via `jest.config.js`'s `moduleNameMapper`) so tests don't send real OTP mail. CI (`.github/workflows/ci-cd.yml`, `test-backend` job) runs `npm test` in `app/` against a `mongo:7` service container on every push/PR to `main` — see "CI/CD" under Deployment below for the full pipeline.
 
 ### Architecture
 
@@ -81,7 +81,7 @@ backend/
   controllers/            # one controller per route file
   models/                 # Mongoose schemas: Admin, User, SharedUserID, QuestionType,
                           #   Question, AnswerOption, AssessmentSession, UserAnswer, Result,
-                          #   BusinessMatrixCell
+                          #   BusinessMatrixCell, Setting
                           #   (OTPs are stored as fields directly on Admin/User, not a separate model)
   middleware/
     adminAuth.js          # JWT verification for admin routes
@@ -120,7 +120,7 @@ Admin and user auth are **not** symmetric:
 - **User** (`routes/userAuth.js` / `controllers/userAuthController.js`): OTP-over-email — POST registration → server emails a 6-digit OTP → client POSTs OTP to `/verify-otp` → JWT issued. `/resend-otp` is rate-limited to one request per 60 seconds server-side.
 - Both `/api/v1/admin/login`, `/api/v1/user/login`, and `/api/v1/user/verify-otp` additionally sit behind a shared 10-requests/minute rate limiter (`backend/app.js`).
 - Admin and user JWTs are verified by separate middleware (`middleware/adminAuth.js` / `middleware/userAuth.js`) and carry a `role` claim.
-- CORS origins are read from `USER_APP_URL`, `ADMIN_APP_URL`, and `ADMIN_WEB_URL` env vars (the last one is for the standalone `admin-web` Next.js frontend calling the API cross-origin instead of being served statically).
+- CORS is allowlist-based (`backend/app.js`): origins from `USER_APP_URL`, `ADMIN_APP_URL`, and `ADMIN_WEB_URL` env vars (the last one is for the standalone `admin-web` Next.js frontend calling the API cross-origin instead of being served statically) are always allowed, and `http://localhost:*` / any `*.vercel.app` origin is allowed unconditionally on top of that allowlist (so preview deploys work without an env var update).
 
 ### Key Domain Concepts
 
@@ -135,6 +135,7 @@ Admin and user auth are **not** symmetric:
 - **businessRecommendationEngine.getRecommendations(dimensionPercentages)** — ordered rule list matched against dimension percentages (e.g. high Communication + Leadership + Risk Taking → sales/marketing businesses), deduped and capped at 5, with a fallback set if nothing matches. Replaces the old static `BUSINESS_MAP` (still present in `scoreCalculator.js` but superseded for new results).
 - **Result** — one per submitted session. Original fields (total/percentage/level, per-category scores, `recommendedBusiness`, `improvementAreas`) plus additive fields for dimension scoring (`dimensionScores`, `dimensionPercentages`, `strongDimensions`/`weakDimensions`, the four composite scores, `recommendations`) — the additive fields are absent on Result documents created before this was introduced, so treat them as optional when reading.
 - **BusinessMatrixCell** — admin-editable `rowTypeId` × `colTypeId` (both `QuestionType` refs) → recommended `businessName` + `rating` (1–5), unique per pair; managed via `adminBusinessMatrix.js`, separate from both `BUSINESS_MAP` and `businessRecommendationEngine`.
+- **Setting** — a generic `key`/`value` (Mixed) store for admin-configurable platform settings. Currently holds `assessment_duration_minutes` (default 30 when unset), read by `assessmentController.startSession`/`getQuestions` to size a new session's `expiresAt` and to report `remainingSeconds`, exposed read-only to the user app at `GET /api/v1/assessment/settings` and read/write to admins at `GET`/`POST /api/v1/admin/settings`, and editable from admin-web's Settings page. `AssessmentTimer` (`frontend/assets/js/timer.js`) accepts either a duration-in-seconds number or an absolute `expiresAt` date.
 
 ---
 
@@ -162,3 +163,12 @@ Two independent deploy paths exist for the Express app (`app/`), both driven by 
 - **Vercel** (standalone/serverless): `app/api/index.js` re-exports `backend/app.js` as the serverless entrypoint; `app/vercel.json` rewrites all requests to it. Since there's no boot-time hook on a serverless platform, `backend/app.js` connects to MongoDB lazily on first request and caches the connection on `global.__tbtMongoConnect` for warm invocations (`backend/server.js`'s `connectDB()` call is a no-op in this mode since the connection is already established). The candidate frontend (`frontend/`) reads its API origin from `window.TBT_API_BASE` (`frontend/assets/js/api.js`) so it can be hosted standalone on Vercel pointing at a separately-hosted API — set that global (e.g. injected via env at build/deploy time) when the frontend and API aren't on the same origin.
 
 `admin-web` is not part of either blueprint above — it's always a separate deploy target (e.g. Vercel) calling the API cross-origin; see its `ADMIN_WEB_URL` CORS requirement above.
+
+### CI/CD (`.github/workflows/ci-cd.yml`)
+
+A single GitHub Actions workflow covers both halves of the repo and runs on every push/PR to `main`:
+- `test-backend` — `app/`'s Jest suite against a `mongo:7` service container (same as the old `ci.yml`).
+- `build-admin-web` — installs, lints (non-blocking), and runs `next build` for `app/admin-web/`.
+- `deploy-backend` / `deploy-admin-web` — on a push to `main` only, and gated on the corresponding test/build job passing, deploy each app to its own Vercel project via the Vercel CLI (`vercel pull` → `vercel build --prod` → `vercel deploy --prebuilt --prod`). Requires a `VERCEL_TOKEN` repo secret; production env vars live in each Vercel project's dashboard, not in the workflow. See `DEPLOYMENT.md` §6 for full setup.
+
+This is independent of Render's own git-based auto-deploy (still active per its own dashboard setting) — the two are not mutually exclusive.

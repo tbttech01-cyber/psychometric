@@ -45,3 +45,19 @@ MONGO_URI="<your Atlas connection string>" ADMIN_EMAIL="<prod admin email>" ADMI
 - Visit the Render URL — should redirect to `/user/index.html`.
 - Log in as admin, complete the OTP flow (real email should arrive this time), confirm the dashboard loads.
 - Register a test user with the seeded shared code (`TBT2024`), complete an assessment, confirm scoring/result render correctly.
+
+## 6. CI/CD via GitHub Actions → Vercel (`.github/workflows/ci-cd.yml`)
+
+On every push/PR to `main`, this workflow builds and tests both `app/` (backend + user frontend) and `app/admin-web/`. On a push to `main` (not PRs), and only once tests/build for that side pass, it deploys both to Vercel as production deployments using the Vercel CLI (`vercel pull` → `vercel build --prod` → `vercel deploy --prebuilt --prod`). A broken build or a failing `npm test` blocks the corresponding deploy job entirely.
+
+This assumes both sides are already linked to Vercel projects (`vercel link` was run once locally in `app/` and in `app/admin-web/`, producing the gitignored `.vercel/project.json` in each — the workflow hardcodes the same org/project IDs found there, which are identifiers, not credentials).
+
+Setup required for this pipeline to run:
+
+1. **One GitHub secret**: repo Settings → Secrets and variables → Actions → New repository secret → `VERCEL_TOKEN` — a token from https://vercel.com/account/tokens with access to both projects' team.
+2. **Production env vars set in Vercel itself** (dashboard → each project → Settings → Environment Variables → Production), since `vercel pull` fetches these rather than the workflow supplying them:
+   - `backend` project: `MONGO_URI`, `JWT_SECRET`, `GMAIL_USER`, `GMAIL_PASS`, `ADMIN_EMAIL`, `ADMIN_PASSWORD`, `USER_APP_URL`, `ADMIN_APP_URL`, `ADMIN_WEB_URL`.
+   - `admin-web` project: `NEXT_PUBLIC_API_URL` pointing at the backend project's production URL.
+3. If the Vercel projects ever need relinking (e.g. recreated), update `VERCEL_ORG_ID`/`VERCEL_PROJECT_ID` in `.github/workflows/ci-cd.yml` to match the new `.vercel/project.json` values.
+
+Render's own auto-deploy-on-push (§3 above) is unrelated to this workflow and keeps running independently unless disabled in the Render dashboard — with both active, every push to `main` deploys to both Render and Vercel.
