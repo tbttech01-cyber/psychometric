@@ -73,17 +73,18 @@ backend/
   app.js                  # the real Express app — middleware, CORS, rate limiters,
                           #   lazy serverless DB connect, routes, static serving of frontend/
   config/db.js            # Mongoose connection
-  routes/                 # 6 route files
+  routes/                 # 7 route files
     adminAuth.js          # POST /api/v1/admin/login, /logout, /change-password; GET /profile
     adminCRUD.js          # CRUD for shared-ids, question-types, questions, answer-options
     adminDashboard.js     # GET stats, results list, export (PDF/CSV), email
     adminBusinessMatrix.js # CRUD for BusinessMatrixCell (rowTypeId x colTypeId -> business + rating)
+    adminQuestionSets.js  # CRUD for QuestionSet (a set's questionIds array order IS its question order)
     userAuth.js           # POST /api/v1/user/register, /verify-otp, /login, etc.
     assessment.js         # GET /questions, POST /start, /submit, GET /result
   controllers/            # one controller per route file
   models/                 # Mongoose schemas: Admin, User, SharedUserID, QuestionType,
                           #   Question, AnswerOption, AssessmentSession, UserAnswer, Result,
-                          #   BusinessMatrixCell, Setting
+                          #   BusinessMatrixCell, Setting, QuestionSet
                           #   (OTPs are stored as fields directly on Admin/User, not a separate model)
   middleware/
     adminAuth.js          # JWT verification for admin routes
@@ -104,6 +105,9 @@ backend/
     seedBusinessMatrixDummy.js # optional dummy BusinessMatrixCell rows for local matrix-admin testing
     migratePhase1QuestionTypes.js # one-time backfill: sets dimension/questionType/marks on pre-existing
                           #   Questions (maps each legacy QuestionType.name to its canonical dimension)
+    migrateQuestionSets.js # one-time: bundles all active questions into a "Default Set", assigns it to
+                          #   every access code, backfills in-progress sessions (idempotent). Run:
+                          #   `node backend/scripts/migrateQuestionSets.js`
 ```
 
 **Frontend structure:**
@@ -128,18 +132,19 @@ Admin and user auth are **not** symmetric:
 
 ### Key Domain Concepts
 
-- **SharedUserID** — an alphanumeric access code given to users; scoped to a particular assessment cohort.
+- **SharedUserID** — an alphanumeric access code given to users; scoped to a particular assessment cohort. Carries a `questionSetId` — the **QuestionSet that cohort's users are assessed on** (nullable; users of an unassigned code are blocked at `/start`).
+- **QuestionSet** — a named, admin-managed group of questions with its own `durationMinutes` (per-set timer). `questionIds` is an **ordered array of Question refs where array position IS the per-set order** (decoupled from the globally-unique `Question.order` — the same question can sit at different positions in different sets). Questions are **shared**: a question can belong to many sets, and deleting a set never deletes its questions (deletion is blocked, 409, while any access code still references the set). Managed via `adminQuestionSets.js`; reordering is just a PUT with the array in a new sequence (no separate reorder endpoint).
 - **QuestionType** — the category grouping shown to admins/users (e.g., verbal, numerical). Each has a unique `order`. Distinct from `Question.questionType` below — the naming collision is real, don't conflate them.
 - **Question** — belongs to a `QuestionType` category (`typeId`) and additionally carries a `questionType` enum describing its *answer shape*: `LIKERT_SCALE`, `SITUATIONAL`, `NUMERICAL_ABILITY`, `PERCENTAGE_TYPE`, `PUZZLE_TYPE`, `LOGICAL_ABILITY`, `VERBAL_ABILITY`, `IMAGE_BASED`, `MULTI_SELECT`, `RANKING` (see `models/Question.js`'s `QUESTION_TYPES`). Each question also has a `dimension` (one of 12 psychometric traits in `Question.DIMENSIONS` — Communication, Leadership, Problem Solving, etc.) that its score rolls up into for the report's dimension breakdown, independent of its `QuestionType` category. Type-specific fields (`correctOptionId`, `correctOptionIds`, `idealOrder`, `scoringMode`) are all on one schema rather than split across models.
 - **AnswerOption** — options carry a `score` (not a fixed `marks` value); `SITUATIONAL` options additionally carry `dimensionScores` (one option maps to multiple dimensions at once, e.g. `{Communication: 5, Teamwork: 4}`).
 - **evaluationEngine.js** — one evaluator function per `questionType`, dispatched by `evaluateAnswer(question, options, userAnswer)`. This is the only place scoring rules live; controllers must never inline per-type logic. `NUMERICAL_ABILITY`/`PERCENTAGE_TYPE`/`PUZZLE_TYPE`/`LOGICAL_ABILITY`/`VERBAL_ABILITY`/`IMAGE_BASED` all share `evaluateSingleCorrect` (correct option → full marks, else 0).
 - **UserAnswer** — exactly one of `answerOptionId` (single-select types), `selectedOptionIds` (`MULTI_SELECT`), or `rankingOrder` (`RANKING`) is populated, depending on the question's `questionType`.
-- **AssessmentSession** — tracks in-progress / submitted / expired state with a timer (`expiresAt`).
-- **scoreCalculator.calculateResult** — aggregates `UserAnswer` scores two ways: per `QuestionType` category (unchanged legacy behavior) and per `dimension` (summed across whatever dimensions each answer's `dimensionScores` touches — most types touch one, `SITUATIONAL` touches several). Also derives `aptitudeScore`/`personalityScore`/`businessMindsetScore`/`financialAwarenessScore` as averages over fixed dimension groupings, and calls `businessRecommendationEngine` for recommendations.
+- **AssessmentSession** — tracks in-progress / submitted / expired state with a timer (`expiresAt`). At `startSession` it **snapshots the resolved set** onto the session: `questionSetId`, an ordered `questionIds` (the frozen list this attempt is scored against), and `durationMinutes`. `getQuestions` and `submitAssessment` read this snapshot — **not** the live set — so mid-attempt admin edits (reorder, membership, timer, cohort reassignment, deactivating a reused question) can't corrupt an in-flight attempt. Safe because question delete is a soft-delete, so a snapshotted id always resolves. Question *content/marks/options* are still live-read at submit (scoring stays server-authoritative). `assessmentController.resolveUserSet(user)` maps a user → their code's set → active-filtered, order-preserved question ids.
+- **scoreCalculator.calculateResult** — aggregates `UserAnswer` scores two ways: per `QuestionType` category and per `dimension` (summed across whatever dimensions each answer's `dimensionScores` touches — most types touch one, `SITUATIONAL` touches several). Maxes come from `computeQuestionMaxes` over the **session's snapshot question set** (not all active questions), so **percentages are relative to the set the candidate actually took**. The function is parameterized on the question array, so no change was needed for set-scoping. Also derives `aptitudeScore`/`personalityScore`/`businessMindsetScore`/`financialAwarenessScore` as averages over fixed dimension groupings, and calls `businessRecommendationEngine` for recommendations.
 - **businessRecommendationEngine.getRecommendations(dimensionPercentages)** — ordered rule list matched against dimension percentages (e.g. high Communication + Leadership + Risk Taking → sales/marketing businesses), deduped and capped at 5, with a fallback set if nothing matches. Replaces the old static `BUSINESS_MAP` (still present in `scoreCalculator.js` but superseded for new results).
 - **Result** — one per submitted session. Original fields (total/percentage/level, per-category scores, `recommendedBusiness`, `improvementAreas`) plus additive fields for dimension scoring (`dimensionScores`, `dimensionPercentages`, `strongDimensions`/`weakDimensions`, the four composite scores, `recommendations`) — the additive fields are absent on Result documents created before this was introduced, so treat them as optional when reading.
 - **BusinessMatrixCell** — admin-editable `rowTypeId` × `colTypeId` (both `QuestionType` refs) → recommended `businessName` + `rating` (1–5), unique per pair; managed via `adminBusinessMatrix.js`, separate from both `BUSINESS_MAP` and `businessRecommendationEngine`.
-- **Setting** — a generic `key`/`value` (Mixed) store for admin-configurable platform settings. Currently holds `assessment_duration_minutes` (default 30 when unset), read by `assessmentController.startSession`/`getQuestions` to size a new session's `expiresAt` and to report `remainingSeconds`, exposed read-only to the user app at `GET /api/v1/assessment/settings` and read/write to admins at `GET`/`POST /api/v1/admin/settings`, and editable from admin-web's Settings page. `AssessmentTimer` (`frontend/assets/js/timer.js`) accepts either a duration-in-seconds number or an absolute `expiresAt` date.
+- **Setting** — a generic `key`/`value` (Mixed) store for admin-configurable platform settings. Holds `assessment_duration_minutes` (default 30 when unset). Since per-QuestionSet timers were introduced this is **no longer the live assessment timer** — each attempt's duration comes from its snapshot set's `durationMinutes`. It now serves as a **fallback** (the migration seeds the Default Set's timer from it; `getSettings` falls back to it only when a cohort has no usable set) and as the admin-editable default used to pre-fill a new set's timer. Still exposed at `GET /api/v1/assessment/settings` (now reflects the caller's own set duration) and `GET`/`POST /api/v1/admin/settings`. `AssessmentTimer` (`frontend/assets/js/timer.js`) accepts either a duration-in-seconds number or an absolute `expiresAt` date.
 
 ---
 

@@ -32,7 +32,10 @@ router.post('/shared-ids',
   ],
   validate, ctrl.createSharedID
 );
-router.put('/shared-ids/:id', ctrl.updateSharedID);
+router.put('/shared-ids/:id',
+  [body('questionSetId').optional({ checkFalsy: true }).isMongoId().withMessage('A valid question set is required.')],
+  validate, ctrl.updateSharedID
+);
 router.delete('/shared-ids/:id', ctrl.deleteSharedID);
 router.get('/shared-ids/:id/stats', ctrl.sharedIDStats);
 

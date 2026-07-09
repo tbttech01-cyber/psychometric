@@ -9,6 +9,17 @@ const assessmentSessionSchema = new mongoose.Schema({
   autoSubmitted: { type: Boolean, default: false },
   totalAnswered: { type: Number, default: 0 },
   ipAddress:     { type: String },
+
+  // Snapshot of the assigned Question Set taken at startSession. `questionIds`
+  // is the FROZEN, ordered list of questions this attempt is scored against —
+  // getQuestions and submitAssessment read it (not the live set), so admin
+  // edits to the set mid-attempt (reorder, membership, timer, cohort
+  // reassignment, deactivating a reused question) can't corrupt an in-flight
+  // attempt. Question content/marks/options stay live-read at submit. All
+  // three are nullable/empty for legacy pre-Question-Set sessions.
+  questionSetId:   { type: mongoose.Schema.Types.ObjectId, ref: 'QuestionSet', default: null },
+  questionIds:     { type: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Question' }], default: [] },
+  durationMinutes: { type: Number },
 }, { timestamps: { createdAt: true, updatedAt: false } });
 
 assessmentSessionSchema.index({ userId: 1, status: 1 });

@@ -2,6 +2,10 @@ const request = require('supertest');
 const app = require('../backend/app');
 const { connect, disconnect } = require('./dbConnect');
 const User = require('../backend/models/User');
+const Admin = require('../backend/models/Admin');
+const Question = require('../backend/models/Question');
+const SharedUserID = require('../backend/models/SharedUserID');
+const QuestionSet = require('../backend/models/QuestionSet');
 
 beforeAll(connect);
 afterAll(disconnect);
@@ -194,5 +198,46 @@ describe('Assessment flow — all 10 question types', () => {
       .post('/api/v1/assessment/start')
       .set('Authorization', `Bearer ${userToken}`);
     expect(res.status).toBe(403);
+  });
+});
+
+describe('Question Set — cohort assignment and per-set timer', () => {
+  // Full register→OTP→verify flow (email is mocked) to get a candidate token
+  // for a freshly-created cohort code.
+  async function tokenForCode(code, email) {
+    const vc = await request(app).post('/api/v1/user/validate-code').send({ code });
+    const codeId = vc.body.codeId;
+    await request(app).post('/api/v1/user/register').send({ codeId, name: 'Cohort Tester', email, password: 'Password123' });
+    const user = await User.findOne({ email });
+    const res = await request(app).post('/api/v1/user/verify-otp').send({ email, otp: user.otpCode });
+    return res.body.token;
+  }
+
+  it('blocks /start when the cohort has no question set assigned', async () => {
+    const admin = await Admin.findOne();
+    await SharedUserID.create({ code: 'NOSETCODE', label: 'No set cohort', createdBy: admin._id, questionSetId: null });
+    const token = await tokenForCode('NOSETCODE', 'noset-user@example.com');
+
+    const res = await request(app).post('/api/v1/assessment/start').set('Authorization', `Bearer ${token}`);
+    expect(res.status).toBe(403);
+    expect(res.body.message).toMatch(/no assessment has been assigned/i);
+  });
+
+  it('sizes the session timer from the assigned set, not the global default', async () => {
+    const admin = await Admin.findOne();
+    const qIds = (await Question.find({ isActive: true }).sort('order').limit(3).select('_id')).map((q) => q._id);
+    const set = await QuestionSet.create({ name: 'Timer Set 5min', durationMinutes: 5, questionIds: qIds, createdBy: admin._id });
+    await SharedUserID.create({ code: 'TIMER5CODE', label: '5 min cohort', createdBy: admin._id, questionSetId: set._id });
+    const token = await tokenForCode('TIMER5CODE', 'timer5-user@example.com');
+
+    const res = await request(app).post('/api/v1/assessment/start').set('Authorization', `Bearer ${token}`);
+    expect(res.status).toBe(201);
+    const minutes = Math.round((new Date(res.body.expiresAt) - new Date(res.body.startedAt)) / 60000);
+    expect(minutes).toBe(5);
+
+    // The candidate only sees the set's 3 questions, not all seeded ones.
+    const qRes = await request(app).get('/api/v1/assessment/questions').set('Authorization', `Bearer ${token}`);
+    const shown = qRes.body.data.reduce((n, type) => n + type.questions.length, 0);
+    expect(shown).toBe(3);
   });
 });

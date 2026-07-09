@@ -8,6 +8,7 @@ import StatCard from "@/components/StatCard";
 import PageHeader from "@/components/PageHeader";
 import ConfirmModal from "@/components/ConfirmModal";
 
+type AssignedSet = { _id: string; name: string; durationMinutes?: number };
 type SharedID = {
   _id: string;
   code: string;
@@ -15,18 +16,23 @@ type SharedID = {
   isActive: boolean;
   usageCount: number;
   createdAt: string;
+  questionSetId?: AssignedSet | string | null;
 };
+type SetOption = { _id: string; name: string };
 
 export default function SharedIdsPage() {
   const showToast = useToast();
   const token = getToken();
 
   const [rows, setRows] = useState<SharedID[]>([]);
+  const [sets, setSets] = useState<SetOption[]>([]);
   const [search, setSearch] = useState("");
   const [newCode, setNewCode] = useState("");
   const [newLabel, setNewLabel] = useState("");
+  const [newSetId, setNewSetId] = useState("");
   const [editing, setEditing] = useState<SharedID | null>(null);
   const [editLabel, setEditLabel] = useState("");
+  const [editSetId, setEditSetId] = useState("");
   const [deactivateTarget, setDeactivateTarget] = useState<SharedID | null>(null);
 
   const load = useCallback(async () => {
@@ -37,22 +43,31 @@ export default function SharedIdsPage() {
   }, [search, token, showToast]);
 
   useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    api.get("/admin/question-sets", token).then(({ ok, data }) => { if (ok) setSets(data.data); });
+  }, [token]);
 
   const active = rows.filter((r) => r.isActive).length;
+  const setNameOf = (r: SharedID) => {
+    if (!r.questionSetId) return null;
+    if (typeof r.questionSetId === "string") return sets.find((s) => s._id === r.questionSetId)?.name || "—";
+    return r.questionSetId.name;
+  };
+  const setIdOf = (r: SharedID) => (r.questionSetId ? (typeof r.questionSetId === "string" ? r.questionSetId : r.questionSetId._id) : "");
 
   async function createCode() {
     if (!newCode || !newLabel) { showToast("Code and label required.", "error"); return; }
     if (!/^[A-Z0-9]+$/.test(newCode)) { showToast("Code must contain only letters and numbers.", "error"); return; }
-    const { ok, data } = await api.post("/admin/shared-ids", { code: newCode.toUpperCase(), label: newLabel }, token);
+    const { ok, data } = await api.post("/admin/shared-ids", { code: newCode.toUpperCase(), label: newLabel, questionSetId: newSetId || undefined }, token);
     if (!ok) { showToast(data.message || "Failed.", "error"); return; }
     showToast("Code created!", "success");
-    setNewCode(""); setNewLabel("");
+    setNewCode(""); setNewLabel(""); setNewSetId("");
     load();
   }
 
   async function saveEdit() {
     if (!editing) return;
-    const { ok, data } = await api.put(`/admin/shared-ids/${editing._id}`, { label: editLabel }, token);
+    const { ok, data } = await api.put(`/admin/shared-ids/${editing._id}`, { label: editLabel, questionSetId: editSetId }, token);
     if (!ok) { showToast(data.message || "Update failed.", "error"); return; }
     showToast("Code updated!", "success");
     setEditing(null);
@@ -95,6 +110,11 @@ export default function SharedIdsPage() {
               className="border rounded-xl px-3.5 py-2.5 uppercase font-mono focus:outline-none" style={{ borderColor: "var(--tbt-border)" }} />
             <input value={newLabel} onChange={(e) => setNewLabel(e.target.value)} placeholder="Label / Group name"
               className="border rounded-xl px-3.5 py-2.5 flex-1 min-w-48 focus:outline-none" style={{ borderColor: "var(--tbt-border)" }} />
+            <select value={newSetId} onChange={(e) => setNewSetId(e.target.value)}
+              className="border rounded-xl px-3.5 py-2.5 focus:outline-none" style={{ borderColor: "var(--tbt-border)" }}>
+              <option value="">No question set</option>
+              {sets.map((s) => <option key={s._id} value={s._id}>{s.name}</option>)}
+            </select>
             <button onClick={createCode} className="btn btn-primary">Create</button>
           </div>
         </div>
@@ -106,16 +126,21 @@ export default function SharedIdsPage() {
               className="border rounded-xl pl-10 pr-3.5 py-2.5 focus:outline-none w-full" style={{ borderColor: "var(--tbt-border)" }} />
           </div>
           <table className="data-table">
-            <thead><tr><th>Code</th><th>Label</th><th>Status</th><th>Usage</th><th>Created</th><th>Actions</th></tr></thead>
+            <thead><tr><th>Code</th><th>Label</th><th>Question Set</th><th>Status</th><th>Usage</th><th>Created</th><th>Actions</th></tr></thead>
             <tbody>
               {rows.map((r) => (
                 editing?._id === r._id ? (
                   <tr key={r._id}>
                     <td className="font-mono font-bold">{r.code}</td>
-                    <td colSpan={5}>
-                      <div className="flex gap-2 items-center">
+                    <td colSpan={6}>
+                      <div className="flex gap-2 items-center flex-wrap">
                         <input value={editLabel} onChange={(e) => setEditLabel(e.target.value)}
                           className="border-2 rounded-lg px-3 py-1.5 flex-1 focus:outline-none" style={{ borderColor: "var(--tbt-border)" }} />
+                        <select value={editSetId} onChange={(e) => setEditSetId(e.target.value)}
+                          className="border-2 rounded-lg px-3 py-1.5 focus:outline-none" style={{ borderColor: "var(--tbt-border)" }}>
+                          <option value="">No question set</option>
+                          {sets.map((s) => <option key={s._id} value={s._id}>{s.name}</option>)}
+                        </select>
                         <button onClick={saveEdit} className="btn btn-primary btn-sm">Save</button>
                         <button onClick={() => setEditing(null)} className="btn btn-outline btn-sm">Cancel</button>
                       </div>
@@ -125,11 +150,12 @@ export default function SharedIdsPage() {
                   <tr key={r._id}>
                     <td className="font-mono font-bold">{r.code}</td>
                     <td>{r.label}</td>
+                    <td>{setNameOf(r) || <span style={{ color: "var(--tbt-muted)" }}>—</span>}</td>
                     <td><span className={`badge ${r.isActive ? "badge-active" : "badge-inactive"}`}>{r.isActive ? "Active" : "Inactive"}</span></td>
                     <td>{r.usageCount}</td>
                     <td>{new Date(r.createdAt).toLocaleDateString()}</td>
                     <td className="flex gap-2">
-                      <button onClick={() => { setEditing(r); setEditLabel(r.label); }} className="btn btn-outline btn-sm">Edit</button>
+                      <button onClick={() => { setEditing(r); setEditLabel(r.label); setEditSetId(setIdOf(r)); }} className="btn btn-outline btn-sm">Edit</button>
                       <button onClick={() => toggleActivate(r)} className={`btn btn-sm ${r.isActive ? "btn-danger" : "btn-primary"}`}>
                         {r.isActive ? "Deactivate" : "Activate"}
                       </button>

@@ -74,6 +74,22 @@ export type Question = {
   options: AnswerOption[];
 };
 
+// A named group of questions with its own timer, assigned to access codes.
+// `questionIds` is ordered (array position = per-set question order). The list
+// endpoint returns bare id strings plus the two computed counts; the detail
+// endpoint (getSet) populates `questionIds` with Question docs for the editor.
+export type QuestionSet = {
+  _id: string;
+  name: string;
+  description?: string;
+  durationMinutes: number;
+  questionIds: (Question | string)[];
+  isActive: boolean;
+  createdAt: string;
+  questionCount?: number;
+  assignedCodeCount?: number;
+};
+
 // Mirrors the Phase-2 fields on backend models/Result.js — optional since
 // older Result documents predate these and never got them backfilled.
 export type Result = {

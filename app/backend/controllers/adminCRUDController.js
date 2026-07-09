@@ -5,30 +5,55 @@ const Question = require('../models/Question');
 const AnswerOption = require('../models/AnswerOption');
 const AssessmentSession = require('../models/AssessmentSession');
 const User = require('../models/User');
+const QuestionSet = require('../models/QuestionSet');
+
+// Reject a questionSetId that doesn't reference a real set. Returns true when
+// the value is absent/null (unassigning is allowed) or valid; sends a 400 and
+// returns false otherwise, so callers can early-out.
+async function validateQuestionSetId(questionSetId, res) {
+  if (questionSetId === undefined || questionSetId === null || questionSetId === '') return true;
+  const exists = await QuestionSet.exists({ _id: questionSetId });
+  if (!exists) { res.status(400).json({ success: false, message: 'Assigned question set does not exist.' }); return false; }
+  return true;
+}
 
 // ── Shared User IDs ─────────────────────────────────────────────────────────
 exports.listSharedIDs = async (req, res, next) => {
   try {
     const { search } = req.query;
     const query = search ? { $or: [{ code: new RegExp(search, 'i') }, { label: new RegExp(search, 'i') }] } : {};
-    const data = await SharedUserID.find(query).sort({ createdAt: -1 }).populate('createdBy', 'email');
+    const data = await SharedUserID.find(query).sort({ createdAt: -1 })
+      .populate('createdBy', 'email')
+      .populate('questionSetId', 'name durationMinutes');
     res.json({ success: true, data, total: data.length });
   } catch (err) { next(err); }
 };
 
 exports.createSharedID = async (req, res, next) => {
   try {
-    const { code, label } = req.body;
+    const { code, label, questionSetId } = req.body;
     const exists = await SharedUserID.findOne({ code: code.toUpperCase() });
     if (exists) return res.status(409).json({ success: false, message: 'Code already exists.' });
-    const doc = await SharedUserID.create({ code: code.toUpperCase(), label, createdBy: req.admin._id });
+    if (!(await validateQuestionSetId(questionSetId, res))) return;
+    const doc = await SharedUserID.create({
+      code: code.toUpperCase(), label, createdBy: req.admin._id,
+      questionSetId: questionSetId || null,
+    });
     res.status(201).json({ success: true, data: doc });
   } catch (err) { next(err); }
 };
 
 exports.updateSharedID = async (req, res, next) => {
   try {
-    const doc = await SharedUserID.findByIdAndUpdate(req.params.id, { $set: req.body }, { new: true, runValidators: true });
+    if (!(await validateQuestionSetId(req.body.questionSetId, res))) return;
+    // Whitelist the fields an update may touch — never blindly $set the whole
+    // body (which could clobber createdBy/usageCount or inject unknown keys).
+    const update = {};
+    for (const field of ['label', 'isActive', 'questionSetId']) {
+      if (req.body[field] !== undefined) update[field] = req.body[field];
+    }
+    if ('questionSetId' in update && !update.questionSetId) update.questionSetId = null;
+    const doc = await SharedUserID.findByIdAndUpdate(req.params.id, { $set: update }, { new: true, runValidators: true });
     if (!doc) return res.status(404).json({ success: false, message: 'Not found.' });
     res.json({ success: true, data: doc });
   } catch (err) { next(err); }

@@ -5,6 +5,7 @@ const QuestionType = require('../models/QuestionType');
 const Question = require('../models/Question');
 const AnswerOption = require('../models/AnswerOption');
 const SharedUserID = require('../models/SharedUserID');
+const QuestionSet = require('../models/QuestionSet');
 
 // The first 8 category names deliberately match 8 of the 12 Question.DIMENSIONS
 // values exactly, so each Likert question's `dimension` is just its category's
@@ -271,11 +272,31 @@ async function seedDatabase({ adminEmail, adminPassword, log = () => {} } = {}) 
   }
   log(`Example questions created for all other question types: ${extraCount}`);
 
+  // A Default Set containing every seeded question, so the assessment flow
+  // works out of the box: without a set assigned to their access code, users
+  // are blocked at /start (see assessmentController.resolveUserSet).
+  const admin = await Admin.findOne({ email: adminEmail });
+  const allQuestionIds = (await Question.find({ isActive: true }).sort('order').select('_id')).map(q => q._id);
+  let defaultSet = await QuestionSet.findOne({ name: 'Default Set' });
+  if (!defaultSet) {
+    defaultSet = await QuestionSet.create({
+      name: 'Default Set',
+      description: 'All questions — created automatically so assessments work out of the box.',
+      durationMinutes: 30,
+      questionIds: allQuestionIds,
+      createdBy: admin._id,
+    });
+    log(`Default Set created with ${allQuestionIds.length} questions.`);
+  }
+
   const demoCode = await SharedUserID.findOne({ code: 'TBT2024' });
   if (!demoCode) {
-    const admin = await Admin.findOne({ email: adminEmail });
-    await SharedUserID.create({ code: 'TBT2024', label: 'Tamil Business Tribe 2024 Cohort', createdBy: admin._id });
-    log('Demo shared code TBT2024 created.');
+    await SharedUserID.create({ code: 'TBT2024', label: 'Tamil Business Tribe 2024 Cohort', createdBy: admin._id, questionSetId: defaultSet._id });
+    log('Demo shared code TBT2024 created (assigned to Default Set).');
+  } else if (!demoCode.questionSetId) {
+    demoCode.questionSetId = defaultSet._id;
+    await demoCode.save();
+    log('Demo shared code TBT2024 assigned to Default Set.');
   }
 }
 
