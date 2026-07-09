@@ -2,6 +2,7 @@ const User = require('../models/User');
 const Result = require('../models/Result');
 const AssessmentSession = require('../models/AssessmentSession');
 const SharedUserID = require('../models/SharedUserID');
+const Setting = require('../models/Setting');
 const { generatePDF, generateCSV } = require('../utils/exportHelper');
 
 exports.getDashboard = async (req, res, next) => {
@@ -174,5 +175,32 @@ exports.exportCSV = async (req, res, next) => {
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
     res.setHeader('Content-Disposition', `attachment; filename="tbt_results_${date}.csv"`);
     res.send(csv);
+  } catch (err) { next(err); }
+};
+
+exports.getSettings = async (req, res, next) => {
+  try {
+    const duration = await Setting.findOne({ key: 'assessment_duration_minutes' });
+    res.json({
+      success: true,
+      data: {
+        assessment_duration_minutes: duration ? Number(duration.value) : 30
+      }
+    });
+  } catch (err) { next(err); }
+};
+
+exports.updateSettings = async (req, res, next) => {
+  try {
+    const { assessment_duration_minutes } = req.body;
+    if (assessment_duration_minutes == null || isNaN(Number(assessment_duration_minutes)) || Number(assessment_duration_minutes) <= 0) {
+      return res.status(400).json({ success: false, message: 'Invalid assessment duration.' });
+    }
+    await Setting.findOneAndUpdate(
+      { key: 'assessment_duration_minutes' },
+      { value: Number(assessment_duration_minutes) },
+      { upsert: true, new: true }
+    );
+    res.json({ success: true, message: 'Settings updated successfully.' });
   } catch (err) { next(err); }
 };

@@ -17,7 +17,7 @@
       <div class="bg-blue-50 rounded-xl p-4 mb-6 text-left space-y-2 text-sm" style="border:1px solid #DBEAFE">
         <p class="font-bold mb-2" style="color:var(--tbt-primary)">Before you begin:</p>
         <div class="flex gap-2"><span>✅</span><span>A short set of questions across several psychometric categories</span></div>
-        <div class="flex gap-2"><span>⏱️</span><span>30-minute time limit — complete in one sitting</span></div>
+        <div class="flex gap-2"><span>⏱️</span><span id="time-limit-text">30-minute time limit — complete in one sitting</span></div>
         <div class="flex gap-2"><span>🔒</span><span>One attempt only — answers cannot be changed after submission</span></div>
         <div class="flex gap-2"><span>💡</span><span>Answer honestly — there are no right or wrong answers</span></div>
       </div>
@@ -33,6 +33,19 @@
     const token = api.requireAuth('user');
     const user = api.getUser();
     if (user) document.getElementById('greeting').textContent = `Welcome, ${user.name}! Take a moment to understand your strengths.`;
+
+    async function loadSettings() {
+      const { ok, data } = await api.get('/assessment/settings', token);
+      // api.get() returns the full response body as `data`, i.e.
+      // {success, data:{assessment_duration_minutes}} — the value is nested
+      // one level deeper than `data.assessment_duration_minutes`, which is
+      // always undefined and silently left the welcome page showing the
+      // hardcoded "30-minute" text regardless of the admin-configured value.
+      if (ok && data.data && data.data.assessment_duration_minutes) {
+        document.getElementById('time-limit-text').textContent = `${data.data.assessment_duration_minutes}-minute time limit — complete in one sitting`;
+      }
+    }
+    loadSettings();
 
     document.getElementById('btn-start').addEventListener('click', async () => {
       const btn = document.getElementById('btn-start');

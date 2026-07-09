@@ -4,6 +4,7 @@ const AssessmentSession = require('../models/AssessmentSession');
 const UserAnswer = require('../models/UserAnswer');
 const Result = require('../models/Result');
 const User = require('../models/User');
+const Setting = require('../models/Setting');
 const QuestionType = require('../models/QuestionType');
 const { calculateResult, computeQuestionMaxes } = require('../utils/scoreCalculator');
 const { evaluateAnswer } = require('../utils/evaluationEngine');
@@ -24,6 +25,10 @@ function shuffled(arr) {
 exports.getQuestions = async (req, res, next) => {
   try {
     const types = await QuestionType.find({ isActive: true }).sort('order');
+    const session = await AssessmentSession.findOne({ userId: req.user._id, status: 'in-progress' });
+    const remainingSeconds = session
+      ? Math.max(0, Math.ceil((session.expiresAt - new Date()) / 1000))
+      : 1800;
     const questions = await Question.find({ isActive: true }).sort('order');
     const questionIds = questions.map(q => q._id);
     // Scoring secrets (score/isCorrect/dimensionScores) must never reach the
@@ -59,7 +64,7 @@ exports.getQuestions = async (req, res, next) => {
         })),
     }));
 
-    res.json({ success: true, data: result });
+    res.json({ success: true, data: result, remainingSeconds });
   } catch (err) { next(err); }
 };
 
@@ -74,8 +79,10 @@ exports.startSession = async (req, res, next) => {
     if (inProgress)
       return res.status(409).json({ success: false, sessionId: inProgress._id, expiresAt: inProgress.expiresAt, message: 'Assessment already in progress.' });
 
+    const durationSetting = await Setting.findOne({ key: 'assessment_duration_minutes' });
+    const minutes = durationSetting ? Number(durationSetting.value) : 30;
     const startedAt = new Date();
-    const expiresAt = new Date(startedAt.getTime() + 30 * 60 * 1000);
+    const expiresAt = new Date(startedAt.getTime() + minutes * 60 * 1000);
     const session = await AssessmentSession.create({
       userId, startedAt, expiresAt,
       ipAddress: req.ip,
@@ -230,9 +237,28 @@ exports.submitAssessment = async (req, res, next) => {
 exports.getResult = async (req, res, next) => {
   try {
     const result = await Result.findOne({ userId: req.user._id })
-      .populate('userId', 'name email sharedCode');
+      .populate({
+        path: 'userId',
+        select: 'name email sharedCode sharedUserID',
+        populate: {
+          path: 'sharedUserID',
+          select: 'label'
+        }
+      });
     if (!result) return res.status(404).json({ success: false, message: 'No result found.' });
 
     res.json({ success: true, data: result });
+  } catch (err) { next(err); }
+};
+
+exports.getSettings = async (req, res, next) => {
+  try {
+    const duration = await Setting.findOne({ key: 'assessment_duration_minutes' });
+    res.json({
+      success: true,
+      data: {
+        assessment_duration_minutes: duration ? Number(duration.value) : 30
+      }
+    });
   } catch (err) { next(err); }
 };

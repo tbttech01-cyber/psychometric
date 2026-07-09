@@ -10,25 +10,34 @@ async function request<T = any>(
 ): Promise<ApiResult<T>> {
   const headers: Record<string, string> = { "Content-Type": "application/json" };
   if (token) headers["Authorization"] = `Bearer ${token}`;
-  const res = await fetch(`${API_BASE}${path}`, {
-    method,
-    headers,
-    body: body ? JSON.stringify(body) : undefined,
-  });
-  const data = await res.json().catch(() => ({ success: false, message: "Server error" }));
+  try {
+    const res = await fetch(`${API_BASE}${path}`, {
+      method,
+      headers,
+      body: body ? JSON.stringify(body) : undefined,
+    });
+    const data = await res.json().catch(() => ({ success: false, message: "Server error" }));
 
-  // A 401 on a request that carried a token means the session this app already
-  // considered "logged in" is no longer valid server-side (expired, or a later
-  // login elsewhere invalidated it — this app uses a single-active-session
-  // model). Don't leave the user stuck on a broken page: clear the stale token
-  // and send them back to login with an explanation. (A 401 with no token,
-  // e.g. a failed login attempt itself, is normal and left alone.)
-  if (res.status === 401 && token && typeof window !== "undefined" && !window.location.pathname.startsWith("/login")) {
-    removeToken();
-    window.location.href = "/login?reason=session-ended";
+    // A 401 on a request that carried a token means the session this app already
+    // considered "logged in" is no longer valid server-side (expired, or a later
+    // login elsewhere invalidated it — this app uses a single-active-session
+    // model). Don't leave the user stuck on a broken page: clear the stale token
+    // and send them back to login with an explanation. (A 401 with no token,
+    // e.g. a failed login attempt itself, is normal and left alone.)
+    if (res.status === 401 && token && typeof window !== "undefined" && !window.location.pathname.startsWith("/login")) {
+      removeToken();
+      window.location.href = "/login?reason=session-ended";
+    }
+
+    return { ok: res.ok, status: res.status, data };
+  } catch (error) {
+    console.error("Request failed:", error);
+    return {
+      ok: false,
+      status: 0,
+      data: { success: false, message: "Connection failed. Please check your network." } as any,
+    };
   }
-
-  return { ok: res.ok, status: res.status, data };
 }
 
 export const api = {
@@ -74,19 +83,24 @@ export const API_BASE_URL = API_BASE;
 export async function downloadFile(path: string, token: string | null, filename: string): Promise<{ ok: boolean; message?: string }> {
   const headers: Record<string, string> = {};
   if (token) headers["Authorization"] = `Bearer ${token}`;
-  const res = await fetch(`${API_BASE}${path}`, { headers });
-  if (!res.ok) {
-    const data = await res.json().catch(() => ({}));
-    return { ok: false, message: data.message || "Export failed." };
+  try {
+    const res = await fetch(`${API_BASE}${path}`, { headers });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      return { ok: false, message: data.message || "Export failed." };
+    }
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+    return { ok: true };
+  } catch (error) {
+    console.error("File download failed:", error);
+    return { ok: false, message: "Connection failed. Please try again." };
   }
-  const blob = await res.blob();
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  URL.revokeObjectURL(url);
-  return { ok: true };
 }

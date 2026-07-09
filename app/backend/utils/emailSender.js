@@ -23,6 +23,13 @@ function template(body) {
 }
 
 async function sendOTPEmail(toEmail, toName, otp, type = 'user') {
+  console.log(`[EMAIL BYPASS] OTP for ${toEmail} (${toName}): ${otp}`);
+  
+  if (process.env.NODE_ENV === 'development' && (!process.env.GMAIL_USER || process.env.GMAIL_USER === 'your.email@gmail.com' || process.env.GMAIL_PASS.includes('xxxx'))) {
+    console.log('[DEV BYPASS] Using development bypass, skipped sending real email.');
+    return;
+  }
+
   const isAdmin = type === 'admin';
   const subject = isAdmin
     ? `Admin Login OTP — ${brand}`
@@ -44,6 +51,13 @@ async function sendOTPEmail(toEmail, toName, otp, type = 'user') {
 }
 
 async function sendWelcomeEmail(toEmail, toName, sharedCode) {
+  console.log(`[EMAIL BYPASS] Welcome email for ${toEmail} (${toName}) with sharedCode: ${sharedCode}`);
+  
+  if (process.env.NODE_ENV === 'development' && (!process.env.GMAIL_USER || process.env.GMAIL_USER === 'your.email@gmail.com' || process.env.GMAIL_PASS.includes('xxxx'))) {
+    console.log('[DEV BYPASS] Using development bypass, skipped sending welcome email.');
+    return;
+  }
+
   const html = template(`
     <p style="color:#1e293b;">Welcome, <strong>${toName}</strong>!</p>
     <p style="color:#475569;">Your account has been verified. You're ready to start your psychometric assessment.</p>

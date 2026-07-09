@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import Link from "next/link";
 import { BarChart3, Trophy, CheckSquare, Search } from "lucide-react";
 import { api, getToken, downloadFile } from "@/lib/api";
 import { useToast } from "@/components/ToastProvider";
@@ -204,7 +205,10 @@ export default function ResultsPage() {
                   <td><span className={levelBadgeClass(r.level)}>{r.level}</span></td>
                   <td className="text-xs">{(r.highestCategory || []).join(", ")}</td>
                   <td className="text-xs">{new Date(r.createdAt).toLocaleDateString()}</td>
-                  <td><button onClick={() => setDeleteTarget(r)} className="btn btn-danger btn-sm">Delete</button></td>
+                  <td className="flex gap-2">
+                    <Link href={`/results/${r._id}`} className="btn btn-outline btn-sm">View</Link>
+                    <button onClick={() => setDeleteTarget(r)} className="btn btn-danger btn-sm">Delete</button>
+                  </td>
                 </tr>
               ))}
             </tbody>

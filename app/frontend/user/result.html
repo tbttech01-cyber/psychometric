@@ -22,13 +22,13 @@
 
       <!-- Score card -->
       <div class="card text-center">
-        <h2 class="text-2xl font-extrabold mb-1" style="color:var(--tbt-primary)">Your Assessment Results</h2>
+        <h2 class="text-2xl font-extrabold mb-1" id="assessment-title" style="color:var(--tbt-primary)">Your Assessment Results</h2>
         <p id="result-name" class="mb-6" style="color:var(--tbt-muted)"></p>
         <div class="flex flex-col items-center justify-center gap-2 mb-4">
           <div class="gauge-circle" id="gauge" style="--pct:0%">
             <span class="gauge-value" id="pct-value">0%</span>
           </div>
-          <p class="text-xs uppercase tracking-wide font-semibold" style="color:var(--tbt-muted)">Business Readiness Score</p>
+          <p class="text-xs uppercase tracking-wide font-semibold" id="score-label" style="color:var(--tbt-muted)">Business Readiness Score</p>
           <p id="total-marks" class="font-semibold text-lg mt-1" style="color:var(--tbt-text)"></p>
           <span id="level-badge" class="badge text-base px-4 py-1.5"></span>
         </div>
@@ -101,6 +101,10 @@
       document.getElementById('loading').classList.add('hidden');
       document.getElementById('result-content').classList.remove('hidden');
 
+      const testLabel = r.userId?.sharedUserID?.label || 'Your Assessment';
+      document.title = `${testLabel} Results — Tamil Business Tribe`;
+      document.getElementById('assessment-title').textContent = `${testLabel} Results`;
+      document.getElementById('score-label').textContent = `${testLabel} Score`;
       document.getElementById('result-name').textContent = `${r.userId?.name || ''} — ${r.userId?.sharedCode || ''}`;
       document.getElementById('total-marks').textContent = `Total: ${r.totalMarks} / ${r.maxScore}`;
       document.getElementById('pct-value').textContent = `${r.percentage}%`;

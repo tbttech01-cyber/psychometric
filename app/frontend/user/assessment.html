@@ -56,19 +56,43 @@
     const expiresAt = localStorage.getItem('tbt_session_expires');
     if (!sessionId || !expiresAt) window.location.href = '/user/welcome.html';
 
-    let sections = [], renderUnits = [], answers = {}, timedOut = {}, currentSection = 0, timer, questionTimer = null;
+    let sections = [], renderUnits = [], answers = {}, timedOut = {}, timeSpent = {}, questionStartTimes = {}, currentSection = 0, timer, questionTimer = null;
+
+    // Keyed by sessionId so a stale in-progress answer set from a previous
+    // (already-submitted) session is never applied to a new one.
+    const autosaveKey = () => `tbt_assessment_answers_${sessionId}`;
+
+    function restoreAutosave() {
+      try {
+        const raw = localStorage.getItem(autosaveKey());
+        if (!raw) return;
+        const saved = JSON.parse(raw);
+        if (saved.answers) answers = saved.answers;
+        if (saved.timedOut) timedOut = saved.timedOut;
+        if (saved.timeSpent) timeSpent = saved.timeSpent;
+      } catch { /* corrupt/old autosave payload — ignore and start fresh */ }
+    }
+
+    function saveAutosave() {
+      localStorage.setItem(autosaveKey(), JSON.stringify({ answers, timedOut, timeSpent }));
+    }
 
     async function loadQuestions() {
       const { ok, data } = await api.get('/assessment/questions', token);
       if (!ok) { showToast('Failed to load questions.', 'error'); return; }
       sections = data.data;
+      restoreAutosave();
       renderUnits = buildRenderUnits(sections);
       renderQuestions();
       document.getElementById('loading').classList.add('hidden');
       document.getElementById('question-container').classList.remove('hidden');
       document.getElementById('nav-section').classList.remove('hidden');
 
-      timer = new AssessmentTimer(expiresAt,
+      // remainingSeconds (server-recalculated, so it accounts for time
+      // already elapsed) is a plain number of seconds; AssessmentTimer's
+      // constructor treats a `number` as a relative duration and anything
+      // else as an absolute expiry, so passing it straight through is safe.
+      timer = new AssessmentTimer(data.remainingSeconds !== undefined ? data.remainingSeconds : expiresAt,
         ({ minutes, seconds }) => {
           const t = document.getElementById('timer-display');
           t.textContent = `${String(minutes).padStart(2,'0')}:${String(seconds).padStart(2,'0')}`;
@@ -134,6 +158,7 @@
                 <span class="inline-block w-6 h-6 rounded-full text-center text-xs leading-6 font-bold text-white mr-2" style="background:var(--tbt-primary)">${questionOffset+qi+1}</span>
                 ${q.text}
               </p>
+              ${renderAudio(q)}
               <div class="space-y-2">
                 ${q.options.map(opt => `
                   <div class="likert-option">
@@ -145,6 +170,12 @@
             </div>
           `).join('')}
         </div>`;
+    }
+
+    function renderAudio(q) {
+      return q.hasAudio && q.audioUrl
+        ? `<audio controls class="w-full mb-4"><source src="${q.audioUrl}" /></audio>`
+        : '';
     }
 
     function questionHeader(unit, globalIndex, totalQuestions, timerHtml) {
@@ -168,11 +199,12 @@
           ${questionHeader(unit, globalIndex, totalQuestions, timerHtml)}
           ${q.instructionText ? `<p class="text-xs italic mb-2" style="color:var(--tbt-muted)">${q.instructionText}</p>` : ''}
           ${q.imageUrl ? `<img src="${q.imageUrl}" alt="" class="max-w-full rounded-lg mb-4" />` : ''}
+          ${renderAudio(q)}
           <p class="font-semibold mb-4 text-base leading-relaxed">${q.text}</p>
           <div class="space-y-2" id="options-${q._id}">
             ${q.options.map(opt => `
               <div class="likert-option">
-                <input type="radio" name="q_${q._id}" id="opt_${opt._id}" value="${opt._id}" onchange="recordAnswer('${q._id}','${opt._id}')" ${answers[q._id]===opt._id?'checked':''} />
+                <input type="radio" name="q_${q._id}" id="opt_${opt._id}" value="${opt._id}" onchange="recordAnswer('${q._id}','${opt._id}')" ${answers[q._id]===opt._id?'checked':''} ${timedOut[q._id]?'disabled':''} />
                 <label for="opt_${opt._id}">${opt.optionText}</label>
               </div>
             `).join('')}
@@ -188,6 +220,7 @@
           ${questionHeader(unit, globalIndex, totalQuestions)}
           ${q.instructionText ? `<p class="text-xs italic mb-2" style="color:var(--tbt-muted)">${q.instructionText}</p>` : ''}
           ${q.imageUrl ? `<img src="${q.imageUrl}" alt="" class="max-w-full rounded-lg mb-4" />` : ''}
+          ${renderAudio(q)}
           <p class="font-semibold mb-1 text-base leading-relaxed">${q.text}</p>
           <p class="text-xs mb-3" style="color:var(--tbt-muted)">Select all that apply.</p>
           <div class="space-y-2" id="options-${q._id}">
@@ -210,6 +243,7 @@
         <div class="card mb-6">
           ${questionHeader(unit, globalIndex, totalQuestions)}
           ${q.instructionText ? `<p class="text-xs italic mb-2" style="color:var(--tbt-muted)">${q.instructionText}</p>` : ''}
+          ${renderAudio(q)}
           <p class="font-semibold mb-1 text-base leading-relaxed">${q.text}</p>
           <p class="text-xs mb-3" style="color:var(--tbt-muted)">Use the arrows to arrange in your preferred order (top = first).</p>
           <div class="space-y-2" id="options-${q._id}">
@@ -262,14 +296,24 @@
       });
     }
 
+    // Elapsed time since this question's section was first shown (see
+    // showSection), refreshed on every interaction so the stored value
+    // reflects time-to-last-change rather than time-to-first-change.
+    function markTimeSpent(qId) {
+      const start = questionStartTimes[qId];
+      if (start) timeSpent[qId] = Math.round((Date.now() - start) / 1000);
+    }
+
     function recordAnswer(qId, optId) {
       answers[qId] = optId;
+      markTimeSpent(qId);
       // Once answered, the per-question timer's only job (forcing an answer
       // before time runs out) is done — stop it so it doesn't auto-advance
       // the candidate away from a question they already answered and may
       // still be reviewing.
       const unit = renderUnits[currentSection];
       if (unit && unit.kind === 'single' && unit.question._id === qId) stopQuestionTimer();
+      saveAutosave();
       updateProgress();
     }
 
@@ -277,8 +321,10 @@
       const set = new Set(answers[qId] || []);
       if (checked) set.add(optId); else set.delete(optId);
       answers[qId] = [...set];
+      markTimeSpent(qId);
       const unit = renderUnits[currentSection];
       if (unit && unit.kind === 'multiselect' && unit.question._id === qId && set.size > 0) stopQuestionTimer();
+      saveAutosave();
       updateProgress();
     }
 
@@ -288,6 +334,8 @@
       const j = idx + dir;
       if (j < 0 || j >= order.length) return;
       [order[idx], order[j]] = [order[j], order[idx]];
+      markTimeSpent(qId);
+      saveAutosave();
       const unit = renderUnits[currentSection];
       if (unit && unit.kind === 'ranking' && unit.question._id === qId) {
         const flat = allQuestionsFlat();
@@ -309,6 +357,8 @@
         },
         () => {
           timedOut[q._id] = true;
+          markTimeSpent(q._id);
+          saveAutosave();
           document.querySelectorAll(`#options-${q._id} input`).forEach((inp) => inp.disabled = true);
           if (currentSection < renderUnits.length - 1) showSection(currentSection + 1);
           else updateProgress();
@@ -326,6 +376,11 @@
       currentSection = idx;
       stopQuestionTimer();
       const unit = renderUnits[idx];
+      // Time-to-answer is measured from the first time a question's section
+      // is actually shown, not from page load — a batch section shows all
+      // its questions at once, so every one of them starts its clock here.
+      const startedQuestions = unit.kind === 'batch' ? unit.questions : [unit.question];
+      startedQuestions.forEach((q) => { if (!questionStartTimes[q._id]) questionStartTimes[q._id] = Date.now(); });
       // A RANKING question is seeded with its displayed order the first time
       // its section is shown — reordering from there is optional, not a
       // forced interaction (see hasAnswer()).
@@ -342,13 +397,24 @@
     }
 
     // Whether a raw question (not a render unit) currently has a
-    // submittable answer — used for the progress bar and for gating manual
-    // submission, mirroring hasAnswer()'s per-type rules.
+    // submittable answer — used for the progress bar, mirroring
+    // hasAnswer()'s per-type rules.
     function isAnswered(q) {
       const val = answers[q._id];
       if (q.questionType === 'MULTI_SELECT') return Array.isArray(val) && val.length > 0;
       if (q.questionType === 'RANKING') return Array.isArray(val) && val.length === q.options.length;
       return !!val;
+    }
+
+    // Whether a question is "done" for submission-gating purposes: answered,
+    // OR explicitly timed out. A per-question timeout permanently disables
+    // that question's inputs (see startQuestionTimer), so it can never
+    // become isAnswered() again — gating manual submit on isAnswered() alone
+    // would trap the candidate forever after a single timeout, unable to
+    // submit until the global timer force-submits. The Next-button gate
+    // already carries this same exception; the submit gate must match it.
+    function isResolved(q) {
+      return isAnswered(q) || !!timedOut[q._id];
     }
 
     function updateProgress() {
@@ -374,21 +440,26 @@
     // backend's per-questionType `referencedOptionIds` expects: a single
     // answerOptionId for LIKERT/SITUATIONAL/single-correct-answer types, an
     // answerOptionIds array for MULTI_SELECT, an orderedOptionIds array for
-    // RANKING — or, for anything unanswered, a bare {questionId, status}
-    // marker so a per-question timeout (or an auto-submit cutoff) is
-    // recorded explicitly rather than silently dropped from the submission.
+    // RANKING. isAnswered(q) is the single source of truth for whether a
+    // question has a submittable answer — anything else (never visited
+    // before a global auto-submit cutoff, or a per-question timeout) MUST
+    // get an explicit status, because routes/assessment.js's validator
+    // rejects the whole submission if any entry has neither an answer field
+    // nor a status. A bare {questionId} with nothing else previously slipped
+    // through here whenever the global timer fired before every question had
+    // been visited, failing submission entirely.
     function buildAnswerPayload(allQuestions) {
       return allQuestions.map((q) => {
         const entry = { questionId: q._id };
-        if (timedOut[q._id]) entry.status = 'timeout';
-
-        if (q.questionType === 'MULTI_SELECT') {
-          if (Array.isArray(answers[q._id]) && answers[q._id].length) entry.answerOptionIds = answers[q._id];
-        } else if (q.questionType === 'RANKING') {
-          if (Array.isArray(answers[q._id]) && answers[q._id].length) entry.orderedOptionIds = answers[q._id];
-        } else if (answers[q._id]) {
-          entry.answerOptionId = answers[q._id];
+        if (isAnswered(q)) {
+          if (q.questionType === 'MULTI_SELECT') entry.answerOptionIds = answers[q._id];
+          else if (q.questionType === 'RANKING') entry.orderedOptionIds = answers[q._id];
+          else entry.answerOptionId = answers[q._id];
+          entry.status = timedOut[q._id] ? 'timeout' : 'answered';
+        } else {
+          entry.status = timedOut[q._id] ? 'timeout' : 'skipped';
         }
+        if (timeSpent[q._id] != null) entry.timeTakenSeconds = timeSpent[q._id];
         return entry;
       });
     }
@@ -397,10 +468,10 @@
       if (timer) timer.stop();
       stopQuestionTimer();
       const allQuestions = allQuestionsFlat();
-      const answeredCount = allQuestions.filter(isAnswered).length;
+      const resolvedCount = allQuestions.filter(isResolved).length;
 
-      if (!auto && answeredCount < allQuestions.length) {
-        const unanswered = allQuestions.length - answeredCount;
+      if (!auto && resolvedCount < allQuestions.length) {
+        const unanswered = allQuestions.length - resolvedCount;
         document.getElementById('unanswered-msg').textContent = `⚠️ ${unanswered} question(s) unanswered. Please answer all questions before submitting.`;
         return;
       }
@@ -410,7 +481,7 @@
       btn.disabled = true; btn.textContent = 'Submitting...';
       const { ok, data } = await api.post('/assessment/submit', { sessionId, answers: answerPayload, autoSubmitted: auto }, token);
       if (!ok) { showToast(data.message || 'Submission failed.', 'error'); btn.disabled = false; btn.textContent = 'Submit Assessment'; return; }
-      localStorage.removeItem('tbt_session_id'); localStorage.removeItem('tbt_session_expires');
+      localStorage.removeItem('tbt_session_id'); localStorage.removeItem('tbt_session_expires'); localStorage.removeItem(autosaveKey());
       const user = api.getUser(); if (user) { user.hasCompletedAssessment = true; api.setUser(user); }
       window.location.href = '/user/result.html';
     }

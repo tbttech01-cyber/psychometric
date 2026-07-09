@@ -12,5 +12,7 @@ router.get('/results/:id', ctrl.getResultById);
 router.delete('/results/:id', ctrl.deleteResult);
 router.get('/export/pdf', ctrl.exportPDF);
 router.get('/export/csv', ctrl.exportCSV);
+router.get('/settings', ctrl.getSettings);
+router.post('/settings', ctrl.updateSettings);
 
 module.exports = router;

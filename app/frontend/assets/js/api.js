@@ -3,12 +3,17 @@ const API_BASE = (window.TBT_API_BASE || '') + '/api/v1';
 const _req = async (method, path, body, token) => {
   const headers = { 'Content-Type': 'application/json' };
   if (token) headers['Authorization'] = `Bearer ${token}`;
-  const res = await fetch(`${API_BASE}${path}`, {
-    method, headers,
-    body: body ? JSON.stringify(body) : undefined,
-  });
-  const data = await res.json().catch(() => ({ success: false, message: 'Server error' }));
-  return { ok: res.ok, status: res.status, data };
+  try {
+    const res = await fetch(`${API_BASE}${path}`, {
+      method, headers,
+      body: body ? JSON.stringify(body) : undefined,
+    });
+    const data = await res.json().catch(() => ({ success: false, message: 'Server error' }));
+    return { ok: res.ok, status: res.status, data };
+  } catch (error) {
+    console.error('Request failed:', error);
+    return { ok: false, status: 0, data: { success: false, message: 'Connection failed. Please check your network or try again.' } };
+  }
 };
 
 const api = {

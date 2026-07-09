@@ -1,6 +1,12 @@
 class AssessmentTimer {
-  constructor(expiresAt, onTick, onExpire) {
-    this.expiresAt = new Date(expiresAt).getTime();
+  constructor(durationOrExpiry, onTick, onExpire) {
+    if (typeof durationOrExpiry === 'number') {
+      this.expiresAt = Date.now() + durationOrExpiry * 1000;
+    } else if (durationOrExpiry && !isNaN(Number(durationOrExpiry))) {
+      this.expiresAt = Date.now() + Number(durationOrExpiry) * 1000;
+    } else {
+      this.expiresAt = new Date(durationOrExpiry).getTime();
+    }
     this.onTick = onTick;
     this.onExpire = onExpire;
     this._interval = null;

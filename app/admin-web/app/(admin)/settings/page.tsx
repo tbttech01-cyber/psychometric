@@ -16,12 +16,22 @@ export default function SettingsPage() {
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
 
+  const [duration, setDuration] = useState<number | "">("");
+  const [savingDuration, setSavingDuration] = useState(false);
+
   useEffect(() => {
     (async () => {
       const { ok, data } = await api.get("/admin/profile", token);
       if (!ok) return;
       setEmail(data.admin.email);
       setLastLogin(data.admin.lastLoginAt ? new Date(data.admin.lastLoginAt).toLocaleString() : "This is your first login");
+    })();
+
+    (async () => {
+      const { ok, data } = await api.get("/admin/settings", token);
+      if (ok && data.data) {
+        setDuration(data.data.assessment_duration_minutes);
+      }
     })();
   }, [token]);
 
@@ -37,6 +47,20 @@ export default function SettingsPage() {
       removeToken();
       router.push("/login");
     }, 1500);
+  }
+
+  async function saveSettings() {
+    if (!duration || isNaN(Number(duration)) || Number(duration) <= 0) {
+      return showToast("Please enter a valid duration in minutes.", "error");
+    }
+    setSavingDuration(true);
+    const { ok, data } = await api.post("/admin/settings", { assessment_duration_minutes: Number(duration) }, token);
+    setSavingDuration(false);
+    if (!ok) {
+      showToast(data.message || "Failed to update settings.", "error");
+      return;
+    }
+    showToast("Settings updated successfully.", "success");
   }
 
   return (
@@ -72,6 +96,20 @@ export default function SettingsPage() {
                 className="border-2 rounded-lg px-3 py-2 w-full focus:outline-none" style={{ borderColor: "var(--tbt-border)" }} />
             </div>
             <button onClick={changePassword} className="btn btn-primary">Change Password</button>
+          </div>
+        </div>
+
+        <div className="card">
+          <h3 className="font-bold mb-3" style={{ color: "var(--tbt-primary)" }}>Assessment Settings</h3>
+          <div className="space-y-3">
+            <div>
+              <label className="block text-xs font-semibold mb-1">Assessment Time Limit (in minutes)</label>
+              <input type="number" min="1" value={duration} onChange={(e) => setDuration(e.target.value === "" ? "" : Number(e.target.value))}
+                className="border-2 rounded-lg px-3 py-2 w-full focus:outline-none" style={{ borderColor: "var(--tbt-border)" }} />
+            </div>
+            <button onClick={saveSettings} disabled={savingDuration} className="btn btn-primary">
+              {savingDuration ? "Saving..." : "Save Settings"}
+            </button>
           </div>
         </div>
       </main>

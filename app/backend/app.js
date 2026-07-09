@@ -22,7 +22,31 @@ const corsOrigins = [
   ...splitOrigins(process.env.ADMIN_APP_URL),
   ...splitOrigins(process.env.ADMIN_WEB_URL),
 ];
-app.use(cors(corsOrigins.length ? { origin: corsOrigins } : {}));
+app.use(cors({
+  origin: (origin, callback) => {
+    // Allow requests with no origin (like mobile apps, curl, postman)
+    if (!origin) return callback(null, true);
+
+    if (corsOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+
+    // Always allow localhost and Vercel domains (including preview/branch deployments)
+    const isLocalhost = /^http:\/\/localhost(:\d+)?$/.test(origin);
+    const isVercel = /\.vercel\.app$/.test(origin);
+
+    if (isLocalhost || isVercel) {
+      return callback(null, true);
+    }
+
+    // If no origins configured, default to allowing it
+    if (corsOrigins.length === 0) {
+      return callback(null, true);
+    }
+
+    return callback(null, false);
+  }
+}));
 app.use(express.json());
 
 // On a persistent server (server.js), connectDB() already runs once at boot,

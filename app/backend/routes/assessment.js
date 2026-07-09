@@ -32,5 +32,6 @@ router.post('/submit',
 );
 
 router.get('/result', userAuth, ctrl.getResult);
+router.get('/settings', userAuth, ctrl.getSettings);
 
 module.exports = router;
