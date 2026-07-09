@@ -1,0 +1,44 @@
+name: Migrate Question Sets (one-time)
+
+# Manual-only. Runs backend/scripts/migrateQuestionSets.js against the
+# PRODUCTION database. MONGO_URI is pulled from the Vercel backend project at
+# runtime (never stored in this repo) using the existing VERCEL_TOKEN secret.
+# Delete this workflow file once it has run successfully.
+on:
+  workflow_dispatch:
+
+jobs:
+  migrate:
+    name: Run Question Set migration (production)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: app
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      # Identifiers only (not credentials) — the backend Vercel project.
+      VERCEL_ORG_ID: team_RUmkOwJ67yFsJKTGJys0u2rD
+      VERCEL_PROJECT_ID: prj_wKabaDhHYWHoYjzEQIjmBRFkoi8d
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: app/package-lock.json
+
+      - run: npm ci
+
+      # Pulls production env into .vercel/.env.production.local
+      - name: Pull production env from Vercel
+        run: npx vercel@latest pull --yes --environment=production --token="$VERCEL_TOKEN"
+
+      # The migration reads MONGO_URI via dotenv from app/.env, so drop the
+      # pulled production env there. dotenv parses it safely (no shell eval),
+      # and the value is never echoed.
+      - name: Run migration against production
+        run: |
+          cp .vercel/.env.production.local .env
+          node backend/scripts/migrateQuestionSets.js
