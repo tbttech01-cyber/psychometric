@@ -4,6 +4,7 @@
 // Protected by the standard admin JWT middleware — no secret lives in source.
 // DELETE this file and its mount in app.js right after the migration has run.
 const router = require('express').Router();
+const nodemailer = require('nodemailer');
 const adminAuth = require('../middleware/adminAuth');
 const Admin = require('../models/Admin');
 const Question = require('../models/Question');
@@ -11,6 +12,25 @@ const Setting = require('../models/Setting');
 const SharedUserID = require('../models/SharedUserID');
 const QuestionSet = require('../models/QuestionSet');
 const AssessmentSession = require('../models/AssessmentSession');
+
+// TEMP diagnostic (public, no secrets returned): verifies the Gmail SMTP
+// login and reports the exact error + whether the App Password looks wrong
+// (should be 16 chars, no spaces). Remove with the rest of this file.
+router.get('/email-check', async (req, res) => {
+  const pass = process.env.GMAIL_PASS || '';
+  const meta = {
+    gmailUser: process.env.GMAIL_USER || null,
+    passLength: pass.length,
+    passHasSpaces: /\s/.test(pass),
+  };
+  try {
+    const t = nodemailer.createTransport({ service: 'gmail', auth: { user: process.env.GMAIL_USER, pass } });
+    await t.verify();
+    res.json({ success: true, message: 'SMTP auth OK', ...meta });
+  } catch (err) {
+    res.json({ success: false, error: String((err && err.message) || err), code: err && err.code, ...meta });
+  }
+});
 
 router.use(adminAuth);
 
