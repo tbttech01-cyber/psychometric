@@ -35,10 +35,17 @@ jobs:
       - name: Pull production env from Vercel
         run: npx vercel@latest pull --yes --environment=production --token="$VERCEL_TOKEN"
 
-      # The migration reads MONGO_URI via dotenv from app/.env, so drop the
-      # pulled production env there. dotenv parses it safely (no shell eval),
-      # and the value is never echoed.
+      # Extract MONGO_URI from the pulled file, strip any surrounding quotes
+      # (Vercel may store/emit the value quoted, which would otherwise reach
+      # the driver as `"mongodb+srv://...` → "Invalid scheme"), mask it, and
+      # pass it via env. dotenv in the script won't override an already-set
+      # env var, so this wins over the (absent) app/.env.
       - name: Run migration against production
         run: |
-          cp .vercel/.env.production.local .env
-          node backend/scripts/migrateQuestionSets.js
+          RAW=$(grep -m1 '^MONGO_URI=' .vercel/.env.production.local | cut -d= -f2-)
+          RAW="${RAW%\"}"; RAW="${RAW#\"}"
+          RAW="${RAW%\'}"; RAW="${RAW#\'}"
+          RAW="${RAW%\"}"; RAW="${RAW#\"}"
+          echo "::add-mask::$RAW"
+          echo "connection scheme detected: ${RAW%%://*}://"
+          MONGO_URI="$RAW" node backend/scripts/migrateQuestionSets.js
