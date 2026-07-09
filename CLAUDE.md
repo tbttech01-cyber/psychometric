@@ -69,7 +69,9 @@ Tests live in `app/tests/` and run against a **real MongoDB**, not mocks — `gl
 
 ```
 backend/
-  server.js               # entry point — wires middleware, routes, static serving
+  server.js               # thin entry point — connectDB() then app.listen()
+  app.js                  # the real Express app — middleware, CORS, rate limiters,
+                          #   lazy serverless DB connect, routes, static serving of frontend/
   config/db.js            # Mongoose connection
   routes/                 # 6 route files
     adminAuth.js          # POST /api/v1/admin/login, /logout, /change-password; GET /profile
@@ -100,6 +102,8 @@ backend/
     seedData.js            # static seed data referenced by seed.js
     seedDummyData.js       # optional extra dummy users/results for local dashboard testing
     seedBusinessMatrixDummy.js # optional dummy BusinessMatrixCell rows for local matrix-admin testing
+    migratePhase1QuestionTypes.js # one-time backfill: sets dimension/questionType/marks on pre-existing
+                          #   Questions (maps each legacy QuestionType.name to its canonical dimension)
 ```
 
 **Frontend structure:**
