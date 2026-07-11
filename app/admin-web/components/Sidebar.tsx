@@ -15,7 +15,6 @@ import {
   FileText,
   Settings as SettingsIcon,
   Grid3x3,
-  Database,
   LogOut,
   X,
   type LucideIcon,
@@ -34,7 +33,6 @@ const NAV_ITEMS: { href: string; label: string; icon: LucideIcon }[] = [
   { href: "/reports", label: "Reports", icon: FileText },
   { href: "/settings", label: "Settings", icon: SettingsIcon },
   { href: "/business-matrix", label: "Business Matrix", icon: Grid3x3 },
-  { href: "/migrate", label: "Run Migration", icon: Database }, // TEMP: remove after prod Question Set migration
 ];
 
 export default function Sidebar({ mobileOpen = false, onClose }: { mobileOpen?: boolean; onClose?: () => void }) {
