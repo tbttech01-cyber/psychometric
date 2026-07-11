@@ -256,16 +256,23 @@
       const audio = new Audio(url);
       currentAudio = audio;
       currentAudioQid = qid;
-      audio.addEventListener('play', () => { if (currentAudioQid === qid) setAudioState(qid, 'pause'); });
-      audio.addEventListener('pause', () => { if (currentAudioQid === qid && !audio.ended) setAudioState(qid, 'play'); });
-      audio.addEventListener('ended', () => { if (currentAudioQid === qid) setAudioState(qid, 'replay'); });
+      // Guard every handler on element IDENTITY, not the question id: stopping a
+      // clip sets src='' which fires a spurious 'error' on the OLD element, and
+      // replaying the SAME question means qid alone can't distinguish the dead
+      // element from the live one. `currentAudio === audio` ensures only the
+      // live clip ever mutates shared state (otherwise a stopped element's late
+      // 'error' would null out the live clip and surface a false failure).
+      audio.addEventListener('play', () => { if (currentAudio === audio) setAudioState(qid, 'pause'); });
+      audio.addEventListener('pause', () => { if (currentAudio === audio && !audio.ended) setAudioState(qid, 'play'); });
+      audio.addEventListener('ended', () => { if (currentAudio === audio) setAudioState(qid, 'replay'); });
       audio.addEventListener('error', () => {
-        if (currentAudioQid === qid) { currentAudio = null; currentAudioQid = null; }
+        if (currentAudio !== audio) return; // a stopped/replaced clip erroring — ignore
+        currentAudio = null; currentAudioQid = null;
         setAudioState(qid, 'play');
         showAudioError(qid);
       });
       const p = audio.play();
-      if (p && typeof p.catch === 'function') p.catch(() => { setAudioState(qid, 'play'); showAudioError(qid); });
+      if (p && typeof p.catch === 'function') p.catch(() => { if (currentAudio === audio) { setAudioState(qid, 'play'); showAudioError(qid); } });
     }
 
     // One button handles play / pause / resume / replay:
