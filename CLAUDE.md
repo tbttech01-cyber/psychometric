@@ -73,7 +73,7 @@ backend/
   app.js                  # the real Express app — middleware, CORS, rate limiters,
                           #   lazy serverless DB connect, routes, static serving of frontend/
   config/db.js            # Mongoose connection
-  routes/                 # 7 route files
+  routes/                 # 8 route files (one is temporary — see tempMigrate.js)
     adminAuth.js          # POST /api/v1/admin/login, /logout, /change-password; GET /profile
     adminCRUD.js          # CRUD for shared-ids, question-types, questions, answer-options
     adminDashboard.js     # GET stats, results list, export (PDF/CSV), email
@@ -81,6 +81,8 @@ backend/
     adminQuestionSets.js  # CRUD for QuestionSet (a set's questionIds array order IS its question order)
     userAuth.js           # POST /api/v1/user/register, /verify-otp, /login, etc.
     assessment.js         # GET /questions, POST /start, /submit, GET /result
+    tempMigrate.js        # TEMPORARY — mounted at /api/v1/_migrate (see "Temporary
+                          #   migration scaffolding" below); delete after prod migration
   controllers/            # one controller per route file
   models/                 # Mongoose schemas: Admin, User, SharedUserID, QuestionType,
                           #   Question, AnswerOption, AssessmentSession, UserAnswer, Result,
@@ -146,6 +148,15 @@ Admin and user auth are **not** symmetric:
 - **Result** — one per submitted session. Original fields (total/percentage/level, per-category scores, `recommendedBusiness`, `improvementAreas`) plus additive fields for dimension scoring (`dimensionScores`, `dimensionPercentages`, `strongDimensions`/`weakDimensions`, the four composite scores, `recommendations`) — the additive fields are absent on Result documents created before this was introduced, so treat them as optional when reading.
 - **BusinessMatrixCell** — admin-editable `rowTypeId` × `colTypeId` (both `QuestionType` refs) → recommended `businessName` + `rating` (1–5), unique per pair; managed via `adminBusinessMatrix.js`, separate from both `BUSINESS_MAP` and `businessRecommendationEngine`.
 - **Setting** — a generic `key`/`value` (Mixed) store for admin-configurable platform settings. Holds `assessment_duration_minutes` (default 30 when unset). Since per-QuestionSet timers were introduced this is **no longer the live assessment timer** — each attempt's duration comes from its snapshot set's `durationMinutes`. It now serves as a **fallback** (the migration seeds the Default Set's timer from it; `getSettings` falls back to it only when a cohort has no usable set) and as the admin-editable default used to pre-fill a new set's timer. Still exposed at `GET /api/v1/assessment/settings` (now reflects the caller's own set duration) and `GET`/`POST /api/v1/admin/settings`. `AssessmentTimer` (`frontend/assets/js/timer.js`) accepts either a duration-in-seconds number or an absolute `expiresAt` date.
+
+### Temporary migration scaffolding (delete after prod migration)
+
+The last few commits added throwaway plumbing to run the Question Set migration against the production Mongo (whose `MONGO_URI` is a "sensitive" Vercel env var CI can't pull, so the migration couldn't run from the workflow). **All of this is meant to be removed once the prod migration has run — treat it as tech debt, not a pattern to extend:**
+
+- `backend/routes/tempMigrate.js` mounted at `/api/v1/_migrate` in `backend/app.js`. `POST /question-sets` (admin-JWT-guarded) runs the same idempotent steps as `scripts/migrateQuestionSets.js` but over the request's live connection. `GET /email-check` is a **public** Gmail-SMTP diagnostic (returns error/pass-length metadata, never the password).
+- `app/admin-web/app/(admin)/migrate/` — an admin page that POSTs to that endpoint.
+
+When cleaning up: delete the route file, its mount line in `app.js`, and the admin-web `migrate/` page together.
 
 ---
 
