@@ -5,6 +5,7 @@ const ctrl = require('../controllers/assessmentController');
 const userAuth = require('../middleware/userAuth');
 
 router.get('/questions', userAuth, ctrl.getQuestions);
+router.get('/questions/:id/audio', userAuth, ctrl.getQuestionAudio);
 router.post('/start', userAuth, ctrl.startSession);
 
 router.post('/submit',

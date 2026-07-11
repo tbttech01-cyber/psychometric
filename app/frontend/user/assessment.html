@@ -78,6 +78,12 @@
     let activeState = 'idle'; // 'idle' | 'playing' | 'paused' | 'ended'
     let ttsTick = null;       // keep-alive interval so Chrome doesn't auto-pause long speech
     const TTS_OK = typeof window !== 'undefined' && 'speechSynthesis' in window && typeof window.SpeechSynthesisUtterance === 'function';
+    // Cached neural-TTS audio (studio quality, generated offline): which
+    // questions have it, and per-question object URLs once fetched.
+    let neuralReady = {};      // qid -> true when the server has fresh cached audio
+    let neuralAudioUrls = {};  // qid -> objectURL | 'none' | undefined (unfetched)
+    let playToken = 0;         // invalidates in-flight audio fetches on nav / new play
+    const NEURAL_BASE = (window.TBT_API_BASE || '') + '/api/v1';
 
     // Keyed by sessionId so a stale in-progress answer set from a previous
     // (already-submitted) session is never applied to a new one.
@@ -105,9 +111,10 @@
       // Index both audio sources for every question: the uploaded clip (if any)
       // takes priority, and every question also exposes its text for the
       // text-to-speech fallback so EVERY question gets a working audio button.
-      audioUrls = {}; questionTexts = {};
+      audioUrls = {}; questionTexts = {}; neuralReady = {};
       sections.forEach((s) => s.questions.forEach((q) => {
         if (q.hasAudio && q.audioUrl) audioUrls[q._id] = q.audioUrl;
+        if (q.neuralAudio) neuralReady[q._id] = true;
         questionTexts[q._id] = q.text || '';
       }));
       restoreAutosave();
@@ -381,13 +388,35 @@
       setTimeout(() => { if (currentUtterance === u && !started && !ss.paused && !ss.speaking) fail('No speech voice is available on this device or browser.'); }, 2500);
     }
 
-    // Begin playback for a question from the start — uploaded audio first,
-    // otherwise text-to-speech — after stopping anything else.
-    function startPlayback(qid) {
+    // Fetch (and object-URL-cache) a question's cached neural mp3. Returns the
+    // object URL, or 'none' if the server has no audio for it.
+    async function fetchNeural(qid) {
+      if (neuralAudioUrls[qid] !== undefined) return neuralAudioUrls[qid];
+      try {
+        const res = await fetch(`${NEURAL_BASE}/assessment/questions/${qid}/audio`, { headers: { Authorization: `Bearer ${token}` } });
+        if (!res.ok) return (neuralAudioUrls[qid] = 'none');
+        const url = URL.createObjectURL(await res.blob());
+        return (neuralAudioUrls[qid] = url);
+      } catch { return (neuralAudioUrls[qid] = 'none'); }
+    }
+
+    function setLoading(qid) { const l = document.getElementById(`audio-label-${qid}`); if (l) l.textContent = 'Loading…'; }
+
+    // Begin playback for a question from the start, after stopping anything
+    // else. Priority: admin-uploaded audio -> cached neural TTS (studio quality)
+    // -> browser speech synthesis. Async because neural audio is fetched lazily;
+    // a playToken guard aborts a fetch the user has already navigated past.
+    async function startPlayback(qid) {
       stopAllPlayback();
+      const myToken = ++playToken;
       hideAudioError(qid);
-      if (audioUrls[qid]) startAudio(qid, audioUrls[qid]);
-      else startTts(qid);
+      if (audioUrls[qid]) { startAudio(qid, audioUrls[qid]); return; }         // 1) uploaded
+      if (neuralReady[qid]) {                                                  // 2) cached neural
+        let url = neuralAudioUrls[qid];
+        if (url === undefined) { setLoading(qid); url = await fetchNeural(qid); if (myToken !== playToken) return; }
+        if (url && url !== 'none') { startAudio(qid, url); return; }
+      }
+      startTts(qid);                                                          // 3) browser speech
     }
 
     function pausePlayback(qid) {
@@ -626,7 +655,12 @@
       // Leaving a section stops its audio/speech — moving to the next/previous
       // question never leaves the previous playback running.
       stopAllPlayback();
+      playToken++; // invalidate any neural-audio fetch still in flight
       const unit = renderUnits[idx];
+      // Warm cached neural audio for this section's questions so Play is instant.
+      (unit.kind === 'batch' ? unit.questions : [unit.question]).forEach((q) => {
+        if (q && neuralReady[q._id] && neuralAudioUrls[q._id] === undefined) fetchNeural(q._id);
+      });
       // Time-to-answer is measured from the first time a question's section
       // is actually shown, not from page load — a batch section shows all
       // its questions at once, so every one of them starts its clock here.
@@ -719,6 +753,7 @@
       if (timer) timer.stop();
       stopQuestionTimer();
       stopAllPlayback();
+      playToken++;
       const allQuestions = allQuestionsFlat();
       const resolvedCount = allQuestions.filter(isResolved).length;
 

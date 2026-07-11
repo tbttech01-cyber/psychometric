@@ -1,5 +1,7 @@
+const crypto = require('crypto');
 const Question = require('../models/Question');
 const AnswerOption = require('../models/AnswerOption');
+const QuestionAudio = require('../models/QuestionAudio');
 const AssessmentSession = require('../models/AssessmentSession');
 const UserAnswer = require('../models/UserAnswer');
 const Result = require('../models/Result');
@@ -44,6 +46,10 @@ function publicAudio(q) {
     (url.startsWith('data:') || url.startsWith('http://') || url.startsWith('https://'));
   return { hasAudio: playable, audioUrl: playable ? url : undefined };
 }
+
+// Must match utils/edgeTts.textHash — computed inline here so the request path
+// never loads the msedge-tts module (only the offline generation script does).
+const textHash = (t) => crypto.createHash('sha256').update(String(t || '')).digest('hex');
 
 // Resolve which Question Set a user's assessment should draw from, via their
 // access code (SharedUserID → questionSetId → QuestionSet). Returns the set
@@ -105,6 +111,13 @@ exports.getQuestions = async (req, res, next) => {
       optionsByQuestion[qId].push({ _id: opt._id, optionText: opt.optionText, optionImageUrl: opt.optionImageUrl, order: opt.order });
     }
 
+    // Which questions have up-to-date cached neural-TTS audio (see
+    // QuestionAudio / scripts/generateQuestionAudio.js). The candidate uses it
+    // via GET /questions/:id/audio when set, else falls back to browser speech.
+    const audioHashByQid = {};
+    (await QuestionAudio.find({ questionId: { $in: questionIds } }).select('questionId textHash'))
+      .forEach((r) => { audioHashByQid[r.questionId.toString()] = r.textHash; });
+
     // Group by category for the candidate UI (unchanged contract). Questions
     // within a category preserve the set's order because `questions` is
     // already snapshot-ordered and .filter is stable. Categories the set
@@ -125,6 +138,7 @@ exports.getQuestions = async (req, res, next) => {
             questionType: q.questionType, dimension: q.dimension, difficulty: q.difficulty,
             timeLimitSeconds: q.timeLimitSeconds, imageUrl: q.imageUrl, instructionText: q.instructionText,
             hasAudio: audio.hasAudio, audioUrl: audio.audioUrl,
+            neuralAudio: audioHashByQid[q._id.toString()] === textHash(q.text),
             options: q.questionType === 'RANKING'
               ? shuffled(optionsByQuestion[q._id.toString()] || [])
               : (optionsByQuestion[q._id.toString()] || []),
@@ -350,5 +364,19 @@ exports.getSettings = async (req, res, next) => {
       minutes = duration ? Number(duration.value) : 30;
     }
     res.json({ success: true, data: { assessment_duration_minutes: minutes } });
+  } catch (err) { next(err); }
+};
+
+// Serves the cached neural-TTS mp3 for a question (generated offline by
+// scripts/generateQuestionAudio.js). 404 when none exists — the candidate then
+// falls back to browser speech synthesis. Runtime never calls the TTS endpoint.
+exports.getQuestionAudio = async (req, res, next) => {
+  try {
+    const cached = await QuestionAudio.findOne({ questionId: req.params.id }).select('audio contentType textHash');
+    if (!cached || !cached.audio) return res.status(404).json({ success: false, message: 'No generated audio for this question.' });
+    res.set('Content-Type', cached.contentType || 'audio/mpeg');
+    res.set('Cache-Control', 'private, max-age=86400');
+    res.set('ETag', `"${cached.textHash}"`);
+    return res.send(cached.audio);
   } catch (err) { next(err); }
 };
