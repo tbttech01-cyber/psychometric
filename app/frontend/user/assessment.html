@@ -76,6 +76,7 @@
     let activeQid = null;     // question whose audio/speech is currently live
     let activeMode = null;    // 'audio' | 'tts'
     let activeState = 'idle'; // 'idle' | 'playing' | 'paused' | 'ended'
+    let ttsTick = null;       // keep-alive interval so Chrome doesn't auto-pause long speech
     const TTS_OK = typeof window !== 'undefined' && 'speechSynthesis' in window && typeof window.SpeechSynthesisUtterance === 'function';
 
     // Keyed by sessionId so a stale in-progress answer set from a previous
@@ -273,11 +274,17 @@
     function pickSpeech(text) {
       const isTamil = /[஀-௿]/.test(text || '');
       const want = isTamil ? 'ta' : 'en';
-      const lang = isTamil ? 'ta-IN' : 'en-US';
+      let lang = isTamil ? 'ta-IN' : 'en-US';
       const list = (voicesCache && voicesCache.length) ? voicesCache : (TTS_OK ? (window.speechSynthesis.getVoices() || []) : []);
-      const voice = list.find((v) => (v.lang || '').toLowerCase().startsWith(want))
-        || list.find((v) => (v.lang || '').toLowerCase().startsWith('en'))
-        || null;
+      let voice = list.find((v) => (v.lang || '').toLowerCase().startsWith(want));
+      if (!voice) {
+        // Preferred-language voice unavailable — fall back to an English voice
+        // (then any voice) and MATCH lang to it. A lang/voice mismatch (e.g.
+        // lang 'ta-IN' with an English voice) silences some engines, so aligning
+        // them guarantees the text is still read aloud.
+        voice = list.find((v) => (v.lang || '').toLowerCase().startsWith('en')) || list[0] || null;
+        if (voice && voice.lang) lang = voice.lang;
+      }
       return { lang, voice };
     }
 
@@ -286,8 +293,16 @@
     // that navigation/submit/exit never leaves audio running.
     function stopAllPlayback() {
       const prev = activeQid;
+      if (ttsTick) { clearInterval(ttsTick); ttsTick = null; }
       if (currentAudio) { const a = currentAudio; currentAudio = null; try { a.pause(); } catch { /* ignore */ } a.src = ''; }
-      if (TTS_OK) { currentUtterance = null; try { window.speechSynthesis.cancel(); } catch { /* ignore */ } }
+      if (TTS_OK) {
+        // Cancel ONLY when something is actually queued/speaking. An
+        // unconditional cancel() immediately before a speak() makes Chrome
+        // silently drop the new utterance (the cancel->speak race) — the reason
+        // speech failed to start on real devices.
+        const ss = window.speechSynthesis;
+        if (currentUtterance || ss.speaking || ss.pending) { currentUtterance = null; try { ss.cancel(); } catch { /* ignore */ } }
+      }
       activeQid = null; activeMode = null; activeState = 'idle';
       if (prev) setAudioState(prev, 'play');
     }
@@ -314,16 +329,35 @@
       const text = (questionTexts[qid] || '').trim();
       if (!TTS_OK) { setAudioState(qid, 'play'); showAudioError(qid, 'Audio is not supported in this browser.'); return; }
       if (!text) { showAudioError(qid, 'No question text to read.'); return; }
+      const ss = window.speechSynthesis;
       const u = new SpeechSynthesisUtterance(text);
       const { lang, voice } = pickSpeech(text);
       u.lang = lang; if (voice) u.voice = voice;
       currentUtterance = u; activeQid = qid; activeMode = 'tts'; activeState = 'playing';
-      u.onstart = () => { if (currentUtterance === u) { activeState = 'playing'; setAudioState(qid, 'pause'); } };
-      u.onend = () => { if (currentUtterance !== u) return; currentUtterance = null; activeQid = qid; activeMode = null; activeState = 'ended'; setAudioState(qid, 'replay'); };
-      u.onerror = () => { if (currentUtterance !== u) return; currentUtterance = null; activeQid = null; activeMode = null; activeState = 'idle'; setAudioState(qid, 'play'); showAudioError(qid, 'Speech could not be played.'); };
+      let started = false;
+      const fail = (msg) => { if (currentUtterance !== u) return; if (ttsTick) { clearInterval(ttsTick); ttsTick = null; } currentUtterance = null; activeQid = null; activeMode = null; activeState = 'idle'; setAudioState(qid, 'play'); showAudioError(qid, msg); };
+      u.onstart = () => { if (currentUtterance === u) { started = true; activeState = 'playing'; setAudioState(qid, 'pause'); } };
+      u.onend = () => { if (currentUtterance !== u) return; if (ttsTick) { clearInterval(ttsTick); ttsTick = null; } currentUtterance = null; activeQid = qid; activeMode = null; activeState = 'ended'; setAudioState(qid, 'replay'); };
+      u.onerror = () => fail('Speech could not be played on this device.');
       setAudioState(qid, 'pause');
-      try { window.speechSynthesis.speak(u); }
-      catch { currentUtterance = null; activeQid = null; activeMode = null; activeState = 'idle'; setAudioState(qid, 'play'); showAudioError(qid, 'Speech could not be played.'); }
+      const speak = () => {
+        if (currentUtterance !== u) return;
+        try {
+          ss.speak(u);
+          if (ss.paused) ss.resume();               // Chrome can start globally paused — nudge it.
+          // Keep-alive: Chrome auto-pauses long utterances after ~15s; a periodic
+          // resume() (only while genuinely playing) prevents mid-question cutoff.
+          if (ttsTick) clearInterval(ttsTick);
+          ttsTick = setInterval(() => { if (currentUtterance === u && activeState === 'playing' && ss.speaking && !ss.paused) { try { ss.resume(); } catch { /* ignore */ } } else if (currentUtterance !== u) { clearInterval(ttsTick); ttsTick = null; } }, 8000);
+        } catch { fail('Speech could not be played on this device.'); }
+      };
+      // Dodge the cancel()->speak() race: if the engine is still winding down
+      // from a previous utterance, cancel then speak on the next tick.
+      if (ss.speaking || ss.pending) { try { ss.cancel(); } catch { /* ignore */ } setTimeout(speak, 90); }
+      else speak();
+      // If nothing actually starts within a grace period (e.g. no installed voice
+      // for the language), surface a clear message instead of failing silently.
+      setTimeout(() => { if (currentUtterance === u && !started && !ss.paused && !ss.speaking) fail('No speech voice is available on this device or browser.'); }, 2500);
     }
 
     // Begin playback for a question from the start — uploaded audio first,
