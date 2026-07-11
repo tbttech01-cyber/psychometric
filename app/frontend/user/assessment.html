@@ -268,21 +268,41 @@
     function refreshVoices() { if (TTS_OK) { try { voicesCache = window.speechSynthesis.getVoices() || []; } catch { voicesCache = []; } } }
     if (TTS_OK) { refreshVoices(); try { window.speechSynthesis.onvoiceschanged = refreshVoices; } catch { /* ignore */ } }
 
+    // Gentle, human-ish prosody: a touch slower for clarity, natural pitch — so
+    // the read sounds calm and clear rather than fast and robotic.
+    const TTS_RATE = 0.9, TTS_PITCH = 1.0, TTS_VOLUME = 1;
+
+    // Rank voices so the most natural/human-sounding one wins: neural/natural
+    // engines first, then online/enhanced/premium and Google voices, then a few
+    // well-known pleasant named voices. This is what makes it sound less like a
+    // bot (far more impactful than rate/pitch).
+    function scoreVoice(v) {
+      const n = ((v && v.name) || '').toLowerCase();
+      let s = 0;
+      if (/natural|neural/.test(n)) s += 6;
+      if (/online|enhanced|premium/.test(n)) s += 3;
+      if (/google/.test(n)) s += 3;
+      if (/zira|aria|jenny|sonia|libby|emma|ava|samantha|nova|serena|karen|heera/.test(n)) s += 2;
+      if (v && v.default) s += 1;
+      return s;
+    }
+    function bestVoice(list) { return list.length ? list.slice().sort((a, b) => scoreVoice(b) - scoreVoice(a))[0] : null; }
+
     // Tamil text lives in the U+0B80–U+0BFF block; anything else is treated as
-    // English. Pick a matching voice, falling back to any English voice, then
-    // to the browser default (null) so speech still works with no exact match.
+    // English. Choose the best-sounding matching voice, falling back to the best
+    // English voice (then any) with lang aligned so speech still plays.
     function pickSpeech(text) {
       const isTamil = /[஀-௿]/.test(text || '');
       const want = isTamil ? 'ta' : 'en';
       let lang = isTamil ? 'ta-IN' : 'en-US';
       const list = (voicesCache && voicesCache.length) ? voicesCache : (TTS_OK ? (window.speechSynthesis.getVoices() || []) : []);
-      let voice = list.find((v) => (v.lang || '').toLowerCase().startsWith(want));
+      let voice = bestVoice(list.filter((v) => (v.lang || '').toLowerCase().startsWith(want)));
       if (!voice) {
-        // Preferred-language voice unavailable — fall back to an English voice
-        // (then any voice) and MATCH lang to it. A lang/voice mismatch (e.g.
+        // Preferred-language voice unavailable — fall back to the best English
+        // voice (then any) and MATCH lang to it. A lang/voice mismatch (e.g.
         // lang 'ta-IN' with an English voice) silences some engines, so aligning
         // them guarantees the text is still read aloud.
-        voice = list.find((v) => (v.lang || '').toLowerCase().startsWith('en')) || list[0] || null;
+        voice = bestVoice(list.filter((v) => (v.lang || '').toLowerCase().startsWith('en'))) || bestVoice(list) || null;
         if (voice && voice.lang) lang = voice.lang;
       }
       return { lang, voice };
@@ -333,6 +353,7 @@
       const u = new SpeechSynthesisUtterance(text);
       const { lang, voice } = pickSpeech(text);
       u.lang = lang; if (voice) u.voice = voice;
+      u.rate = TTS_RATE; u.pitch = TTS_PITCH; u.volume = TTS_VOLUME;
       currentUtterance = u; activeQid = qid; activeMode = 'tts'; activeState = 'playing';
       let started = false;
       const fail = (msg) => { if (currentUtterance !== u) return; if (ttsTick) { clearInterval(ttsTick); ttsTick = null; } currentUtterance = null; activeQid = null; activeMode = null; activeState = 'idle'; setAudioState(qid, 'play'); showAudioError(qid, msg); };
