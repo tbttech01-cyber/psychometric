@@ -11,8 +11,10 @@
     /* Per-question audio control — wraps on narrow screens so the button and
        any error message stack cleanly on mobile. */
     .audio-player { display: flex; align-items: center; flex-wrap: wrap; gap: 0.5rem 0.75rem; }
-    .audio-btn { min-width: 9rem; }        /* stable width across Play/Pause/Replay labels */
+    .audio-btn { min-width: 10.5rem; }     /* stable width across Play/Pause/Resume/Replay labels */
     .audio-icon { display: inline-flex; }
+    .audio-stop { background: transparent; border: 2px solid var(--tbt-border); color: var(--tbt-muted); }
+    .audio-stop:hover { border-color: var(--tbt-danger); color: var(--tbt-danger); }
     .audio-error { flex-basis: 100%; }     /* error drops to its own line */
   </style>
 </head>
@@ -63,9 +65,18 @@
     if (!sessionId || !expiresAt) window.location.href = '/user/welcome.html';
 
     let sections = [], renderUnits = [], answers = {}, timedOut = {}, timeSpent = {}, questionStartTimes = {}, currentSection = 0, timer, questionTimer = null;
-    // Question audio: qid -> data URI, plus the single live <audio> element so
-    // only one clip can ever play at a time (see stopCurrentAudio).
-    let audioUrls = {}, currentAudio = null, currentAudioQid = null;
+    // Every question shows an audio button. An uploaded clip (data URI) plays
+    // when present; otherwise the question text is read aloud via the Web Speech
+    // API. Only ONE question's audio OR speech may be live at a time — see
+    // stopAllPlayback, the single choke point that prevents any overlap.
+    let audioUrls = {};       // qid -> uploaded audio data URI (priority source)
+    let questionTexts = {};   // qid -> plain question text (text-to-speech source)
+    let currentAudio = null;  // live HTMLAudioElement (uploaded-audio mode)
+    let currentUtterance = null; // live SpeechSynthesisUtterance (tts mode)
+    let activeQid = null;     // question whose audio/speech is currently live
+    let activeMode = null;    // 'audio' | 'tts'
+    let activeState = 'idle'; // 'idle' | 'playing' | 'paused' | 'ended'
+    const TTS_OK = typeof window !== 'undefined' && 'speechSynthesis' in window && typeof window.SpeechSynthesisUtterance === 'function';
 
     // Keyed by sessionId so a stale in-progress answer set from a previous
     // (already-submitted) session is never applied to a new one.
@@ -90,10 +101,14 @@
       const { ok, data } = await api.get('/assessment/questions', token);
       if (!ok) { showToast('Failed to load questions.', 'error'); return; }
       sections = data.data;
-      // Index playable clips by question id so the audio buttons can reference
-      // them without embedding multi-KB data URIs in the DOM markup.
-      audioUrls = {};
-      sections.forEach((s) => s.questions.forEach((q) => { if (q.hasAudio && q.audioUrl) audioUrls[q._id] = q.audioUrl; }));
+      // Index both audio sources for every question: the uploaded clip (if any)
+      // takes priority, and every question also exposes its text for the
+      // text-to-speech fallback so EVERY question gets a working audio button.
+      audioUrls = {}; questionTexts = {};
+      sections.forEach((s) => s.questions.forEach((q) => {
+        if (q.hasAudio && q.audioUrl) audioUrls[q._id] = q.audioUrl;
+        questionTexts[q._id] = q.text || '';
+      }));
       restoreAutosave();
       renderUnits = buildRenderUnits(sections);
       renderQuestions();
@@ -185,26 +200,30 @@
         </div>`;
     }
 
-    // Inline SVG glyphs for the custom audio control (speaker for play, bars
-    // for pause, circular arrow for replay) — sized to sit inside the shared
-    // .btn styling and inherit its colour via currentColor.
+    // Inline SVG glyphs — speaker (play), bars (pause), circular arrow (replay),
+    // square (stop) — sized to sit inside the shared .btn styling, inheriting
+    // colour via currentColor.
     const AUDIO_ICONS = {
       play: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path><path d="M19.07 4.93a10 10 0 0 1 0 14.14"></path></svg>',
       pause: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="4" width="4" height="16" rx="1"></rect><rect x="14" y="4" width="4" height="16" rx="1"></rect></svg>',
       replay: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"></polyline><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path></svg>',
+      stop: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="5" width="14" height="14" rx="2"></rect></svg>',
     };
 
-    // Renders the per-question audio control — only when the question actually
-    // ships a playable clip. Placed below the question text and above the
-    // options by every render*() below. No audio -> '' (no empty control).
+    // Renders the audio control for EVERY question (below the text, above the
+    // options — see each render*()). No dependency on the admin "Has audio"
+    // flag: uploaded audio plays when present, otherwise the text is spoken.
     function renderAudio(q) {
-      if (!q.hasAudio || !q.audioUrl) return '';
       return `
         <div class="audio-player mb-4" id="audio-wrap-${q._id}">
           <button type="button" class="btn btn-outline btn-sm audio-btn" id="audio-btn-${q._id}"
-            onclick="toggleAudio('${q._id}')" aria-label="Play question audio">
+            onclick="togglePlayback('${q._id}')" aria-label="Play question audio">
             <span class="audio-icon" id="audio-icon-${q._id}">${AUDIO_ICONS.play}</span>
-            <span id="audio-label-${q._id}">Play Audio</span>
+            <span id="audio-label-${q._id}">Play Question</span>
+          </button>
+          <button type="button" class="btn btn-sm audio-stop hidden" id="audio-stop-${q._id}"
+            onclick="stopPlayback('${q._id}')" aria-label="Stop audio">
+            <span class="audio-icon">${AUDIO_ICONS.stop}</span><span>Stop</span>
           </button>
           <span class="audio-error text-xs hidden" id="audio-error-${q._id}" role="alert" style="color:var(--tbt-danger)"></span>
         </div>`;
@@ -215,89 +234,138 @@
       if (el) el.innerHTML = AUDIO_ICONS[state] || AUDIO_ICONS.play;
     }
 
-    // Reflect a playback state on a question's button: 'pause' (playing now —
-    // offer Pause), 'replay' (finished — offer Replay), or 'play' (idle/paused
-    // — offer Play).
+    // Reflect playback state on a question's button, and show the Stop button
+    // only while something is playing or paused:
+    //  'play'   -> "Play Question" (idle/stopped)   Stop hidden
+    //  'pause'  -> "Pause"  (currently playing)     Stop shown
+    //  'resume' -> "Resume" (paused mid-playback)   Stop shown
+    //  'replay' -> "Replay" (finished)              Stop hidden
     function setAudioState(qid, state) {
       const label = document.getElementById(`audio-label-${qid}`);
+      const btn = document.getElementById(`audio-btn-${qid}`);
+      const stop = document.getElementById(`audio-stop-${qid}`);
       if (!label) return;
-      if (state === 'pause') { label.textContent = 'Pause Audio'; setAudioIcon(qid, 'pause'); }
-      else if (state === 'replay') { label.textContent = 'Replay Audio'; setAudioIcon(qid, 'replay'); }
-      else { label.textContent = 'Play Audio'; setAudioIcon(qid, 'play'); }
+      const map = { play: ['Play Question', 'play'], pause: ['Pause', 'pause'], resume: ['Resume', 'play'], replay: ['Replay', 'replay'] };
+      const [text, icon] = map[state] || map.play;
+      label.textContent = text;
+      setAudioIcon(qid, icon);
+      if (btn) btn.setAttribute('aria-label', `${text} — question audio`);
+      if (stop) stop.classList.toggle('hidden', !(state === 'pause' || state === 'resume'));
     }
 
-    function showAudioError(qid) {
+    function showAudioError(qid, msg) {
       const el = document.getElementById(`audio-error-${qid}`);
-      if (el) { el.textContent = 'Audio could not be played. Please try again.'; el.classList.remove('hidden'); }
+      if (el) { el.textContent = msg || 'Audio could not be played. Please try again.'; el.classList.remove('hidden'); }
     }
     function hideAudioError(qid) {
       const el = document.getElementById(`audio-error-${qid}`);
       if (el) { el.textContent = ''; el.classList.add('hidden'); }
     }
 
-    // Stop and release whatever clip is live and reset its button to "Play
-    // Audio". Guarantees only one <audio> is ever active at a time.
-    function stopCurrentAudio() {
-      if (!currentAudio) return;
-      const prevQid = currentAudioQid;
-      try { currentAudio.pause(); } catch { /* ignore */ }
-      currentAudio.src = '';
-      currentAudio = null;
-      currentAudioQid = null;
-      if (prevQid) setAudioState(prevQid, 'play');
+    // Web Speech voices load asynchronously; cache them and refresh on change.
+    let voicesCache = [];
+    function refreshVoices() { if (TTS_OK) { try { voicesCache = window.speechSynthesis.getVoices() || []; } catch { voicesCache = []; } } }
+    if (TTS_OK) { refreshVoices(); try { window.speechSynthesis.onvoiceschanged = refreshVoices; } catch { /* ignore */ } }
+
+    // Tamil text lives in the U+0B80–U+0BFF block; anything else is treated as
+    // English. Pick a matching voice, falling back to any English voice, then
+    // to the browser default (null) so speech still works with no exact match.
+    function pickSpeech(text) {
+      const isTamil = /[஀-௿]/.test(text || '');
+      const want = isTamil ? 'ta' : 'en';
+      const lang = isTamil ? 'ta-IN' : 'en-US';
+      const list = (voicesCache && voicesCache.length) ? voicesCache : (TTS_OK ? (window.speechSynthesis.getVoices() || []) : []);
+      const voice = list.find((v) => (v.lang || '').toLowerCase().startsWith(want))
+        || list.find((v) => (v.lang || '').toLowerCase().startsWith('en'))
+        || null;
+      return { lang, voice };
     }
 
-    // Start a question's clip from the beginning, after stopping any other.
-    function playAudioFromStart(qid) {
-      const url = audioUrls[qid];
-      if (!url) return;
-      stopCurrentAudio();
-      hideAudioError(qid);
+    // Stop and release ANY live playback (uploaded audio OR speech) and reset
+    // the active button. The single choke point that guarantees no overlap and
+    // that navigation/submit/exit never leaves audio running.
+    function stopAllPlayback() {
+      const prev = activeQid;
+      if (currentAudio) { const a = currentAudio; currentAudio = null; try { a.pause(); } catch { /* ignore */ } a.src = ''; }
+      if (TTS_OK) { currentUtterance = null; try { window.speechSynthesis.cancel(); } catch { /* ignore */ } }
+      activeQid = null; activeMode = null; activeState = 'idle';
+      if (prev) setAudioState(prev, 'play');
+    }
+
+    // Uploaded-audio playback. Handlers are guarded on element IDENTITY because
+    // stopping sets src='' which fires a spurious 'error' on the dead element.
+    function startAudio(qid, url) {
       const audio = new Audio(url);
-      currentAudio = audio;
-      currentAudioQid = qid;
-      // Guard every handler on element IDENTITY, not the question id: stopping a
-      // clip sets src='' which fires a spurious 'error' on the OLD element, and
-      // replaying the SAME question means qid alone can't distinguish the dead
-      // element from the live one. `currentAudio === audio` ensures only the
-      // live clip ever mutates shared state (otherwise a stopped element's late
-      // 'error' would null out the live clip and surface a false failure).
-      audio.addEventListener('play', () => { if (currentAudio === audio) setAudioState(qid, 'pause'); });
-      audio.addEventListener('pause', () => { if (currentAudio === audio && !audio.ended) setAudioState(qid, 'play'); });
-      audio.addEventListener('ended', () => { if (currentAudio === audio) setAudioState(qid, 'replay'); });
+      currentAudio = audio; activeQid = qid; activeMode = 'audio'; activeState = 'playing';
+      audio.addEventListener('ended', () => { if (currentAudio === audio) { activeState = 'ended'; activeQid = qid; setAudioState(qid, 'replay'); } });
       audio.addEventListener('error', () => {
-        if (currentAudio !== audio) return; // a stopped/replaced clip erroring — ignore
-        currentAudio = null; currentAudioQid = null;
-        setAudioState(qid, 'play');
-        showAudioError(qid);
+        if (currentAudio !== audio) return;
+        currentAudio = null; activeQid = null; activeMode = null; activeState = 'idle';
+        setAudioState(qid, 'play'); showAudioError(qid);
       });
+      setAudioState(qid, 'pause');
       const p = audio.play();
-      if (p && typeof p.catch === 'function') p.catch(() => { if (currentAudio === audio) { setAudioState(qid, 'play'); showAudioError(qid); } });
+      if (p && typeof p.catch === 'function') p.catch(() => { if (currentAudio === audio) { activeState = 'idle'; setAudioState(qid, 'play'); showAudioError(qid); } });
     }
 
-    // One button handles play / pause / resume / replay:
-    //  - playing this clip            -> pause
-    //  - paused mid-clip              -> resume
-    //  - idle / ended / other clip    -> (re)start from the beginning
-    function toggleAudio(qid) {
-      if (!audioUrls[qid]) return;
-      const isCurrent = currentAudioQid === qid && currentAudio;
-      if (isCurrent && !currentAudio.paused && !currentAudio.ended) { currentAudio.pause(); return; }
-      if (isCurrent && currentAudio.paused && !currentAudio.ended && currentAudio.currentTime > 0) {
-        const p = currentAudio.play();
-        if (p && typeof p.catch === 'function') p.catch(() => { setAudioState(qid, 'play'); showAudioError(qid); });
-        return;
-      }
-      playAudioFromStart(qid);
+    // Text-to-speech playback of the question text (the fallback for questions
+    // with no uploaded clip). Uses window.speechSynthesis / SpeechSynthesisUtterance.
+    function startTts(qid) {
+      const text = (questionTexts[qid] || '').trim();
+      if (!TTS_OK) { setAudioState(qid, 'play'); showAudioError(qid, 'Audio is not supported in this browser.'); return; }
+      if (!text) { showAudioError(qid, 'No question text to read.'); return; }
+      const u = new SpeechSynthesisUtterance(text);
+      const { lang, voice } = pickSpeech(text);
+      u.lang = lang; if (voice) u.voice = voice;
+      currentUtterance = u; activeQid = qid; activeMode = 'tts'; activeState = 'playing';
+      u.onstart = () => { if (currentUtterance === u) { activeState = 'playing'; setAudioState(qid, 'pause'); } };
+      u.onend = () => { if (currentUtterance !== u) return; currentUtterance = null; activeQid = qid; activeMode = null; activeState = 'ended'; setAudioState(qid, 'replay'); };
+      u.onerror = () => { if (currentUtterance !== u) return; currentUtterance = null; activeQid = null; activeMode = null; activeState = 'idle'; setAudioState(qid, 'play'); showAudioError(qid, 'Speech could not be played.'); };
+      setAudioState(qid, 'pause');
+      try { window.speechSynthesis.speak(u); }
+      catch { currentUtterance = null; activeQid = null; activeMode = null; activeState = 'idle'; setAudioState(qid, 'play'); showAudioError(qid, 'Speech could not be played.'); }
     }
+
+    // Begin playback for a question from the start — uploaded audio first,
+    // otherwise text-to-speech — after stopping anything else.
+    function startPlayback(qid) {
+      stopAllPlayback();
+      hideAudioError(qid);
+      if (audioUrls[qid]) startAudio(qid, audioUrls[qid]);
+      else startTts(qid);
+    }
+
+    function pausePlayback(qid) {
+      if (activeMode === 'audio' && currentAudio) { try { currentAudio.pause(); } catch { /* ignore */ } }
+      else if (activeMode === 'tts' && TTS_OK) { try { window.speechSynthesis.pause(); } catch { /* ignore */ } }
+      activeState = 'paused'; setAudioState(qid, 'resume');
+    }
+
+    function resumePlayback(qid) {
+      if (activeMode === 'audio' && currentAudio) { const p = currentAudio.play(); if (p && typeof p.catch === 'function') p.catch(() => { setAudioState(qid, 'play'); showAudioError(qid); }); }
+      else if (activeMode === 'tts' && TTS_OK) { try { window.speechSynthesis.resume(); } catch { /* ignore */ } }
+      activeState = 'playing'; setAudioState(qid, 'pause');
+    }
+
+    // Primary button — play / pause / resume / replay depending on state.
+    function togglePlayback(qid) {
+      if (activeQid !== qid) return startPlayback(qid);          // idle, or another question was active
+      if (activeState === 'playing') return pausePlayback(qid);
+      if (activeState === 'paused') return resumePlayback(qid);
+      return startPlayback(qid);                                 // 'ended'/'idle' -> replay / start
+    }
+
+    // Secondary Stop button — stop and reset to "Play Question".
+    function stopPlayback(qid) { stopAllPlayback(); setAudioState(qid, 'play'); }
 
     // Re-point a freshly re-rendered button at the live playback state (used
     // when a RANKING section re-renders mid-play after a reorder).
     function syncAudioButton(qid) {
-      if (currentAudioQid !== qid || !currentAudio) return setAudioState(qid, 'play');
-      if (currentAudio.ended) setAudioState(qid, 'replay');
-      else if (!currentAudio.paused) setAudioState(qid, 'pause');
-      else setAudioState(qid, 'play');
+      if (activeQid !== qid) return setAudioState(qid, 'play');
+      if (activeState === 'ended') return setAudioState(qid, 'replay');
+      if (activeState === 'paused') return setAudioState(qid, 'resume');
+      if (activeState === 'playing') return setAudioState(qid, 'pause');
+      setAudioState(qid, 'play');
     }
 
     function questionHeader(unit, globalIndex, totalQuestions, timerHtml) {
@@ -500,9 +568,9 @@
       });
       currentSection = idx;
       stopQuestionTimer();
-      // Leaving a section stops its audio — moving to the next/previous
-      // question never leaves the previous clip playing.
-      stopCurrentAudio();
+      // Leaving a section stops its audio/speech — moving to the next/previous
+      // question never leaves the previous playback running.
+      stopAllPlayback();
       const unit = renderUnits[idx];
       // Time-to-answer is measured from the first time a question's section
       // is actually shown, not from page load — a batch section shows all
@@ -595,7 +663,7 @@
     async function submitAssessment(auto) {
       if (timer) timer.stop();
       stopQuestionTimer();
-      stopCurrentAudio();
+      stopAllPlayback();
       const allQuestions = allQuestionsFlat();
       const resolvedCount = allQuestions.filter(isResolved).length;
 
@@ -616,9 +684,9 @@
     }
 
     // Exiting the assessment (closing the tab, navigating away, mobile
-    // backgrounding) stops any clip so audio never outlives the page.
-    window.addEventListener('pagehide', stopCurrentAudio);
-    window.addEventListener('beforeunload', stopCurrentAudio);
+    // backgrounding) stops any audio/speech so it never outlives the page.
+    window.addEventListener('pagehide', stopAllPlayback);
+    window.addEventListener('beforeunload', stopAllPlayback);
 
     loadQuestions();
   </script>
