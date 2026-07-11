@@ -32,6 +32,19 @@ function orderByIds(questions, orderedIds) {
   return orderedIds.map(id => byId.get(id.toString())).filter(Boolean);
 }
 
+// Only surface a question's audio to the candidate when it's genuinely
+// playable: hasAudio is set AND audioUrl holds a real inline data URI (how the
+// admin stores clips) or an absolute URL. Anything else — hasAudio with an
+// empty/blank URL, or a stray URL with hasAudio off — is returned as no-audio
+// so the candidate never renders a broken or empty player. audioUrl is omitted
+// entirely when absent so the payload never ships an empty string.
+function publicAudio(q) {
+  const url = typeof q.audioUrl === 'string' ? q.audioUrl.trim() : '';
+  const playable = !!q.hasAudio && !!url &&
+    (url.startsWith('data:') || url.startsWith('http://') || url.startsWith('https://'));
+  return { hasAudio: playable, audioUrl: playable ? url : undefined };
+}
+
 // Resolve which Question Set a user's assessment should draw from, via their
 // access code (SharedUserID → questionSetId → QuestionSet). Returns the set
 // plus its question ids filtered to currently-active questions and kept in
@@ -103,17 +116,20 @@ exports.getQuestions = async (req, res, next) => {
       typeColor: type.color,
       questions: questions
         .filter(q => q.typeId.toString() === type._id.toString())
-        .map(q => ({
+        .map(q => {
           // correctOptionId, explanation, idealOrder, correctOptionIds,
           // scoringMode, isReverseScored are deliberately NOT included here.
-          _id: q._id, text: q.text, order: q.order,
-          questionType: q.questionType, dimension: q.dimension, difficulty: q.difficulty,
-          timeLimitSeconds: q.timeLimitSeconds, imageUrl: q.imageUrl, instructionText: q.instructionText,
-          hasAudio: q.hasAudio, audioUrl: q.audioUrl,
-          options: q.questionType === 'RANKING'
-            ? shuffled(optionsByQuestion[q._id.toString()] || [])
-            : (optionsByQuestion[q._id.toString()] || []),
-        })),
+          const audio = publicAudio(q);
+          return {
+            _id: q._id, text: q.text, order: q.order,
+            questionType: q.questionType, dimension: q.dimension, difficulty: q.difficulty,
+            timeLimitSeconds: q.timeLimitSeconds, imageUrl: q.imageUrl, instructionText: q.instructionText,
+            hasAudio: audio.hasAudio, audioUrl: audio.audioUrl,
+            options: q.questionType === 'RANKING'
+              ? shuffled(optionsByQuestion[q._id.toString()] || [])
+              : (optionsByQuestion[q._id.toString()] || []),
+          };
+        }),
     })).filter(type => type.questions.length > 0);
 
     res.json({ success: true, data: result, remainingSeconds });

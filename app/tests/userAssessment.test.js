@@ -241,3 +241,56 @@ describe('Question Set — cohort assignment and per-set timer', () => {
     expect(shown).toBe(3);
   });
 });
+
+describe('Assessment audio — candidate /questions payload', () => {
+  const AUDIO_URI = 'data:audio/mpeg;base64,SGVsbG8gYXVkaW8=';
+  let touchedIds = [];
+
+  async function tokenForCode(code, email) {
+    const vc = await request(app).post('/api/v1/user/validate-code').send({ code });
+    await request(app).post('/api/v1/user/register').send({ codeId: vc.body.codeId, name: 'Audio Tester', email, password: 'Password123' });
+    const user = await User.findOne({ email });
+    const res = await request(app).post('/api/v1/user/verify-otp').send({ email, otp: user.otpCode });
+    return res.body.token;
+  }
+
+  // Reset the borrowed questions so the audio flags don't leak into other suites.
+  afterAll(async () => {
+    if (touchedIds.length) await Question.updateMany({ _id: { $in: touchedIds } }, { hasAudio: false, audioUrl: '' });
+  });
+
+  it('exposes audio fields for a valid clip, omits them for no-audio, and treats blank-URL as no-audio', async () => {
+    const admin = await Admin.findOne();
+    const qs = await Question.find({ isActive: true }).sort('order').limit(3);
+    const [withAudio, noAudio, blankAudio] = qs;
+    touchedIds = qs.map((q) => q._id);
+
+    // A real clip; a plain no-audio question; and a misconfigured one (hasAudio
+    // set but the URL blank/whitespace) which MUST surface as no-audio so the
+    // candidate never renders a broken/empty player.
+    await Question.updateOne({ _id: withAudio._id }, { hasAudio: true, audioUrl: AUDIO_URI });
+    await Question.updateOne({ _id: noAudio._id }, { hasAudio: false, audioUrl: '' });
+    await Question.updateOne({ _id: blankAudio._id }, { hasAudio: true, audioUrl: '   ' });
+
+    const set = await QuestionSet.create({ name: 'Audio Set', durationMinutes: 10, questionIds: qs.map((q) => q._id), createdBy: admin._id });
+    await SharedUserID.create({ code: 'AUDIOCODE', label: 'Audio cohort', createdBy: admin._id, questionSetId: set._id });
+    const token = await tokenForCode('AUDIOCODE', 'audio-user@example.com');
+
+    const res = await request(app).get('/api/v1/assessment/questions').set('Authorization', `Bearer ${token}`);
+    expect(res.status).toBe(200);
+
+    const flat = res.body.data.flatMap((t) => t.questions);
+    const a = flat.find((q) => q._id === String(withAudio._id));
+    const n = flat.find((q) => q._id === String(noAudio._id));
+    const b = flat.find((q) => q._id === String(blankAudio._id));
+
+    expect(a.hasAudio).toBe(true);
+    expect(a.audioUrl).toBe(AUDIO_URI);
+
+    expect(n.hasAudio).toBe(false);
+    expect(n.audioUrl).toBeUndefined();
+
+    expect(b.hasAudio).toBe(false);
+    expect(b.audioUrl).toBeUndefined();
+  });
+});

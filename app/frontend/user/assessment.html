@@ -8,6 +8,12 @@
   <style>
     .q-section { display: none; }
     .q-section.active { display: block; }
+    /* Per-question audio control — wraps on narrow screens so the button and
+       any error message stack cleanly on mobile. */
+    .audio-player { display: flex; align-items: center; flex-wrap: wrap; gap: 0.5rem 0.75rem; }
+    .audio-btn { min-width: 9rem; }        /* stable width across Play/Pause/Replay labels */
+    .audio-icon { display: inline-flex; }
+    .audio-error { flex-basis: 100%; }     /* error drops to its own line */
   </style>
 </head>
 <body class="min-h-screen" style="background:var(--tbt-bg)">
@@ -57,6 +63,9 @@
     if (!sessionId || !expiresAt) window.location.href = '/user/welcome.html';
 
     let sections = [], renderUnits = [], answers = {}, timedOut = {}, timeSpent = {}, questionStartTimes = {}, currentSection = 0, timer, questionTimer = null;
+    // Question audio: qid -> data URI, plus the single live <audio> element so
+    // only one clip can ever play at a time (see stopCurrentAudio).
+    let audioUrls = {}, currentAudio = null, currentAudioQid = null;
 
     // Keyed by sessionId so a stale in-progress answer set from a previous
     // (already-submitted) session is never applied to a new one.
@@ -81,6 +90,10 @@
       const { ok, data } = await api.get('/assessment/questions', token);
       if (!ok) { showToast('Failed to load questions.', 'error'); return; }
       sections = data.data;
+      // Index playable clips by question id so the audio buttons can reference
+      // them without embedding multi-KB data URIs in the DOM markup.
+      audioUrls = {};
+      sections.forEach((s) => s.questions.forEach((q) => { if (q.hasAudio && q.audioUrl) audioUrls[q._id] = q.audioUrl; }));
       restoreAutosave();
       renderUnits = buildRenderUnits(sections);
       renderQuestions();
@@ -172,10 +185,112 @@
         </div>`;
     }
 
+    // Inline SVG glyphs for the custom audio control (speaker for play, bars
+    // for pause, circular arrow for replay) — sized to sit inside the shared
+    // .btn styling and inherit its colour via currentColor.
+    const AUDIO_ICONS = {
+      play: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path><path d="M19.07 4.93a10 10 0 0 1 0 14.14"></path></svg>',
+      pause: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="4" width="4" height="16" rx="1"></rect><rect x="14" y="4" width="4" height="16" rx="1"></rect></svg>',
+      replay: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"></polyline><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path></svg>',
+    };
+
+    // Renders the per-question audio control — only when the question actually
+    // ships a playable clip. Placed below the question text and above the
+    // options by every render*() below. No audio -> '' (no empty control).
     function renderAudio(q) {
-      return q.hasAudio && q.audioUrl
-        ? `<audio controls class="w-full mb-4"><source src="${q.audioUrl}" /></audio>`
-        : '';
+      if (!q.hasAudio || !q.audioUrl) return '';
+      return `
+        <div class="audio-player mb-4" id="audio-wrap-${q._id}">
+          <button type="button" class="btn btn-outline btn-sm audio-btn" id="audio-btn-${q._id}"
+            onclick="toggleAudio('${q._id}')" aria-label="Play question audio">
+            <span class="audio-icon" id="audio-icon-${q._id}">${AUDIO_ICONS.play}</span>
+            <span id="audio-label-${q._id}">Play Audio</span>
+          </button>
+          <span class="audio-error text-xs hidden" id="audio-error-${q._id}" role="alert" style="color:var(--tbt-danger)"></span>
+        </div>`;
+    }
+
+    function setAudioIcon(qid, state) {
+      const el = document.getElementById(`audio-icon-${qid}`);
+      if (el) el.innerHTML = AUDIO_ICONS[state] || AUDIO_ICONS.play;
+    }
+
+    // Reflect a playback state on a question's button: 'pause' (playing now —
+    // offer Pause), 'replay' (finished — offer Replay), or 'play' (idle/paused
+    // — offer Play).
+    function setAudioState(qid, state) {
+      const label = document.getElementById(`audio-label-${qid}`);
+      if (!label) return;
+      if (state === 'pause') { label.textContent = 'Pause Audio'; setAudioIcon(qid, 'pause'); }
+      else if (state === 'replay') { label.textContent = 'Replay Audio'; setAudioIcon(qid, 'replay'); }
+      else { label.textContent = 'Play Audio'; setAudioIcon(qid, 'play'); }
+    }
+
+    function showAudioError(qid) {
+      const el = document.getElementById(`audio-error-${qid}`);
+      if (el) { el.textContent = 'Audio could not be played. Please try again.'; el.classList.remove('hidden'); }
+    }
+    function hideAudioError(qid) {
+      const el = document.getElementById(`audio-error-${qid}`);
+      if (el) { el.textContent = ''; el.classList.add('hidden'); }
+    }
+
+    // Stop and release whatever clip is live and reset its button to "Play
+    // Audio". Guarantees only one <audio> is ever active at a time.
+    function stopCurrentAudio() {
+      if (!currentAudio) return;
+      const prevQid = currentAudioQid;
+      try { currentAudio.pause(); } catch { /* ignore */ }
+      currentAudio.src = '';
+      currentAudio = null;
+      currentAudioQid = null;
+      if (prevQid) setAudioState(prevQid, 'play');
+    }
+
+    // Start a question's clip from the beginning, after stopping any other.
+    function playAudioFromStart(qid) {
+      const url = audioUrls[qid];
+      if (!url) return;
+      stopCurrentAudio();
+      hideAudioError(qid);
+      const audio = new Audio(url);
+      currentAudio = audio;
+      currentAudioQid = qid;
+      audio.addEventListener('play', () => { if (currentAudioQid === qid) setAudioState(qid, 'pause'); });
+      audio.addEventListener('pause', () => { if (currentAudioQid === qid && !audio.ended) setAudioState(qid, 'play'); });
+      audio.addEventListener('ended', () => { if (currentAudioQid === qid) setAudioState(qid, 'replay'); });
+      audio.addEventListener('error', () => {
+        if (currentAudioQid === qid) { currentAudio = null; currentAudioQid = null; }
+        setAudioState(qid, 'play');
+        showAudioError(qid);
+      });
+      const p = audio.play();
+      if (p && typeof p.catch === 'function') p.catch(() => { setAudioState(qid, 'play'); showAudioError(qid); });
+    }
+
+    // One button handles play / pause / resume / replay:
+    //  - playing this clip            -> pause
+    //  - paused mid-clip              -> resume
+    //  - idle / ended / other clip    -> (re)start from the beginning
+    function toggleAudio(qid) {
+      if (!audioUrls[qid]) return;
+      const isCurrent = currentAudioQid === qid && currentAudio;
+      if (isCurrent && !currentAudio.paused && !currentAudio.ended) { currentAudio.pause(); return; }
+      if (isCurrent && currentAudio.paused && !currentAudio.ended && currentAudio.currentTime > 0) {
+        const p = currentAudio.play();
+        if (p && typeof p.catch === 'function') p.catch(() => { setAudioState(qid, 'play'); showAudioError(qid); });
+        return;
+      }
+      playAudioFromStart(qid);
+    }
+
+    // Re-point a freshly re-rendered button at the live playback state (used
+    // when a RANKING section re-renders mid-play after a reorder).
+    function syncAudioButton(qid) {
+      if (currentAudioQid !== qid || !currentAudio) return setAudioState(qid, 'play');
+      if (currentAudio.ended) setAudioState(qid, 'replay');
+      else if (!currentAudio.paused) setAudioState(qid, 'pause');
+      else setAudioState(qid, 'play');
     }
 
     function questionHeader(unit, globalIndex, totalQuestions, timerHtml) {
@@ -199,8 +314,8 @@
           ${questionHeader(unit, globalIndex, totalQuestions, timerHtml)}
           ${q.instructionText ? `<p class="text-xs italic mb-2" style="color:var(--tbt-muted)">${q.instructionText}</p>` : ''}
           ${q.imageUrl ? `<img src="${q.imageUrl}" alt="" class="max-w-full rounded-lg mb-4" />` : ''}
-          ${renderAudio(q)}
           <p class="font-semibold mb-4 text-base leading-relaxed">${q.text}</p>
+          ${renderAudio(q)}
           <div class="space-y-2" id="options-${q._id}">
             ${q.options.map(opt => `
               <div class="likert-option">
@@ -220,9 +335,9 @@
           ${questionHeader(unit, globalIndex, totalQuestions)}
           ${q.instructionText ? `<p class="text-xs italic mb-2" style="color:var(--tbt-muted)">${q.instructionText}</p>` : ''}
           ${q.imageUrl ? `<img src="${q.imageUrl}" alt="" class="max-w-full rounded-lg mb-4" />` : ''}
-          ${renderAudio(q)}
           <p class="font-semibold mb-1 text-base leading-relaxed">${q.text}</p>
           <p class="text-xs mb-3" style="color:var(--tbt-muted)">Select all that apply.</p>
+          ${renderAudio(q)}
           <div class="space-y-2" id="options-${q._id}">
             ${q.options.map(opt => `
               <div class="likert-option">
@@ -243,9 +358,9 @@
         <div class="card mb-6">
           ${questionHeader(unit, globalIndex, totalQuestions)}
           ${q.instructionText ? `<p class="text-xs italic mb-2" style="color:var(--tbt-muted)">${q.instructionText}</p>` : ''}
-          ${renderAudio(q)}
           <p class="font-semibold mb-1 text-base leading-relaxed">${q.text}</p>
           <p class="text-xs mb-3" style="color:var(--tbt-muted)">Use the arrows to arrange in your preferred order (top = first).</p>
+          ${renderAudio(q)}
           <div class="space-y-2" id="options-${q._id}">
             ${order.map((optId, i) => `
               <div class="rank-item">
@@ -341,6 +456,9 @@
         const flat = allQuestionsFlat();
         document.getElementById(`section-${currentSection}`).innerHTML =
           renderRanking(unit, flat.indexOf(unit.question) + 1, flat.length);
+        // The re-render recreated this question's audio button — restore its
+        // label/icon to match any clip still playing.
+        syncAudioButton(qId);
       }
     }
 
@@ -375,6 +493,9 @@
       });
       currentSection = idx;
       stopQuestionTimer();
+      // Leaving a section stops its audio — moving to the next/previous
+      // question never leaves the previous clip playing.
+      stopCurrentAudio();
       const unit = renderUnits[idx];
       // Time-to-answer is measured from the first time a question's section
       // is actually shown, not from page load — a batch section shows all
@@ -467,6 +588,7 @@
     async function submitAssessment(auto) {
       if (timer) timer.stop();
       stopQuestionTimer();
+      stopCurrentAudio();
       const allQuestions = allQuestionsFlat();
       const resolvedCount = allQuestions.filter(isResolved).length;
 
@@ -485,6 +607,11 @@
       const user = api.getUser(); if (user) { user.hasCompletedAssessment = true; api.setUser(user); }
       window.location.href = '/user/result.html';
     }
+
+    // Exiting the assessment (closing the tab, navigating away, mobile
+    // backgrounding) stops any clip so audio never outlives the page.
+    window.addEventListener('pagehide', stopCurrentAudio);
+    window.addEventListener('beforeunload', stopCurrentAudio);
 
     loadQuestions();
   </script>
