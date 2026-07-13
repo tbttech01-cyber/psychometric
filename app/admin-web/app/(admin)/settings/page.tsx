@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { api, getToken, removeToken } from "@/lib/api";
 import { useToast } from "@/components/ToastProvider";
+import PageHeader from "@/components/PageHeader";
 
 export default function SettingsPage() {
   const showToast = useToast();
@@ -65,10 +66,8 @@ export default function SettingsPage() {
 
   return (
     <>
-      <header className="bg-white border-b px-6 py-4">
-        <h1 className="text-xl font-bold" style={{ color: "var(--tbt-primary)" }}>Settings</h1>
-      </header>
-      <main className="p-6 space-y-4 max-w-xl">
+      <PageHeader title="Settings" breadcrumb="Manage your admin profile and assessment settings" />
+      <main className="p-6 space-y-4 max-w-2xl">
         <div className="card">
           <h3 className="font-bold mb-3" style={{ color: "var(--tbt-primary)" }}>Admin Profile</h3>
           <div className="text-sm space-y-1">
