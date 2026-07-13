@@ -23,6 +23,8 @@ export default function BusinessMatrixPage() {
   const [formRating, setFormRating] = useState(3);
   const [formActive, setFormActive] = useState(true);
   const [deleteTarget, setDeleteTarget] = useState<Cell | null>(null);
+  const [seeding, setSeeding] = useState(false);
+  const [seedConfirm, setSeedConfirm] = useState(false);
 
   const load = useCallback(async () => {
     const { ok, data } = await api.get("/admin/business-matrix", token);
@@ -64,6 +66,16 @@ export default function BusinessMatrixPage() {
     load();
   }
 
+  async function loadSample() {
+    setSeedConfirm(false);
+    setSeeding(true);
+    const { ok, data } = await api.post<{ created?: number; message?: string }>("/admin/business-matrix/seed-sample", {}, token);
+    setSeeding(false);
+    if (!ok) { showToast(data?.message || "Failed to load sample data.", "error"); return; }
+    showToast(`Loaded ${data.created} sample cells.`, "success");
+    load();
+  }
+
   async function confirmDelete() {
     if (!deleteTarget) return;
     const { ok, data } = await api.delete(`/admin/business-matrix/${deleteTarget._id}`, token);
@@ -80,6 +92,12 @@ export default function BusinessMatrixPage() {
     <>
       <PageHeader title="Business Matrix Management" breadcrumb={`Manage the ${types.length}×${types.length} recommendation matrix`} />
       <main className="p-6 space-y-4">
+        <div className="flex justify-end">
+          <button onClick={() => setSeedConfirm(true)} disabled={seeding} className="btn btn-outline btn-sm">
+            {seeding ? "Loading sample…" : "Load sample data"}
+          </button>
+        </div>
+
         <div className="card">
           <div className="flex justify-between items-center mb-2">
             <h3 className="font-bold" style={{ color: "var(--tbt-text)" }}>Matrix Configuration Completion</h3>
@@ -226,6 +244,16 @@ export default function BusinessMatrixPage() {
           confirmLabel="Yes, Remove"
           onConfirm={confirmDelete}
           onCancel={() => setDeleteTarget(null)}
+        />
+      )}
+
+      {seedConfirm && (
+        <ConfirmModal
+          title="Load Sample Data?"
+          message="This replaces the entire matrix with a ready-made 8×8 sample (64 business recommendations, one per trait pair). Any cells you added will be overwritten."
+          confirmLabel="Yes, Load Sample"
+          onConfirm={loadSample}
+          onCancel={() => setSeedConfirm(false)}
         />
       )}
     </>

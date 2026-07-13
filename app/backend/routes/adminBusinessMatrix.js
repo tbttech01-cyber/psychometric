@@ -7,6 +7,7 @@ const adminAuth = require('../middleware/adminAuth');
 router.use(adminAuth);
 
 router.get('/business-matrix', ctrl.getMatrix);
+router.post('/business-matrix/seed-sample', ctrl.seedSample);
 router.post('/business-matrix',
   [
     body('rowTypeId').notEmpty().withMessage('Row category is required.'),

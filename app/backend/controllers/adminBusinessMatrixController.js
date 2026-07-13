@@ -1,5 +1,17 @@
 const QuestionType = require('../models/QuestionType');
 const BusinessMatrixCell = require('../models/BusinessMatrixCell');
+const { seedSampleMatrix } = require('../utils/businessMatrixSample');
+
+// Populates the matrix with the full 8x8 sample grid (replaces existing cells).
+exports.seedSample = async (req, res, next) => {
+  try {
+    const { created, cleared } = await seedSampleMatrix();
+    res.json({ success: true, created, cleared });
+  } catch (err) {
+    if (err.code === 'MISSING_TYPES') return res.status(400).json({ success: false, message: err.message });
+    next(err);
+  }
+};
 
 exports.getMatrix = async (req, res, next) => {
   try {
