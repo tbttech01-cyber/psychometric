@@ -250,7 +250,7 @@ export default function BusinessMatrixPage() {
       {seedConfirm && (
         <ConfirmModal
           title="Load Sample Data?"
-          message="This replaces the entire matrix with a ready-made 8×8 sample (64 business recommendations, one per trait pair). Any cells you added will be overwritten."
+          message="This fills the whole matrix with ready-made sample recommendations — one for every category pair, including Numerical, Logical and Verbal Ability. Any cells you added will be overwritten."
           confirmLabel="Yes, Load Sample"
           onConfirm={loadSample}
           onCancel={() => setSeedConfirm(false)}
