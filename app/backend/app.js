@@ -31,11 +31,16 @@ app.use(cors({
       return callback(null, true);
     }
 
-    // Always allow localhost and Vercel domains (including preview/branch deployments)
+    // Always allow localhost, Vercel domains (including preview/branch
+    // deployments), and the platform's own custom domain + any subdomain
+    // (e.g. psychometric.tamilbusinesstribe.com, admin.tamilbusinesstribe.com).
     const isLocalhost = /^http:\/\/localhost(:\d+)?$/.test(origin);
     const isVercel = /\.vercel\.app$/.test(origin);
+    let host = '';
+    try { host = new URL(origin).hostname; } catch { /* malformed origin */ }
+    const isBrandDomain = host === 'tamilbusinesstribe.com' || host.endsWith('.tamilbusinesstribe.com');
 
-    if (isLocalhost || isVercel) {
+    if (isLocalhost || isVercel || isBrandDomain) {
       return callback(null, true);
     }
 
