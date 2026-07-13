@@ -100,7 +100,7 @@ export default function QuestionSetsPage() {
         breadcrumb="Group questions into timed sets and assign them to access codes"
         actions={!showForm ? <button onClick={openCreate} className="btn btn-primary">+ New Set</button> : undefined}
       />
-      <main className="p-6 space-y-4">
+      <main className="p-6 space-y-4 max-w-6xl mx-auto">
         <div className="grid grid-cols-3 gap-4">
           <StatCard icon={Layers} value={rows.length} label="Question Sets" />
           <StatCard icon={KeyRound} value={totalAssigned} label="Assigned Codes" tone="success" />

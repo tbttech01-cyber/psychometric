@@ -30,7 +30,7 @@ export default function DashboardPage() {
   return (
     <>
       <PageHeader title="Dashboard" breadcrumb={dateStr} />
-      <main className="p-6">
+      <main className="p-6 max-w-6xl mx-auto">
         {!data ? (
           <div className="text-center py-20"><div className="spinner mx-auto" /></div>
         ) : (

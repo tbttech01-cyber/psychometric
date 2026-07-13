@@ -48,7 +48,7 @@ export default function ResultDetailPage() {
 
   if (notFound) {
     return (
-      <main className="p-6">
+      <main className="p-6 max-w-6xl mx-auto">
         <Link href="/results" className="text-sm font-semibold inline-flex items-center gap-1.5" style={{ color: "var(--tbt-primary)" }}>
           <ArrowLeft size={16} /> Back to Results
         </Link>

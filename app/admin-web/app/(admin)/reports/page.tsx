@@ -54,7 +54,7 @@ export default function ReportsPage() {
           </div>
         }
       />
-      <main className="p-6 space-y-4">
+      <main className="p-6 space-y-4 max-w-6xl mx-auto">
         {!dash ? (
           <div className="text-center py-20"><div className="spinner mx-auto" /></div>
         ) : (

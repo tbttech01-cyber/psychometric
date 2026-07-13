@@ -266,7 +266,7 @@ function QuestionsPageInner() {
           </button>
         }
       />
-      <main className="p-6 space-y-4">
+      <main className="p-6 space-y-4 max-w-6xl mx-auto">
         {showForm && (
           <div className="grid lg:grid-cols-2 gap-4">
             <div className="card">

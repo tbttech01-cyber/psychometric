@@ -67,7 +67,7 @@ export default function SettingsPage() {
   return (
     <>
       <PageHeader title="Settings" breadcrumb="Manage your admin profile and assessment settings" />
-      <main className="p-6 space-y-4 max-w-2xl">
+      <main className="p-6 space-y-4 max-w-3xl mx-auto">
         <div className="card">
           <h3 className="font-bold mb-3" style={{ color: "var(--tbt-primary)" }}>Admin Profile</h3>
           <div className="text-sm space-y-1">

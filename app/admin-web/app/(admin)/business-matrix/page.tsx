@@ -91,7 +91,7 @@ export default function BusinessMatrixPage() {
   return (
     <>
       <PageHeader title="Business Matrix Management" breadcrumb={`Manage the ${types.length}×${types.length} recommendation matrix`} />
-      <main className="p-6 space-y-4">
+      <main className="p-6 space-y-4 max-w-6xl mx-auto">
         <div className="flex justify-end">
           <button onClick={() => setSeedConfirm(true)} disabled={seeding} className="btn btn-outline btn-sm">
             {seeding ? "Loading sample…" : "Load sample data"}

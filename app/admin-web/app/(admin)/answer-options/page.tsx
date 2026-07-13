@@ -31,7 +31,7 @@ export default function AnswerOptionsPage() {
   return (
     <>
       <PageHeader title="Answer Options" breadcrumb="Manage the answer options for each question" />
-      <main className="p-6 space-y-4">
+      <main className="p-6 space-y-4 max-w-6xl mx-auto">
         <div className="card text-sm" style={{ background: "#EFF6FF", borderColor: "#BFDBFE" }}>
           Answer options vary by question type. Select a question to view its options, or edit them from the Questions page.
         </div>

@@ -112,7 +112,7 @@ export default function QuestionTypesPage() {
           </button>
         }
       />
-      <main className="p-6 space-y-4">
+      <main className="p-6 space-y-4 max-w-6xl mx-auto">
         <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
           <StatCard icon={FolderKanban} value={activeCount} label="Active Categories" />
           <StatCard icon={HelpCircle} value={totalQuestions} label="Total Questions" />

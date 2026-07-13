@@ -114,7 +114,7 @@ export default function UsersPage() {
         breadcrumb="Manage candidates and assessment access"
         actions={<button onClick={() => setShowAdd((s) => !s)} className="btn btn-primary btn-sm">+ Add New User</button>}
       />
-      <main className="p-6 space-y-4">
+      <main className="p-6 space-y-4 max-w-6xl mx-auto">
         {stats && (
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             <StatCard icon={UsersIcon} value={stats.totalUsers} label="Total Users" />
