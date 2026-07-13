@@ -30,4 +30,35 @@ async function synthesize(text, voice, { rate = '-6%', pitch = '+0Hz' } = {}) {
   return Buffer.concat(chunks);
 }
 
-module.exports = { voiceFor, textHash, synthesize, EN_VOICE, TA_VOICE };
+// Curated free neural voices (Microsoft Edge) for the admin voice picker.
+const VOICES = {
+  en: [
+    { id: 'en-US-AriaNeural', label: 'Aria — US female, warm' },
+    { id: 'en-US-JennyNeural', label: 'Jenny — US female, friendly' },
+    { id: 'en-US-AnaNeural', label: 'Ana — US female, soft' },
+    { id: 'en-US-GuyNeural', label: 'Guy — US male' },
+    { id: 'en-GB-SoniaNeural', label: 'Sonia — UK female' },
+    { id: 'en-GB-RyanNeural', label: 'Ryan — UK male' },
+    { id: 'en-IN-NeerjaNeural', label: 'Neerja — India female' },
+    { id: 'en-IN-PrabhatNeural', label: 'Prabhat — India male' },
+  ],
+  ta: [
+    { id: 'ta-IN-PallaviNeural', label: 'Pallavi — Tamil female' },
+    { id: 'ta-IN-ValluvarNeural', label: 'Valluvar — Tamil male' },
+    { id: 'ta-LK-SaranyaNeural', label: 'Saranya — Tamil (LK) female' },
+    { id: 'ta-LK-KumarNeural', label: 'Kumar — Tamil (LK) male' },
+  ],
+};
+
+// Format a numeric admin config into SSML prosody strings (e.g. -6 -> '-6%').
+function buildProsody({ ratePct = -6, pitchHz = 0 } = {}) {
+  const sign = (n) => (Number(n) >= 0 ? `+${Number(n)}` : String(Number(n)));
+  return { rate: `${sign(ratePct)}%`, pitch: `${sign(pitchHz)}Hz` };
+}
+
+// Pick the configured voice for a piece of text by its language.
+function voiceForConfig(text, config = {}) {
+  return isTamil(text) ? (config.voiceTa || TA_VOICE) : (config.voiceEn || EN_VOICE);
+}
+
+module.exports = { voiceFor, voiceForConfig, textHash, synthesize, buildProsody, isTamil, VOICES, EN_VOICE, TA_VOICE };

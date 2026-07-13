@@ -2,6 +2,7 @@ const crypto = require('crypto');
 const Question = require('../models/Question');
 const AnswerOption = require('../models/AnswerOption');
 const QuestionAudio = require('../models/QuestionAudio');
+const { getTtsConfig } = require('../utils/ttsSettings');
 const AssessmentSession = require('../models/AssessmentSession');
 const UserAnswer = require('../models/UserAnswer');
 const Result = require('../models/Result');
@@ -114,9 +115,13 @@ exports.getQuestions = async (req, res, next) => {
     // Which questions have up-to-date cached neural-TTS audio (see
     // QuestionAudio / scripts/generateQuestionAudio.js). The candidate uses it
     // via GET /questions/:id/audio when set, else falls back to browser speech.
+    // Honour the admin on/off toggle: when disabled, expose no neural audio.
+    const ttsEnabled = (await getTtsConfig()).enabled;
     const audioHashByQid = {};
-    (await QuestionAudio.find({ questionId: { $in: questionIds } }).select('questionId textHash'))
-      .forEach((r) => { audioHashByQid[r.questionId.toString()] = r.textHash; });
+    if (ttsEnabled) {
+      (await QuestionAudio.find({ questionId: { $in: questionIds } }).select('questionId textHash'))
+        .forEach((r) => { audioHashByQid[r.questionId.toString()] = r.textHash; });
+    }
 
     // Group by category for the candidate UI (unchanged contract). Questions
     // within a category preserve the set's order because `questions` is

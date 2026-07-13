@@ -15,6 +15,7 @@ import {
   FileText,
   Settings as SettingsIcon,
   Grid3x3,
+  Volume2,
   LogOut,
   X,
   type LucideIcon,
@@ -33,6 +34,7 @@ const NAV_ITEMS: { href: string; label: string; icon: LucideIcon }[] = [
   { href: "/reports", label: "Reports", icon: FileText },
   { href: "/settings", label: "Settings", icon: SettingsIcon },
   { href: "/business-matrix", label: "Business Matrix", icon: Grid3x3 },
+  { href: "/voice", label: "Voice / Audio", icon: Volume2 },
 ];
 
 export default function Sidebar({ mobileOpen = false, onClose }: { mobileOpen?: boolean; onClose?: () => void }) {

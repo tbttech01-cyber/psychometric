@@ -98,6 +98,7 @@ app.use('/api/v1/admin', require('./routes/adminCRUD'));
 app.use('/api/v1/admin', require('./routes/adminDashboard'));
 app.use('/api/v1/admin', require('./routes/adminBusinessMatrix'));
 app.use('/api/v1/admin', require('./routes/adminQuestionSets'));
+app.use('/api/v1/admin', require('./routes/adminTts'));
 app.use('/api/v1/user', require('./routes/userAuth'));
 app.use('/api/v1/assessment', require('./routes/assessment'));
 
