@@ -104,7 +104,7 @@ export default function VoicePage() {
     return (
       <>
         <PageHeader title="Voice / Audio" breadcrumb="Free neural text-to-speech read aloud on the candidate assessment" />
-        <main className="p-6 space-y-4"><p style={{ color: "var(--tbt-muted)" }}>Loading…</p></main>
+        <main className="p-6 md:p-8 space-y-5 max-w-4xl mx-auto"><p style={{ color: "var(--tbt-muted)" }}>Loading…</p></main>
       </>
     );
   }
@@ -115,7 +115,7 @@ export default function VoicePage() {
     <>
       <PageHeader title="Voice / Audio" breadcrumb="Free neural text-to-speech read aloud on the candidate assessment" />
 
-      <main className="p-6 space-y-4 max-w-3xl">
+      <main className="p-6 md:p-8 space-y-5 max-w-4xl mx-auto">
         {/* Settings */}
         <div className="card space-y-4">
           <div className="flex items-center justify-between">
