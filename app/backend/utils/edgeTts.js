@@ -3,8 +3,17 @@
 // it from the offline generation script (scripts/generateQuestionAudio.js), NOT
 // from the request path, and cache the result in the DB (QuestionAudio), so the
 // serverless runtime never depends on it and generation happens once per text.
-const { MsEdgeTTS, OUTPUT_FORMAT } = require('msedge-tts');
 const crypto = require('crypto');
+
+// msedge-tts (and its `ws` dependency) is heavy and only needed when actually
+// synthesizing — which happens on the admin "Generate" action, never on a
+// normal request. Load it lazily so it stays OFF the serverless cold-start path
+// (requiring this module for VOICES/textHash/etc. must stay cheap).
+let _msedge = null;
+function loadMsEdge() {
+  if (!_msedge) _msedge = require('msedge-tts');
+  return _msedge;
+}
 
 // Warm, natural neural voices. Overridable via env if you prefer others.
 const EN_VOICE = process.env.TTS_EN_VOICE || 'en-US-AriaNeural';
@@ -17,6 +26,7 @@ const textHash = (text) => crypto.createHash('sha256').update(String(text || '')
 
 // Synthesize `text` to an mp3 Buffer. A slightly slower rate reads calmer/clearer.
 async function synthesize(text, voice, { rate = '-6%', pitch = '+0Hz' } = {}) {
+  const { MsEdgeTTS, OUTPUT_FORMAT } = loadMsEdge();
   const tts = new MsEdgeTTS();
   await tts.setMetadata(voice, OUTPUT_FORMAT.AUDIO_24KHZ_48KBITRATE_MONO_MP3);
   const { audioStream } = tts.toStream(text, { rate, pitch });

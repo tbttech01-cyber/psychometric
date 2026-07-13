@@ -1,9 +1,9 @@
-const PDFDocument = require('pdfkit');
-const { Parser } = require('json2csv');
-
+// pdfkit (~450ms to load) and json2csv are only needed when an admin actually
+// exports — require them lazily so they stay OFF the serverless cold-start path.
 const brand = 'Tamil Business Tribe';
 
 function generatePDF(results) {
+  const PDFDocument = require('pdfkit');
   const doc = new PDFDocument({ size: 'A4', layout: 'landscape', margin: 40 });
 
   // Header
@@ -107,6 +107,7 @@ function generateCSV(results) {
     { label: 'Assessment Date',            value: r => r.createdAt ? new Date(r.createdAt).toISOString() : '' },
   ];
 
+  const { Parser } = require('json2csv');
   const parser = new Parser({ fields });
   return '﻿' + parser.parse(results); // UTF-8 BOM for Excel
 }
