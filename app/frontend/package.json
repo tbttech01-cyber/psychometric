@@ -2,6 +2,9 @@
   "name": "tbt-candidate-frontend",
   "private": true,
   "scripts": {
-    "build": "node build-env.js"
+    "build": "tailwindcss -i ./src/tailwind.css -o ./assets/css/tailwind.css --minify && node build-env.js"
+  },
+  "devDependencies": {
+    "tailwindcss": "^3.4.0"
   }
 }
