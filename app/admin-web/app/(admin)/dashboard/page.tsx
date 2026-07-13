@@ -34,7 +34,7 @@ export default function DashboardPage() {
         {!data ? (
           <div className="text-center py-20"><div className="spinner mx-auto" /></div>
         ) : (
-          <div className="space-y-6">
+          <div className="space-y-4">
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
               <StatCard icon={Users} value={data.cards.totalUsersRegistered} label="Registered Users" />
               <StatCard icon={CheckCircle2} value={data.cards.totalAssessmentsCompleted} label="Completed" />

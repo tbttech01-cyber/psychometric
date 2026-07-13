@@ -7,6 +7,7 @@ import { useToast } from "@/components/ToastProvider";
 import StatCard from "@/components/StatCard";
 import DoughnutChart from "@/components/DoughnutChart";
 import type { DashboardData } from "@/lib/types";
+import PageHeader from "@/components/PageHeader";
 
 const LEVELS = [
   { key: "Excellent", color: "#10B981" },
@@ -43,14 +44,17 @@ export default function ReportsPage() {
 
   return (
     <>
-      <header className="bg-white border-b px-6 py-4 flex justify-between items-center">
-        <h1 className="text-xl font-bold" style={{ color: "var(--tbt-primary)" }}>Reports</h1>
-        <div className="flex gap-2">
-          <button onClick={() => doExport("pdf")} className="btn btn-primary btn-sm">Export Full Report (PDF)</button>
-          <button onClick={() => doExport("csv")} className="btn btn-outline btn-sm">Export Full Report (CSV)</button>
-        </div>
-      </header>
-      <main className="p-6 space-y-6">
+      <PageHeader
+        title="Reports"
+        breadcrumb="Export and review assessment results"
+        actions={
+          <div className="flex gap-2">
+            <button onClick={() => doExport("pdf")} className="btn btn-primary btn-sm">Export Full Report (PDF)</button>
+            <button onClick={() => doExport("csv")} className="btn btn-outline btn-sm">Export Full Report (CSV)</button>
+          </div>
+        }
+      />
+      <main className="p-6 space-y-4">
         {!dash ? (
           <div className="text-center py-20"><div className="spinner mx-auto" /></div>
         ) : (

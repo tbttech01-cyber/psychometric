@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api, getToken, API_BASE_URL } from "@/lib/api";
 import { useToast } from "@/components/ToastProvider";
+import PageHeader from "@/components/PageHeader";
 
 type Voice = { id: string; label: string };
 type Voices = { en: Voice[]; ta: Voice[] };
@@ -102,8 +103,8 @@ export default function VoicePage() {
   if (!config) {
     return (
       <>
-        <header className="bg-white border-b px-6 py-4"><h1 className="text-xl font-bold" style={{ color: "var(--tbt-primary)" }}>Voice / Audio</h1></header>
-        <main className="p-6"><p style={{ color: "var(--tbt-muted)" }}>Loading…</p></main>
+        <PageHeader title="Voice / Audio" breadcrumb="Free neural text-to-speech read aloud on the candidate assessment" />
+        <main className="p-6 space-y-4"><p style={{ color: "var(--tbt-muted)" }}>Loading…</p></main>
       </>
     );
   }
@@ -112,10 +113,7 @@ export default function VoicePage() {
 
   return (
     <>
-      <header className="bg-white border-b px-6 py-4">
-        <h1 className="text-xl font-bold" style={{ color: "var(--tbt-primary)" }}>Voice / Audio</h1>
-        <p className="text-xs mt-0.5" style={{ color: "var(--tbt-muted)" }}>Free neural text-to-speech read aloud on the candidate assessment.</p>
-      </header>
+      <PageHeader title="Voice / Audio" breadcrumb="Free neural text-to-speech read aloud on the candidate assessment" />
 
       <main className="p-6 space-y-4 max-w-3xl">
         {/* Settings */}

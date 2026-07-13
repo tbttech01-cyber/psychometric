@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { api, getToken } from "@/lib/api";
+import PageHeader from "@/components/PageHeader";
 
 type Question = { _id: string; order: number; text: string; isActive: boolean };
 type Option = { _id: string; order: number; optionText: string; score: number };
@@ -29,9 +30,7 @@ export default function AnswerOptionsPage() {
 
   return (
     <>
-      <header className="bg-white border-b px-6 py-4">
-        <h1 className="text-xl font-bold" style={{ color: "var(--tbt-primary)" }}>Answer Options</h1>
-      </header>
+      <PageHeader title="Answer Options" breadcrumb="Manage the answer options for each question" />
       <main className="p-6 space-y-4">
         <div className="card text-sm" style={{ background: "#EFF6FF", borderColor: "#BFDBFE" }}>
           Answer options vary by question type. Select a question to view its options, or edit them from the Questions page.
