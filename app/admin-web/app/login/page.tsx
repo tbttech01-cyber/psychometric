@@ -57,10 +57,10 @@ export default function LoginPage() {
         style={{ background: "linear-gradient(160deg, var(--tbt-primary), var(--tbt-primary-dark))" }}
       >
         <div>
-          <div className="rounded-xl px-4 py-3 inline-block mb-4" style={{ background: "var(--tbt-sidebar-bg)" }}>
-            <Image src="/tbt-logo.png" alt="Tamil Business Tribe" width={220} height={60} priority style={{ height: "auto", width: "220px" }} />
+          <div className="inline-block mb-4">
+            <Image src="/tbt-logo.png" alt="Tamil Business Tribe" width={220} height={60} priority style={{ height: "auto", width: "220px", filter: "brightness(0) invert(1)" }} />
           </div>
-          <p className="text-white/60 text-sm mt-1 tracking-wide uppercase">Administration Portal</p>
+          <p className="text-white/70 text-sm mt-1 tracking-wide uppercase">Administration Portal</p>
         </div>
         <div className="space-y-5">
           <div className="flex items-center gap-3">
