@@ -151,12 +151,22 @@
     // LOGICAL_ABILITY, VERBAL_ABILITY, IMAGE_BASED, SITUATIONAL). All unit
     // kinds still map 1:1 onto a `.q-section` div, so the dot-nav/prev-next/
     // progress-bar machinery below needs no other changes.
+    // How many LIKERT questions share one page. The likert questions of a
+    // category used to render as a single (arbitrarily long) page; they're now
+    // paginated in forward order so the candidate answers a fixed handful, hits
+    // Next, and continues from the next one (page 1 = Q1–5, page 2 = Q6–10, …).
+    const LIKERT_PAGE_SIZE = 5;
     function buildRenderUnits(sections) {
       const units = [];
       sections.forEach((section) => {
         const batch = section.questions.filter((q) => q.questionType === 'LIKERT_SCALE' || !q.questionType);
         const others = section.questions.filter((q) => q.questionType && q.questionType !== 'LIKERT_SCALE');
-        if (batch.length) units.push({ kind: 'batch', typeName: section.typeName, typeIcon: section.typeIcon, questions: batch });
+        // Chunk the likert batch into fixed-size pages, preserving the set's
+        // order. questionOffset in renderQuestions accumulates each unit's
+        // length, so the "Questions X–Y of Z" counter stays correct per page.
+        for (let i = 0; i < batch.length; i += LIKERT_PAGE_SIZE) {
+          units.push({ kind: 'batch', typeName: section.typeName, typeIcon: section.typeIcon, questions: batch.slice(i, i + LIKERT_PAGE_SIZE) });
+        }
         others.forEach((q) => {
           const kind = q.questionType === 'MULTI_SELECT' ? 'multiselect' : q.questionType === 'RANKING' ? 'ranking' : 'single';
           units.push({ kind, typeName: section.typeName, typeIcon: section.typeIcon, question: q });
