@@ -37,14 +37,20 @@ export default function PageHeader({
       </div>
       <div className="flex items-center gap-3 flex-wrap">
         {actions}
-        <button className="icon-btn" onClick={() => showToast("No new notifications.", "info")} aria-label="Notifications">
-          <Bell size={18} />
-        </button>
-        <div className="flex items-center gap-2.5">
-          <div className="avatar-circle">{initialsFromEmail(email)}</div>
-          <div className="hidden sm:block leading-tight">
-            <p className="text-sm font-semibold" style={{ color: "var(--tbt-text)" }}>{email || "Admin"}</p>
-            <p className="text-xs" style={{ color: "var(--tbt-muted)" }}>Administrator</p>
+        {/* Bell + avatar are secondary on mobile (branding + logout live in the
+            mobile top bar / menu). Wrap them in a plain div so `hidden` actually
+            hides the bell below sm — .icon-btn's display:flex would otherwise
+            beat the `hidden` utility in the cascade. */}
+        <div className="hidden sm:flex items-center gap-3">
+          <button className="icon-btn" onClick={() => showToast("No new notifications.", "info")} aria-label="Notifications">
+            <Bell size={18} />
+          </button>
+          <div className="flex items-center gap-2.5">
+            <div className="avatar-circle">{initialsFromEmail(email)}</div>
+            <div className="hidden md:block leading-tight">
+              <p className="text-sm font-semibold" style={{ color: "var(--tbt-text)" }}>{email || "Admin"}</p>
+              <p className="text-xs" style={{ color: "var(--tbt-muted)" }}>Administrator</p>
+            </div>
           </div>
         </div>
       </div>
