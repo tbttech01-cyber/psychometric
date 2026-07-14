@@ -690,6 +690,10 @@
       document.getElementById('btn-next').style.display = idx === renderUnits.length-1 ? 'none' : '';
       document.getElementById('submit-section').classList.toggle('hidden', idx !== renderUnits.length-1);
       updateProgress();
+      // Moving to a section always shows it from its first question — otherwise
+      // a long previous page leaves the candidate scrolled to the bottom and the
+      // new page's question 1 starts off-screen.
+      window.scrollTo({ top: 0, behavior: 'smooth' });
     }
 
     // Whether a raw question (not a render unit) currently has a
