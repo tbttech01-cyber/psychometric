@@ -229,18 +229,18 @@ export default function UsersPage() {
           <p className="text-sm mb-3" style={{ color: "var(--tbt-muted)" }}>{total} user(s) found</p>
           <table className="data-table">
             <thead>
-              <tr><th>Name</th><th>Email</th><th>Candidate ID</th><th>Access Code</th><th>Status</th><th>Assessment</th><th>Registered</th><th>Actions</th></tr>
+              <tr><th>Name</th><th>Email</th><th className="hidden xl:table-cell">Candidate ID</th><th className="hidden xl:table-cell">Access Code</th><th>Status</th><th>Assessment</th><th className="hidden xl:table-cell">Registered</th><th>Actions</th></tr>
             </thead>
             <tbody>
               {rows.map((u) => (
                 <tr key={u._id}>
                   <td className="font-semibold">{u.name}</td>
                   <td className="text-xs">{u.email}</td>
-                  <td><span className="font-mono text-xs">{u.candidateId || "—"}</span></td>
-                  <td><span className="font-mono text-xs">{u.sharedCode}</span></td>
+                  <td className="hidden xl:table-cell"><span className="font-mono text-xs">{u.candidateId || "—"}</span></td>
+                  <td className="hidden xl:table-cell"><span className="font-mono text-xs">{u.sharedCode}</span></td>
                   <td><span className={`badge ${u.isVerified ? "badge-active" : "badge-inactive"}`}>{u.isVerified ? "Verified" : "Unverified"}</span></td>
                   <td><span className={`badge ${u.hasCompletedAssessment ? "badge-good" : "badge-pending"}`}>{u.hasCompletedAssessment ? "Completed" : "Pending"}</span></td>
-                  <td className="text-xs">{new Date(u.createdAt).toLocaleDateString()}</td>
+                  <td className="text-xs hidden xl:table-cell">{new Date(u.createdAt).toLocaleDateString()}</td>
                   <td><button onClick={() => setDeleteId(u._id)} className="btn btn-danger btn-sm">Delete</button></td>
                 </tr>
               ))}

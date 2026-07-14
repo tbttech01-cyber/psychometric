@@ -447,7 +447,7 @@ function QuestionsPageInner() {
         <div className="card overflow-x-auto">
           <p className="text-sm mb-3" style={{ color: "var(--tbt-muted)" }}>{filteredRows.length} question(s)</p>
           <table className="data-table">
-            <thead><tr><th>#</th><th>Category</th><th>Type</th><th>Dimension</th><th>Difficulty</th><th>Marks</th><th>Question Text</th><th>Status</th><th>Actions</th></tr></thead>
+            <thead><tr><th>#</th><th>Category</th><th>Type</th><th className="hidden xl:table-cell">Dimension</th><th className="hidden xl:table-cell">Difficulty</th><th className="hidden xl:table-cell">Marks</th><th>Question Text</th><th>Status</th><th>Actions</th></tr></thead>
             <tbody>
               {filteredRows.map((q, i) => {
                 const t = typeOf(q);
@@ -468,10 +468,10 @@ function QuestionsPageInner() {
                     </td>
                     <td><span className="inline-block px-2 py-0.5 rounded text-xs font-semibold text-white" style={{ background: t?.color || "#1E3A5F" }}>{t?.name || ""}</span></td>
                     <td><span className="inline-block px-2 py-0.5 rounded text-xs font-semibold text-white" style={questionTypeBadgeStyle(q.questionType)}>{QUESTION_TYPE_LABELS[q.questionType] || q.questionType}</span></td>
-                    <td className="text-xs">{q.dimension}</td>
-                    <td><span className={difficultyBadgeClass(q.difficulty)}>{q.difficulty}</span></td>
-                    <td className="text-sm">{q.marks}</td>
-                    <td className="text-sm max-w-md">{q.text}</td>
+                    <td className="text-xs hidden xl:table-cell">{q.dimension}</td>
+                    <td className="hidden xl:table-cell"><span className={difficultyBadgeClass(q.difficulty)}>{q.difficulty}</span></td>
+                    <td className="text-sm hidden xl:table-cell">{q.marks}</td>
+                    <td className="text-sm"><div className="max-w-md line-clamp-2" title={q.text}>{q.text}</div></td>
                     <td><span className={`badge ${q.isActive ? "badge-active" : "badge-inactive"}`}>{q.isActive ? "Active" : "Inactive"}</span></td>
                     <td>
                       <div className="flex gap-2">
