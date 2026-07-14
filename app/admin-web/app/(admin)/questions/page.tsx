@@ -473,9 +473,11 @@ function QuestionsPageInner() {
                     <td className="text-sm">{q.marks}</td>
                     <td className="text-sm max-w-md">{q.text}</td>
                     <td><span className={`badge ${q.isActive ? "badge-active" : "badge-inactive"}`}>{q.isActive ? "Active" : "Inactive"}</span></td>
-                    <td className="flex gap-2">
-                      <button onClick={() => openEdit(q._id)} className="btn btn-outline btn-sm">Edit</button>
-                      <button onClick={() => setDeleteTarget(q)} className="btn btn-danger btn-sm">Delete</button>
+                    <td>
+                      <div className="flex gap-2">
+                        <button onClick={() => openEdit(q._id)} className="btn btn-outline btn-sm">Edit</button>
+                        <button onClick={() => setDeleteTarget(q)} className="btn btn-danger btn-sm">Delete</button>
+                      </div>
                     </td>
                   </tr>
                 );

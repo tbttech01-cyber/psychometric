@@ -31,14 +31,14 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   return (
     <div className="flex h-screen overflow-hidden" style={{ background: "var(--tbt-bg)" }}>
       <Sidebar mobileOpen={mobileNavOpen} onClose={() => setMobileNavOpen(false)} />
-      <div className="flex-1 flex flex-col overflow-hidden">
+      <div className="flex-1 flex flex-col overflow-hidden min-w-0">
         <div className="md:hidden flex items-center gap-3 px-4 py-3 bg-white border-b" style={{ borderColor: "var(--tbt-border)" }}>
           <button onClick={() => setMobileNavOpen(true)} aria-label="Open menu" className="icon-btn">
             <Menu size={18} />
           </button>
           <span className="font-bold text-sm" style={{ color: "var(--tbt-text)" }}>Admin Portal</span>
         </div>
-        <div className="flex-1 overflow-y-auto">{children}</div>
+        <div className="flex-1 overflow-y-auto overflow-x-hidden min-w-0">{children}</div>
       </div>
     </div>
   );

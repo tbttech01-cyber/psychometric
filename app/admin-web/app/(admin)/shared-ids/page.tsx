@@ -154,11 +154,13 @@ export default function SharedIdsPage() {
                     <td><span className={`badge ${r.isActive ? "badge-active" : "badge-inactive"}`}>{r.isActive ? "Active" : "Inactive"}</span></td>
                     <td>{r.usageCount}</td>
                     <td>{new Date(r.createdAt).toLocaleDateString()}</td>
-                    <td className="flex gap-2">
-                      <button onClick={() => { setEditing(r); setEditLabel(r.label); setEditSetId(setIdOf(r)); }} className="btn btn-outline btn-sm">Edit</button>
-                      <button onClick={() => toggleActivate(r)} className={`btn btn-sm ${r.isActive ? "btn-danger" : "btn-primary"}`}>
-                        {r.isActive ? "Deactivate" : "Activate"}
-                      </button>
+                    <td>
+                      <div className="flex gap-2">
+                        <button onClick={() => { setEditing(r); setEditLabel(r.label); setEditSetId(setIdOf(r)); }} className="btn btn-outline btn-sm">Edit</button>
+                        <button onClick={() => toggleActivate(r)} className={`btn btn-sm ${r.isActive ? "btn-danger" : "btn-primary"}`}>
+                          {r.isActive ? "Deactivate" : "Activate"}
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 )

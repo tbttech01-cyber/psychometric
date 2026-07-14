@@ -158,9 +158,11 @@ export default function QuestionSetsPage() {
                   <td>{r.durationMinutes} min</td>
                   <td>{r.assignedCodeCount}</td>
                   <td><span className={`badge ${r.isActive ? "badge-active" : "badge-inactive"}`}>{r.isActive ? "Active" : "Inactive"}</span></td>
-                  <td className="flex gap-2">
-                    <button onClick={() => openEdit(r)} className="btn btn-outline btn-sm">Edit</button>
-                    <button onClick={() => setDeleteTarget(r)} className="btn btn-danger btn-sm">Delete</button>
+                  <td>
+                    <div className="flex gap-2">
+                      <button onClick={() => openEdit(r)} className="btn btn-outline btn-sm">Edit</button>
+                      <button onClick={() => setDeleteTarget(r)} className="btn btn-danger btn-sm">Delete</button>
+                    </div>
                   </td>
                 </tr>
               ))}
