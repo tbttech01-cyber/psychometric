@@ -63,7 +63,7 @@ Tests live in `app/tests/` and run against a **real MongoDB**, not mocks — `gl
 
 ### Architecture
 
-**Single-server design:** Express serves both the REST API (`/api/v1/...`) and the user-facing frontend as static files from `frontend/`. There is no build step for it — plain HTML + vanilla JS. The admin app (`app/admin-web/`) is a separate Next.js app, not served by this Express process — see below. Old links to the retired vanilla admin (`/admin/*`) 302-redirect to `ADMIN_WEB_URL`.
+**Single-server design:** Express serves both the REST API (`/api/v1/...`) and the user-facing frontend as static files from `frontend/`. The frontend is plain HTML + vanilla JS — no framework, no bundler. There is one lightweight, optional build step (`cd app/frontend && npm run build`): it compiles Tailwind (`src/tailwind.css` → `assets/css/tailwind.css --minify`) and runs `build-env.js` to write `assets/js/env.js` from the `TBT_API_BASE` env var. Both outputs are committed, so the app runs without ever building; you only rebuild after editing Tailwind sources or when pointing a standalone deploy at a cross-origin API. The admin app (`app/admin-web/`) is a separate Next.js app, not served by this Express process — see below. Old links to the retired vanilla admin (`/admin/*`) 302-redirect to `ADMIN_WEB_URL`.
 
 **Backend structure:**
 
@@ -121,8 +121,10 @@ backend/
 ```
 frontend/
   user/       # 7 HTML pages: index, register, otp-register, login, welcome, assessment, result
-  assets/js/  # api.js (fetch wrapper — reads `window.TBT_API_BASE` for the API origin, see Deployment), timer.js, charts.js (Chart.js), validator.js
-  assets/css/ # Tailwind-based styles
+  src/tailwind.css  # Tailwind source — compiled to assets/css/tailwind.css by `npm run build`
+  build-env.js      # writes assets/js/env.js (window.TBT_API_BASE) from the TBT_API_BASE env var
+  assets/js/  # env.js (build output), api.js (fetch wrapper — reads `window.TBT_API_BASE` for the API origin, see Deployment), timer.js, charts.js (Chart.js), validator.js
+  assets/css/ # Tailwind build output (tailwind.css)
               # (there is no admin/ subfolder — the admin UI lives entirely in app/admin-web/)
 ```
 
