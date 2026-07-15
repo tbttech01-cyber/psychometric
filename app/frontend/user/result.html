@@ -11,9 +11,14 @@
 <body class="min-h-screen" style="background:var(--tbt-bg)">
   <div id="toast-container"></div>
   <header class="bg-white border-b shadow-sm">
-    <div class="max-w-4xl mx-auto px-4 py-4 flex justify-between items-center">
+    <div class="max-w-4xl mx-auto px-4 py-4 flex justify-between items-center gap-3 flex-wrap">
       <span class="font-bold text-lg" style="color:var(--tbt-primary)">Tamil Business Tribe</span>
-      <button id="btn-logout" class="btn btn-outline btn-sm">Logout</button>
+      <div class="flex items-center gap-2 flex-wrap">
+        <button id="btn-reassess" class="btn btn-primary btn-sm hidden">Request Reassessment</button>
+        <button id="btn-reassess-start" class="btn btn-accent btn-sm hidden">Start Reassessment</button>
+        <span id="reassess-pending" class="text-xs font-semibold hidden" style="color:var(--tbt-muted)">⏳ Reassessment pending admin approval</span>
+        <button id="btn-logout" class="btn btn-outline btn-sm">Logout</button>
+      </div>
     </div>
   </header>
 
@@ -107,6 +112,7 @@
       const r = data.data;
       document.getElementById('loading').classList.add('hidden');
       document.getElementById('result-content').classList.remove('hidden');
+      renderReassessment(data.reassessment);
 
       const testLabel = r.userId?.sharedUserID?.label || 'Your Assessment';
       document.title = `${testLabel} Results — Tamil Business Tribe`;
@@ -205,6 +211,30 @@
 
     // Logout is confirmed via a shared modal (see api.logoutWithConfirm).
     document.getElementById('btn-logout').addEventListener('click', () => api.logoutWithConfirm(token));
+
+    // Reassessment (retake) request → admin approval → start retake.
+    const btnReassess = document.getElementById('btn-reassess');
+    const btnReassessStart = document.getElementById('btn-reassess-start');
+    const reassessPending = document.getElementById('reassess-pending');
+    function renderReassessment(info) {
+      const status = (info && info.status) || 'none';
+      btnReassess.classList.toggle('hidden', !(info && info.canRequest));
+      reassessPending.classList.toggle('hidden', status !== 'requested');
+      btnReassessStart.classList.toggle('hidden', status !== 'approved');
+    }
+    btnReassess.addEventListener('click', async () => {
+      btnReassess.disabled = true; btnReassess.textContent = 'Sending...';
+      const { ok, data } = await api.post('/assessment/reassessment', {}, token);
+      if (!ok) {
+        showToast(data.message || 'Could not send request.', 'error');
+        btnReassess.disabled = false; btnReassess.textContent = 'Request Reassessment';
+        return;
+      }
+      showToast(data.message || 'Reassessment request sent for approval.', 'success');
+      renderReassessment({ status: 'requested', canRequest: false });
+    });
+    // Approved → begin a fresh attempt from the access-code screen.
+    btnReassessStart.addEventListener('click', () => { window.location.href = '/user/index.html'; });
 
     loadResult();
   </script>

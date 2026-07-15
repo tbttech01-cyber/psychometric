@@ -164,8 +164,18 @@ exports.startSession = async (req, res, next) => {
   try {
     const userId = req.user._id;
 
-    if (req.user.hasCompletedAssessment)
-      return res.status(403).json({ success: false, message: 'You have already completed this assessment.' });
+    if (req.user.hasCompletedAssessment) {
+      // An admin-approved reassessment re-opens exactly one attempt: consume the
+      // approval (reset to 'none' + clear hasCompletedAssessment) so the normal
+      // flow below runs. Without an approval, a completed assessment is blocked.
+      if (req.user.reassessmentStatus === 'approved') {
+        req.user.hasCompletedAssessment = false;
+        req.user.reassessmentStatus = 'none';
+        await req.user.save();
+      } else {
+        return res.status(403).json({ success: false, message: 'You have already completed this assessment.' });
+      }
+    }
 
     const inProgress = await AssessmentSession.findOne({ userId, status: 'in-progress' });
     if (inProgress)
@@ -368,7 +378,10 @@ exports.submitAssessment = async (req, res, next) => {
 
 exports.getResult = async (req, res, next) => {
   try {
+    // Latest result — a candidate may have retaken after an approved
+    // reassessment, and each retake creates a new Result row.
     const result = await Result.findOne({ userId: req.user._id })
+      .sort('-createdAt')
       .populate({
         path: 'userId',
         select: 'name email sharedCode sharedUserID',
@@ -379,7 +392,34 @@ exports.getResult = async (req, res, next) => {
       });
     if (!result) return res.status(404).json({ success: false, message: 'No result found.' });
 
-    res.json({ success: true, data: result });
+    // The result page uses this to render the reassessment button (request /
+    // pending / start-retake). canRequest is true only for a completed
+    // candidate with no request in flight.
+    const reassessment = {
+      status: req.user.reassessmentStatus || 'none',
+      canRequest: !!req.user.hasCompletedAssessment && (req.user.reassessmentStatus || 'none') === 'none',
+    };
+    res.json({ success: true, data: result, reassessment });
+  } catch (err) { next(err); }
+};
+
+// Candidate requests a retake. Allowed only after completing an assessment and
+// when no request is already in flight; sets status to 'requested' so it shows
+// up in the admin Reassessments queue for approval.
+exports.requestReassessment = async (req, res, next) => {
+  try {
+    if (!req.user.hasCompletedAssessment)
+      return res.status(400).json({ success: false, message: 'You can request a reassessment only after completing your assessment.' });
+    const status = req.user.reassessmentStatus || 'none';
+    if (status === 'requested')
+      return res.status(409).json({ success: false, message: 'Your reassessment request is already pending admin approval.' });
+    if (status === 'approved')
+      return res.status(400).json({ success: false, message: 'Your reassessment is already approved — you can start it now.' });
+
+    req.user.reassessmentStatus = 'requested';
+    req.user.reassessmentRequestedAt = new Date();
+    await req.user.save();
+    res.json({ success: true, message: 'Reassessment request sent to the administrator for approval.' });
   } catch (err) { next(err); }
 };
 

@@ -202,3 +202,44 @@ exports.updateSettings = async (req, res, next) => {
     res.json({ success: true, message: 'Settings updated successfully.' });
   } catch (err) { next(err); }
 };
+
+// --- Reassessment (retake) approvals -----------------------------------------
+
+// Candidates who have requested a retake and are awaiting a decision.
+exports.listReassessments = async (req, res, next) => {
+  try {
+    const users = await User.find({ reassessmentStatus: 'requested' })
+      .select('name email sharedCode reassessmentRequestedAt hasCompletedAssessment')
+      .sort('-reassessmentRequestedAt');
+    res.json({ success: true, data: users, total: users.length });
+  } catch (err) { next(err); }
+};
+
+// Approve a pending request → status 'approved'. The candidate's next
+// startSession consumes it and re-opens exactly one attempt.
+exports.approveReassessment = async (req, res, next) => {
+  try {
+    const user = await User.findById(req.params.userId);
+    if (!user) return res.status(404).json({ success: false, message: 'User not found.' });
+    if (user.reassessmentStatus !== 'requested')
+      return res.status(400).json({ success: false, message: 'No pending reassessment request for this user.' });
+    user.reassessmentStatus = 'approved';
+    user.reassessmentDecidedAt = new Date();
+    await user.save();
+    res.json({ success: true, message: 'Reassessment approved. The candidate can now retake the assessment.' });
+  } catch (err) { next(err); }
+};
+
+// Reject a pending request → back to 'none'.
+exports.rejectReassessment = async (req, res, next) => {
+  try {
+    const user = await User.findById(req.params.userId);
+    if (!user) return res.status(404).json({ success: false, message: 'User not found.' });
+    if (user.reassessmentStatus !== 'requested')
+      return res.status(400).json({ success: false, message: 'No pending reassessment request for this user.' });
+    user.reassessmentStatus = 'none';
+    user.reassessmentDecidedAt = new Date();
+    await user.save();
+    res.json({ success: true, message: 'Reassessment request rejected.' });
+  } catch (err) { next(err); }
+};
