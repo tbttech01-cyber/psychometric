@@ -67,6 +67,13 @@ See `app/.env.example` for the full list. Key ones: `MONGO_URI`, `JWT_SECRET`,
 
 ## Deployment
 
-The backend + candidate frontend deploy to Render (single service) and/or Vercel;
-`app/admin-web` deploys separately. Full walkthrough — env vars, MongoDB Atlas,
-Gmail app password, CI/CD — is in `DEPLOYMENT.md`.
+Production runs entirely on **Vercel** via three projects, all deployed by the
+CI/CD workflow (`.github/workflows/ci-cd.yml`) on push to `main`:
+
+- **backend** — the Express API (`app/`)
+- **user-web** — the standalone candidate frontend (`app/frontend`)
+- **admin-web** — the Next.js admin app (`app/admin-web`)
+
+Render is no longer used (its blueprint was removed; disable auto-deploy in the
+Render dashboard if a service still exists). Full walkthrough — env vars,
+MongoDB Atlas, Gmail app password, CI/CD — is in `DEPLOYMENT.md`.

@@ -1,6 +1,8 @@
 # Deployment
 
-This app deploys as a single web service (`render.yaml` blueprint at repo root, service rootDir `app/`). Steps that need your accounts/credentials are marked accordingly — nothing below requires pasting secrets into chat with Claude.
+> **Production topology: Vercel only.** The canonical deploy is three Vercel projects — `backend` (`app/`), `user-web` (`app/frontend`), `admin-web` (`app/admin-web`) — all deployed by `.github/workflows/ci-cd.yml` on push to `main` (see §6). The **Render** blueprint has been removed and Render is no longer part of the deploy path; if a Render service still exists, disable its auto-deploy (Dashboard → the service → Settings → Auto-Deploy → No) or suspend/delete it. The MongoDB Atlas (§1) and Gmail (§2) steps below still apply; §3 (Render) is retained for reference only and is no longer used.
+
+Steps that need your accounts/credentials are marked accordingly — nothing below requires pasting secrets into chat with Claude.
 
 ## 1. MongoDB Atlas (production database)
 

@@ -180,18 +180,17 @@ There is no other admin frontend — do not add HTML pages under `app/frontend/`
 
 ## Deployment
 
-Two independent deploy paths exist for the Express app (`app/`), both driven by the same `backend/app.js`:
+Production runs entirely on **Vercel** (three projects: `backend`, `user-web`, `admin-web`), all deployed by CI/CD on push to `main`. Render has been retired (its `render.yaml` blueprint was removed); disable any remaining Render service's auto-deploy in the dashboard.
 
-- **Render** (primary): single web service via `render.yaml` at the repo root (rootDir `app/`), running `backend/server.js`; auto-deploys on push to `main`. Full walkthrough (MongoDB Atlas, Gmail app password, Render env vars, production seeding) is in `DEPLOYMENT.md`.
-- **Vercel** (standalone/serverless): `app/api/index.js` re-exports `backend/app.js` as the serverless entrypoint; `app/vercel.json` rewrites all requests to it. Since there's no boot-time hook on a serverless platform, `backend/app.js` connects to MongoDB lazily on first request and caches the connection on `global.__tbtMongoConnect` for warm invocations (`backend/server.js`'s `connectDB()` call is a no-op in this mode since the connection is already established). The candidate frontend (`frontend/`) reads its API origin from `window.TBT_API_BASE` (`frontend/assets/js/api.js`) so it can be hosted standalone on Vercel pointing at a separately-hosted API — set that global (e.g. injected via env at build/deploy time) when the frontend and API aren't on the same origin.
-
-`admin-web` is not part of either blueprint above — it's always a separate deploy target (e.g. Vercel) calling the API cross-origin; see its `ADMIN_WEB_URL` CORS requirement above.
+- **Vercel — backend** (`app/`, serverless): `app/api/index.js` re-exports `backend/app.js` as the serverless entrypoint; `app/vercel.json` rewrites all requests to it. Since there's no boot-time hook on a serverless platform, `backend/app.js` connects to MongoDB lazily on first request and caches the connection on `global.__tbtMongoConnect` for warm invocations (`backend/server.js`'s `connectDB()` call is a no-op in this mode). This project also serves `frontend/` statically, but production candidate traffic goes to the standalone `user-web` project below.
+- **Vercel — user-web** (`app/frontend`, static): the standalone candidate frontend. It reads its API origin from `window.TBT_API_BASE` (`frontend/assets/js/api.js`), baked into `assets/js/env.js` at build time by `build-env.js` from the `TBT_API_BASE` env var set in the CI deploy job (currently the backend's Vercel URL; slated to become `api.tamilbusinesstribe.com`). Because it's cross-origin from the API, that origin must be in the backend CORS allowlist.
+- **Vercel — admin-web** (`app/admin-web`): the Next.js admin app, calling the API cross-origin; see its `ADMIN_WEB_URL` CORS requirement above.
 
 ### CI/CD (`.github/workflows/ci-cd.yml`)
 
 A single GitHub Actions workflow covers both halves of the repo and runs on every push/PR to `main`:
 - `test-backend` — `app/`'s Jest suite against a `mongo:7` service container (same as the old `ci.yml`).
-- `build-admin-web` — installs, lints (non-blocking), and runs `next build` for `app/admin-web/`.
-- `deploy-backend` / `deploy-admin-web` — on a push to `main` only, and gated on the corresponding test/build job passing, deploy each app to its own Vercel project via the Vercel CLI (`vercel pull` → `vercel build --prod` → `vercel deploy --prebuilt --prod`). Requires a `VERCEL_TOKEN` repo secret; production env vars live in each Vercel project's dashboard, not in the workflow. See `DEPLOYMENT.md` §6 for full setup.
+- `build-admin-web` — installs, **lints (blocking — the ESLint config keeps `no-explicit-any` an error while pre-existing non-correctness rules like `set-state-in-effect` are warnings)**, and runs `next build` for `app/admin-web/`.
+- `deploy-backend` / `deploy-user-web` / `deploy-admin-web` — on a push to `main` only, and gated on the corresponding test/build job passing, deploy each app to its own Vercel project via the Vercel CLI (`vercel pull` → `vercel build --prod` → `vercel deploy --prebuilt --prod`). Requires a `VERCEL_TOKEN` repo secret; production env vars live in each Vercel project's dashboard, not in the workflow (except `user-web`'s `TBT_API_BASE`, set in the workflow). See `DEPLOYMENT.md` §6 for full setup.
 
-This is independent of Render's own git-based auto-deploy (still active per its own dashboard setting) — the two are not mutually exclusive.
+Render is no longer part of the deploy path (blueprint removed) — Vercel is the sole production topology.

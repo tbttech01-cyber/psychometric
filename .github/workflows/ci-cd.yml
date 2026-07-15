@@ -61,11 +61,11 @@ jobs:
 
       - run: npm ci
 
-      # Non-blocking: surfaces lint issues in the log without failing the
-      # pipeline on pre-existing lint debt unrelated to a given change.
-      # `next build` below still fails the job on real type/build errors.
+      # Blocking: the ESLint config keeps no-explicit-any an error (guards the
+      # typed API layer in lib/api.ts) while pre-existing, non-correctness lint
+      # (e.g. set-state-in-effect) is a warning, so this fails only on real
+      # regressions. `next build` below still fails on type/build errors too.
       - run: npm run lint
-        continue-on-error: true
 
       - run: npm run build
 
@@ -126,6 +126,9 @@ jobs:
       # build-env.js bakes it into assets/js/env.js at build time; without it
       # the build defaults to same-origin (empty), which 404s here because this
       # project serves only static files (the API lives in the backend project).
+      # TODO: once the custom domain api.tamilbusinesstribe.com is configured on
+      # the backend Vercel project, switch this to https://api.tamilbusinesstribe.com
+      # (and add that origin to the backend CORS allowlist).
       TBT_API_BASE: https://backend-three-peach-48.vercel.app
 
     steps:
