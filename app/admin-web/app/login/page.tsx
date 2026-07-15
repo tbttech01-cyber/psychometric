@@ -38,7 +38,7 @@ export default function LoginPage() {
     if (Object.keys(nextErrors).length) return;
 
     setLoading(true);
-    const { ok, data } = await api.post("/admin/login", { email, password });
+    const { ok, data } = await api.post<{ success: boolean; message?: string; token?: string; admin: { _id: string; email: string } }>("/admin/login", { email, password });
     setLoading(false);
     if (!ok || !data.token) {
       showToast(data.message || "Login failed.", "error");

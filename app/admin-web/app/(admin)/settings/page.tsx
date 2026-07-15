@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { api, getToken, removeToken } from "@/lib/api";
+import { api, getToken, removeToken, type ApiEnvelope } from "@/lib/api";
 import { useToast } from "@/components/ToastProvider";
 import PageHeader from "@/components/PageHeader";
 
@@ -22,14 +22,14 @@ export default function SettingsPage() {
 
   useEffect(() => {
     (async () => {
-      const { ok, data } = await api.get("/admin/profile", token);
+      const { ok, data } = await api.get<{ admin: { email: string; lastLoginAt?: string | null } }>("/admin/profile", token);
       if (!ok) return;
       setEmail(data.admin.email);
       setLastLogin(data.admin.lastLoginAt ? new Date(data.admin.lastLoginAt).toLocaleString() : "This is your first login");
     })();
 
     (async () => {
-      const { ok, data } = await api.get("/admin/settings", token);
+      const { ok, data } = await api.get<ApiEnvelope<{ assessment_duration_minutes: number }>>("/admin/settings", token);
       if (ok && data.data) {
         setDuration(data.data.assessment_duration_minutes);
       }
@@ -41,7 +41,7 @@ export default function SettingsPage() {
     if (newPassword.length < 6) return showToast("New password must be at least 6 characters.", "error");
     if (newPassword !== confirmPassword) return showToast("New passwords do not match.", "error");
 
-    const { ok, data } = await api.post("/admin/change-password", { currentPassword, newPassword }, token);
+    const { ok, data } = await api.post<ApiEnvelope>("/admin/change-password", { currentPassword, newPassword }, token);
     if (!ok) { showToast(data.message || "Failed to change password.", "error"); return; }
     showToast("Password changed. Please log in again.", "success");
     setTimeout(() => {
@@ -55,7 +55,7 @@ export default function SettingsPage() {
       return showToast("Please enter a valid duration in minutes.", "error");
     }
     setSavingDuration(true);
-    const { ok, data } = await api.post("/admin/settings", { assessment_duration_minutes: Number(duration) }, token);
+    const { ok, data } = await api.post<ApiEnvelope>("/admin/settings", { assessment_duration_minutes: Number(duration) }, token);
     setSavingDuration(false);
     if (!ok) {
       showToast(data.message || "Failed to update settings.", "error");

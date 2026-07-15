@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { Layers, Clock, KeyRound } from "lucide-react";
-import { api, getToken } from "@/lib/api";
+import { api, getToken, type ApiEnvelope } from "@/lib/api";
 import { useToast } from "@/components/ToastProvider";
 import StatCard from "@/components/StatCard";
 import PageHeader from "@/components/PageHeader";
@@ -29,9 +29,9 @@ export default function QuestionSetsPage() {
 
   const load = useCallback(async () => {
     const [setsRes, qRes, catRes] = await Promise.all([
-      api.get("/admin/question-sets", token),
-      api.get("/admin/questions", token),
-      api.get("/admin/question-types", token),
+      api.get<ApiEnvelope<SetRow[]>>("/admin/question-sets", token),
+      api.get<ApiEnvelope<Question[]>>("/admin/questions", token),
+      api.get<ApiEnvelope<QCategory[]>>("/admin/question-types", token),
     ]);
     if (setsRes.ok) setRows(setsRes.data.data);
     if (qRes.ok) setQuestions(qRes.data.data);
@@ -47,7 +47,7 @@ export default function QuestionSetsPage() {
   }
 
   async function openEdit(row: SetRow) {
-    const { ok, data } = await api.get(`/admin/question-sets/${row._id}`, token);
+    const { ok, data } = await api.get<ApiEnvelope<QuestionSet>>(`/admin/question-sets/${row._id}`, token);
     if (!ok) { showToast("Failed to load set.", "error"); return; }
     const set = data.data;
     setEditingId(row._id);
@@ -73,8 +73,8 @@ export default function QuestionSetsPage() {
       questionIds: form.questionIds,
     };
     const { ok, data } = editingId
-      ? await api.put(`/admin/question-sets/${editingId}`, body, token)
-      : await api.post("/admin/question-sets", body, token);
+      ? await api.put<ApiEnvelope>(`/admin/question-sets/${editingId}`, body, token)
+      : await api.post<ApiEnvelope>("/admin/question-sets", body, token);
     setSaving(false);
     if (!ok) { showToast(data.message || "Save failed.", "error"); return; }
     showToast(editingId ? "Question set updated!" : "Question set created!", "success");
@@ -84,7 +84,7 @@ export default function QuestionSetsPage() {
 
   async function confirmDelete() {
     if (!deleteTarget) return;
-    const { ok, data } = await api.delete(`/admin/question-sets/${deleteTarget._id}`, token);
+    const { ok, data } = await api.delete<ApiEnvelope>(`/admin/question-sets/${deleteTarget._id}`, token);
     setDeleteTarget(null);
     if (!ok) { showToast(data.message || "Delete failed.", "error"); return; }
     showToast("Question set deleted.", "success");

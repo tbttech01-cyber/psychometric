@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import { BarChart3, Trophy, CheckSquare, Search } from "lucide-react";
-import { api, getToken, downloadFile } from "@/lib/api";
+import { api, getToken, downloadFile, type ApiEnvelope } from "@/lib/api";
 import { useToast } from "@/components/ToastProvider";
 import StatCard from "@/components/StatCard";
 import PageHeader from "@/components/PageHeader";
@@ -67,16 +67,16 @@ export default function ResultsPage() {
   }, [page, sortBy, search, level, business, dateFrom, dateTo]);
 
   const load = useCallback(async () => {
-    const { ok, data } = await api.get(`/admin/results?${buildQS()}`, token);
+    const { ok, data } = await api.get<ApiEnvelope<ResultRow[]>>(`/admin/results?${buildQS()}`, token);
     if (!ok) { showToast("Failed to load.", "error"); return; }
     setRows(data.data);
-    setTotal(data.total);
+    setTotal(data.total ?? 0);
     setPages(data.pages || 1);
   }, [buildQS, token, showToast]);
 
   const loadStats = useCallback(async () => {
-    const { ok, data } = await api.get("/admin/results?level=Excellent&limit=1", token);
-    if (ok) setExcellentCount(data.total);
+    const { ok, data } = await api.get<ApiEnvelope<ResultRow[]>>("/admin/results?level=Excellent&limit=1", token);
+    if (ok) setExcellentCount(data.total ?? 0);
   }, [token]);
 
   useEffect(() => { load(); }, [load]);
@@ -110,7 +110,7 @@ export default function ResultsPage() {
 
   async function confirmDelete() {
     if (!deleteTarget) return;
-    const { ok, data } = await api.delete(`/admin/results/${deleteTarget._id}`, token);
+    const { ok, data } = await api.delete<ApiEnvelope>(`/admin/results/${deleteTarget._id}`, token);
     setDeleteTarget(null);
     if (!ok) { showToast(data.message || "Delete failed.", "error"); return; }
     showToast("Result deleted.", "success");

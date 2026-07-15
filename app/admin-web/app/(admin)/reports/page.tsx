@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Users, CheckCircle2, BarChart3, KeyRound } from "lucide-react";
-import { api, getToken, downloadFile } from "@/lib/api";
+import { api, getToken, downloadFile, type ApiEnvelope } from "@/lib/api";
 import { useToast } from "@/components/ToastProvider";
 import StatCard from "@/components/StatCard";
 import DoughnutChart from "@/components/DoughnutChart";
@@ -26,11 +26,11 @@ export default function ReportsPage() {
     (async () => {
       const [dashRes, ...levelResArr] = await Promise.all([
         api.get<DashboardData>("/admin/dashboard", token),
-        ...LEVELS.map((l) => api.get(`/admin/results?level=${encodeURIComponent(l.key)}&limit=1`, token)),
+        ...LEVELS.map((l) => api.get<ApiEnvelope>(`/admin/results?level=${encodeURIComponent(l.key)}&limit=1`, token)),
       ]);
       if (!dashRes.ok) { showToast("Failed to load report data.", "error"); return; }
       setDash(dashRes.data);
-      setLevelCounts(LEVELS.map((l, i) => ({ ...l, count: levelResArr[i].ok ? levelResArr[i].data.total : 0 })));
+      setLevelCounts(LEVELS.map((l, i) => ({ ...l, count: levelResArr[i].ok ? (levelResArr[i].data.total ?? 0) : 0 })));
     })();
   }, [token, showToast]);
 

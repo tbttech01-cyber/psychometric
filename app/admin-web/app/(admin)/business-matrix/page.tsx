@@ -2,13 +2,14 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { Grid3x3, Plus } from "lucide-react";
-import { api, getToken } from "@/lib/api";
+import { api, getToken, type ApiEnvelope } from "@/lib/api";
 import { useToast } from "@/components/ToastProvider";
 import PageHeader from "@/components/PageHeader";
 import ConfirmModal from "@/components/ConfirmModal";
 
 type QType = { _id: string; name: string; order: number };
 type Cell = { _id: string; rowTypeId: string; colTypeId: string; businessName: string; rating: number; isActive: boolean };
+type MatrixResponse = { types: QType[]; cells: Cell[]; completion: { configured: number; total: number } };
 
 export default function BusinessMatrixPage() {
   const showToast = useToast();
@@ -27,7 +28,7 @@ export default function BusinessMatrixPage() {
   const [seedConfirm, setSeedConfirm] = useState(false);
 
   const load = useCallback(async () => {
-    const { ok, data } = await api.get("/admin/business-matrix", token);
+    const { ok, data } = await api.get<MatrixResponse>("/admin/business-matrix", token);
     if (!ok) { showToast("Failed to load business matrix.", "error"); return; }
     setTypes(data.types);
     setCells(data.cells);
@@ -52,11 +53,11 @@ export default function BusinessMatrixPage() {
     if (!editing) return;
     if (!formName.trim()) { showToast("Business/role name is required.", "error"); return; }
     if (editing.cell) {
-      const { ok, data } = await api.put(`/admin/business-matrix/${editing.cell._id}`, { businessName: formName, rating: formRating, isActive: formActive }, token);
+      const { ok, data } = await api.put<ApiEnvelope>(`/admin/business-matrix/${editing.cell._id}`, { businessName: formName, rating: formRating, isActive: formActive }, token);
       if (!ok) { showToast(data.message || "Update failed.", "error"); return; }
       showToast("Cell updated!", "success");
     } else {
-      const { ok, data } = await api.post("/admin/business-matrix", {
+      const { ok, data } = await api.post<ApiEnvelope>("/admin/business-matrix", {
         rowTypeId: editing.row._id, colTypeId: editing.col._id, businessName: formName, rating: formRating,
       }, token);
       if (!ok) { showToast(data.message || "Create failed.", "error"); return; }
@@ -78,7 +79,7 @@ export default function BusinessMatrixPage() {
 
   async function confirmDelete() {
     if (!deleteTarget) return;
-    const { ok, data } = await api.delete(`/admin/business-matrix/${deleteTarget._id}`, token);
+    const { ok, data } = await api.delete<ApiEnvelope>(`/admin/business-matrix/${deleteTarget._id}`, token);
     setDeleteTarget(null);
     setEditing(null);
     if (!ok) { showToast(data.message || "Delete failed.", "error"); return; }

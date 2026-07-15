@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import { FolderKanban, HelpCircle, Award, AlertTriangle } from "lucide-react";
-import { api, getToken } from "@/lib/api";
+import { api, getToken, type ApiEnvelope } from "@/lib/api";
 import { useToast } from "@/components/ToastProvider";
 import StatCard from "@/components/StatCard";
 import PageHeader from "@/components/PageHeader";
@@ -33,9 +33,10 @@ export default function QuestionTypesPage() {
   const [deleteTarget, setDeleteTarget] = useState<QType | null>(null);
 
   const load = useCallback(async () => {
+    type QCountRow = { isActive: boolean; typeId: { _id: string } | string };
     const [typesRes, questionsRes] = await Promise.all([
-      api.get("/admin/question-types", token),
-      api.get("/admin/questions", token),
+      api.get<ApiEnvelope<QType[]>>("/admin/question-types", token),
+      api.get<ApiEnvelope<QCountRow[]>>("/admin/questions", token),
     ]);
     if (!typesRes.ok) { showToast("Failed to load categories.", "error"); return; }
     setTypes(typesRes.data.data);
@@ -43,7 +44,7 @@ export default function QuestionTypesPage() {
       const c: Record<string, number> = {};
       for (const q of questionsRes.data.data) {
         if (!q.isActive) continue; // matches the backend's own linked-questions check
-        const id = q.typeId?._id || q.typeId;
+        const id = typeof q.typeId === "string" ? q.typeId : q.typeId._id;
         c[id] = (c[id] || 0) + 1;
       }
       setCounts(c);
@@ -77,11 +78,11 @@ export default function QuestionTypesPage() {
       return;
     }
     if (editingId) {
-      const { ok, data } = await api.put(`/admin/question-types/${editingId}`, form, token);
+      const { ok, data } = await api.put<ApiEnvelope>(`/admin/question-types/${editingId}`, form, token);
       if (!ok) { showToast(data.message || "Update failed.", "error"); return; }
       showToast("Category updated!", "success");
     } else {
-      const { ok, data } = await api.post("/admin/question-types", form, token);
+      const { ok, data } = await api.post<ApiEnvelope>("/admin/question-types", form, token);
       if (!ok) { showToast(data.message || "Create failed.", "error"); return; }
       showToast("Category created!", "success");
     }
@@ -91,7 +92,7 @@ export default function QuestionTypesPage() {
 
   async function confirmDelete() {
     if (!deleteTarget) return;
-    const { ok, data } = await api.delete(`/admin/question-types/${deleteTarget._id}`, token);
+    const { ok, data } = await api.delete<ApiEnvelope>(`/admin/question-types/${deleteTarget._id}`, token);
     setDeleteTarget(null);
     if (!ok) { showToast(data.message || "Delete failed.", "error"); return; }
     showToast("Category deleted.", "success");

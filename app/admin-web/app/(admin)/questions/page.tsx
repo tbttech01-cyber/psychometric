@@ -3,7 +3,7 @@
 import { Suspense, useEffect, useState, useCallback } from "react";
 import { useSearchParams } from "next/navigation";
 import { Search, ShieldCheck, ArrowUp, ArrowDown } from "lucide-react";
-import { api, getToken } from "@/lib/api";
+import { api, getToken, type ApiEnvelope } from "@/lib/api";
 import { useToast } from "@/components/ToastProvider";
 import PageHeader from "@/components/PageHeader";
 import ConfirmModal from "@/components/ConfirmModal";
@@ -97,13 +97,13 @@ function QuestionsPageInner() {
   const [saving, setSaving] = useState(false);
 
   const loadTypes = useCallback(async () => {
-    const { ok, data } = await api.get("/admin/question-types", token);
+    const { ok, data } = await api.get<ApiEnvelope<QCategory[]>>("/admin/question-types", token);
     if (ok) setTypes(data.data);
   }, [token]);
 
   const load = useCallback(async () => {
     const qs = fType ? `?typeId=${fType}` : "";
-    const { ok, data } = await api.get(`/admin/questions${qs}`, token);
+    const { ok, data } = await api.get<ApiEnvelope<Question[]>>(`/admin/questions${qs}`, token);
     if (!ok) return;
     setRows(data.data);
   }, [fType, token]);
@@ -113,7 +113,7 @@ function QuestionsPageInner() {
   // are soft-deactivated (kept for historical/audit reasons) and must not
   // permanently block their order.
   const loadAllOrders = useCallback(async () => {
-    const { ok, data } = await api.get("/admin/questions", token);
+    const { ok, data } = await api.get<ApiEnvelope<Question[]>>("/admin/questions", token);
     if (ok) setUsedOrders(data.data.filter((q: Question) => q.isActive).map((q: Question) => q.order));
   }, [token]);
 
@@ -161,7 +161,7 @@ function QuestionsPageInner() {
   }
 
   async function openEdit(id: string) {
-    const { ok, data } = await api.get(`/admin/questions/${id}`, token);
+    const { ok, data } = await api.get<ApiEnvelope<Question>>(`/admin/questions/${id}`, token);
     if (!ok) { showToast("Failed to load question.", "error"); return; }
     const q = data.data;
     setEditingId(q._id);
@@ -210,8 +210,8 @@ function QuestionsPageInner() {
 
     setSaving(true);
     const { ok, data } = editingId
-      ? await api.put(`/admin/questions/${editingId}`, payload, token)
-      : await api.post("/admin/questions", payload, token);
+      ? await api.put<ApiEnvelope>(`/admin/questions/${editingId}`, payload, token)
+      : await api.post<ApiEnvelope>("/admin/questions", payload, token);
     setSaving(false);
     if (!ok) { showToast(data.message || "Save failed.", "error"); return; }
     showToast(editingId ? "Question updated!" : "Question created!", "success");
@@ -222,7 +222,7 @@ function QuestionsPageInner() {
 
   async function confirmDelete() {
     if (!deleteTarget) return;
-    const { ok, data } = await api.delete(`/admin/questions/${deleteTarget._id}`, token);
+    const { ok, data } = await api.delete<ApiEnvelope>(`/admin/questions/${deleteTarget._id}`, token);
     setDeleteTarget(null);
     if (!ok) { showToast(data.message || "Delete failed.", "error"); return; }
     showToast("Question deleted.", "success");
@@ -241,7 +241,7 @@ function QuestionsPageInner() {
     const j = i + dir;
     if (j < 0 || j >= filteredRows.length) return;
     const a = filteredRows[i], b = filteredRows[j];
-    const { ok, data } = await api.post("/admin/questions/reorder", {
+    const { ok, data } = await api.post<ApiEnvelope>("/admin/questions/reorder", {
       orders: [{ id: a._id, order: b.order }, { id: b._id, order: a.order }],
     }, token);
     if (!ok) { showToast(data.message || "Reorder failed.", "error"); return; }

@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { Hash, CheckCircle2, XCircle, Search } from "lucide-react";
-import { api, getToken } from "@/lib/api";
+import { api, getToken, type ApiEnvelope } from "@/lib/api";
 import { useToast } from "@/components/ToastProvider";
 import StatCard from "@/components/StatCard";
 import PageHeader from "@/components/PageHeader";
@@ -37,14 +37,14 @@ export default function SharedIdsPage() {
 
   const load = useCallback(async () => {
     const qs = search ? `?search=${encodeURIComponent(search)}` : "";
-    const { ok, data } = await api.get(`/admin/shared-ids${qs}`, token);
+    const { ok, data } = await api.get<ApiEnvelope<SharedID[]>>(`/admin/shared-ids${qs}`, token);
     if (!ok) { showToast("Failed to load.", "error"); return; }
     setRows(data.data);
   }, [search, token, showToast]);
 
   useEffect(() => { load(); }, [load]);
   useEffect(() => {
-    api.get("/admin/question-sets", token).then(({ ok, data }) => { if (ok) setSets(data.data); });
+    api.get<ApiEnvelope<SetOption[]>>("/admin/question-sets", token).then(({ ok, data }) => { if (ok) setSets(data.data); });
   }, [token]);
 
   const active = rows.filter((r) => r.isActive).length;
@@ -58,7 +58,7 @@ export default function SharedIdsPage() {
   async function createCode() {
     if (!newCode || !newLabel) { showToast("Code and label required.", "error"); return; }
     if (!/^[A-Z0-9]+$/.test(newCode)) { showToast("Code must contain only letters and numbers.", "error"); return; }
-    const { ok, data } = await api.post("/admin/shared-ids", { code: newCode.toUpperCase(), label: newLabel, questionSetId: newSetId || undefined }, token);
+    const { ok, data } = await api.post<ApiEnvelope>("/admin/shared-ids", { code: newCode.toUpperCase(), label: newLabel, questionSetId: newSetId || undefined }, token);
     if (!ok) { showToast(data.message || "Failed.", "error"); return; }
     showToast("Code created!", "success");
     setNewCode(""); setNewLabel(""); setNewSetId("");
@@ -67,7 +67,7 @@ export default function SharedIdsPage() {
 
   async function saveEdit() {
     if (!editing) return;
-    const { ok, data } = await api.put(`/admin/shared-ids/${editing._id}`, { label: editLabel, questionSetId: editSetId }, token);
+    const { ok, data } = await api.put<ApiEnvelope>(`/admin/shared-ids/${editing._id}`, { label: editLabel, questionSetId: editSetId }, token);
     if (!ok) { showToast(data.message || "Update failed.", "error"); return; }
     showToast("Code updated!", "success");
     setEditing(null);
@@ -77,7 +77,7 @@ export default function SharedIdsPage() {
   async function toggleActivate(row: SharedID) {
     // Reactivating doesn't need confirmation; deactivating goes through the confirm modal.
     if (row.isActive) { setDeactivateTarget(row); return; }
-    const { ok, data } = await api.put(`/admin/shared-ids/${row._id}`, { isActive: true }, token);
+    const { ok, data } = await api.put<ApiEnvelope>(`/admin/shared-ids/${row._id}`, { isActive: true }, token);
     if (!ok) { showToast(data.message || "Update failed.", "error"); return; }
     showToast("Activated.", "success");
     load();
@@ -85,7 +85,7 @@ export default function SharedIdsPage() {
 
   async function confirmDeactivate() {
     if (!deactivateTarget) return;
-    const { ok, data } = await api.delete(`/admin/shared-ids/${deactivateTarget._id}`, token);
+    const { ok, data } = await api.delete<ApiEnvelope>(`/admin/shared-ids/${deactivateTarget._id}`, token);
     setDeactivateTarget(null);
     if (!ok) { showToast(data.message || "Failed.", "error"); return; }
     showToast("Code deactivated.", "success");

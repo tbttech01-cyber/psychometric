@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { api, getToken } from "@/lib/api";
+import { api, getToken, type ApiEnvelope } from "@/lib/api";
 import PageHeader from "@/components/PageHeader";
 
 type Question = { _id: string; order: number; text: string; isActive: boolean };
@@ -15,7 +15,7 @@ export default function AnswerOptionsPage() {
 
   useEffect(() => {
     (async () => {
-      const { ok, data } = await api.get("/admin/questions", token);
+      const { ok, data } = await api.get<ApiEnvelope<Question[]>>("/admin/questions", token);
       if (ok) setQuestions(data.data.filter((q: Question) => q.isActive));
     })();
   }, [token]);
@@ -23,7 +23,7 @@ export default function AnswerOptionsPage() {
   useEffect(() => {
     if (!selected) { setOptions(null); return; }
     (async () => {
-      const { ok, data } = await api.get(`/admin/answer-options?questionId=${selected}`, token);
+      const { ok, data } = await api.get<ApiEnvelope<Option[]>>(`/admin/answer-options?questionId=${selected}`, token);
       if (ok) setOptions(data.data);
     })();
   }, [selected, token]);

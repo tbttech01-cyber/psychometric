@@ -1,8 +1,23 @@
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api/v1";
 
-export type ApiResult<T = any> = { ok: boolean; status: number; data: T };
+// Standard response envelope returned by (almost) every backend endpoint.
+// Some endpoints add top-level fields (auth: token/admin; list endpoints:
+// total/pages/stats) or return the payload directly (dashboard/reports) — those
+// call sites pass their own response shape as the generic argument.
+export type ApiEnvelope<T = unknown> = {
+  success: boolean;
+  message?: string;
+  // Present on success responses; the `if (ok)` / `if (data.success)` guard at
+  // each call site is what makes this safe to read (error/failure bodies omit it).
+  data: T;
+  total?: number;
+  pages?: number;
+  stats?: unknown;
+};
 
-async function request<T = any>(
+export type ApiResult<T = unknown> = { ok: boolean; status: number; data: T };
+
+async function request<T = unknown>(
   method: string,
   path: string,
   body?: unknown,
@@ -35,16 +50,16 @@ async function request<T = any>(
     return {
       ok: false,
       status: 0,
-      data: { success: false, message: "Connection failed. Please check your network." } as any,
+      data: { success: false, message: "Connection failed. Please check your network." } as unknown as T,
     };
   }
 }
 
 export const api = {
-  get: <T = any>(path: string, token?: string | null) => request<T>("GET", path, undefined, token),
-  post: <T = any>(path: string, body?: unknown, token?: string | null) => request<T>("POST", path, body, token),
-  put: <T = any>(path: string, body?: unknown, token?: string | null) => request<T>("PUT", path, body, token),
-  delete: <T = any>(path: string, token?: string | null) => request<T>("DELETE", path, undefined, token),
+  get: <T = unknown>(path: string, token?: string | null) => request<T>("GET", path, undefined, token),
+  post: <T = unknown>(path: string, body?: unknown, token?: string | null) => request<T>("POST", path, body, token),
+  put: <T = unknown>(path: string, body?: unknown, token?: string | null) => request<T>("PUT", path, body, token),
+  delete: <T = unknown>(path: string, token?: string | null) => request<T>("DELETE", path, undefined, token),
 };
 
 export function getToken(): string | null {

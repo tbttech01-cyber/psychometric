@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { Users as UsersIcon, CheckCircle2, Clock, Trophy, UserRound, IdCard, KeyRound, ShieldCheck, RefreshCw } from "lucide-react";
-import { api, getToken } from "@/lib/api";
+import { api, getToken, type ApiEnvelope } from "@/lib/api";
 import { useToast } from "@/components/ToastProvider";
 import StatCard from "@/components/StatCard";
 import PageHeader from "@/components/PageHeader";
@@ -50,24 +50,24 @@ export default function UsersPage() {
     const params = new URLSearchParams({ page: String(page), limit: "10" });
     if (search) params.set("search", search);
     if (status) params.set("status", status);
-    const { ok, data } = await api.get(`/admin/users?${params}`, token);
+    const { ok, data } = await api.get<ApiEnvelope<UserRow[]> & { stats?: UserStats }>(`/admin/users?${params}`, token);
     if (!ok) { showToast("Failed to load users.", "error"); return; }
     setRows(data.data);
-    setStats(data.stats);
-    setTotal(data.total);
+    setStats(data.stats ?? null);
+    setTotal(data.total ?? 0);
     setPages(data.pages || 1);
   }, [page, search, status, token, showToast]);
 
   useEffect(() => { load(); }, [load]);
 
   useEffect(() => {
-    api.get("/admin/shared-ids", token).then(({ ok, data }) => {
+    api.get<ApiEnvelope<SharedIDOption[]>>("/admin/shared-ids", token).then(({ ok, data }) => {
       if (ok) setSharedCodes(data.data.filter((s: SharedIDOption) => s.isActive));
     });
   }, [token]);
 
   async function generateCandidateId() {
-    const { ok, data } = await api.get("/admin/users/generate-candidate-id", token);
+    const { ok, data } = await api.get<{ candidateId: string }>("/admin/users/generate-candidate-id", token);
     if (ok) setForm((f) => ({ ...f, candidateId: data.candidateId }));
   }
 
@@ -84,7 +84,7 @@ export default function UsersPage() {
       showToast("Password must be at least 6 characters.", "error");
       return;
     }
-    const { ok, data } = await api.post("/admin/users", {
+    const { ok, data } = await api.post<ApiEnvelope>("/admin/users", {
       name: form.name, email: form.email, password: form.password,
       sharedCode: form.sharedCode, phone: form.phone, batch: form.batch,
       accessExpiry: form.accessExpiry || undefined, restrictedAccess: form.restrictedAccess,
@@ -100,7 +100,7 @@ export default function UsersPage() {
 
   async function confirmDelete() {
     if (!deleteId) return;
-    const { ok, data } = await api.delete(`/admin/users/${deleteId}`, token);
+    const { ok, data } = await api.delete<ApiEnvelope>(`/admin/users/${deleteId}`, token);
     setDeleteId(null);
     if (!ok) { showToast(data.message || "Delete failed.", "error"); return; }
     showToast("User deleted.", "success");
