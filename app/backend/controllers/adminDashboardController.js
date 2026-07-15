@@ -4,6 +4,7 @@ const AssessmentSession = require('../models/AssessmentSession');
 const SharedUserID = require('../models/SharedUserID');
 const Setting = require('../models/Setting');
 const { generatePDF, generateCSV } = require('../utils/exportHelper');
+const escapeRegExp = require('../utils/escapeRegExp');
 
 exports.getDashboard = async (req, res, next) => {
   try {
@@ -74,7 +75,7 @@ exports.getResults = async (req, res, next) => {
     const { page = 1, limit = 25, search, dateFrom, dateTo, level, business, sortBy } = req.query;
     const filter = {};
     if (level) filter.level = level;
-    if (business) filter.recommendedBusiness = new RegExp(business, 'i');
+    if (business) filter.recommendedBusiness = new RegExp(escapeRegExp(business), 'i');
     if (dateFrom || dateTo) {
       filter.createdAt = {};
       if (dateFrom) filter.createdAt.$gte = new Date(dateFrom);
@@ -84,12 +85,9 @@ exports.getResults = async (req, res, next) => {
     let query = Result.find(filter).populate('userId', 'name email sharedCode');
 
     if (search) {
+      const re = new RegExp(escapeRegExp(search), 'i');
       const users = await User.find({
-        $or: [
-          { name: new RegExp(search, 'i') },
-          { email: new RegExp(search, 'i') },
-          { sharedCode: new RegExp(search, 'i') },
-        ]
+        $or: [{ name: re }, { email: re }, { sharedCode: re }]
       }).select('_id');
       filter.userId = { $in: users.map(u => u._id) };
       query = Result.find(filter).populate('userId', 'name email sharedCode');
@@ -136,7 +134,7 @@ exports.exportPDF = async (req, res, next) => {
     const filter = {};
     if (ids) filter._id = { $in: ids.split(',') };
     if (level) filter.level = level;
-    if (business) filter.recommendedBusiness = new RegExp(business, 'i');
+    if (business) filter.recommendedBusiness = new RegExp(escapeRegExp(business), 'i');
     if (dateFrom || dateTo) {
       filter.createdAt = {};
       if (dateFrom) filter.createdAt.$gte = new Date(dateFrom);
@@ -161,7 +159,7 @@ exports.exportCSV = async (req, res, next) => {
     const filter = {};
     if (ids) filter._id = { $in: ids.split(',') };
     if (level) filter.level = level;
-    if (business) filter.recommendedBusiness = new RegExp(business, 'i');
+    if (business) filter.recommendedBusiness = new RegExp(escapeRegExp(business), 'i');
     if (dateFrom || dateTo) {
       filter.createdAt = {};
       if (dateFrom) filter.createdAt.$gte = new Date(dateFrom);

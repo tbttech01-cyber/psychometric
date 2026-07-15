@@ -23,10 +23,11 @@ function template(body) {
 }
 
 async function sendOTPEmail(toEmail, toName, otp, type = 'user') {
-  console.log(`[EMAIL BYPASS] OTP for ${toEmail} (${toName}): ${otp}`);
-  
-  if (process.env.NODE_ENV === 'development' && (!process.env.GMAIL_USER || process.env.GMAIL_USER === 'your.email@gmail.com' || process.env.GMAIL_PASS.includes('xxxx'))) {
-    console.log('[DEV BYPASS] Using development bypass, skipped sending real email.');
+  // Never log the OTP value — logs are readable in production and this would
+  // leak live verification codes. Dev-bypass short-circuits email when SMTP
+  // isn't configured; guard GMAIL_PASS so an unset var can't throw.
+  if (process.env.NODE_ENV === 'development' && (!process.env.GMAIL_USER || process.env.GMAIL_USER === 'your.email@gmail.com' || (process.env.GMAIL_PASS || '').includes('xxxx'))) {
+    console.log('[DEV BYPASS] OTP email skipped for', toEmail);
     return;
   }
 
@@ -51,10 +52,9 @@ async function sendOTPEmail(toEmail, toName, otp, type = 'user') {
 }
 
 async function sendWelcomeEmail(toEmail, toName, sharedCode) {
-  console.log(`[EMAIL BYPASS] Welcome email for ${toEmail} (${toName}) with sharedCode: ${sharedCode}`);
-  
-  if (process.env.NODE_ENV === 'development' && (!process.env.GMAIL_USER || process.env.GMAIL_USER === 'your.email@gmail.com' || process.env.GMAIL_PASS.includes('xxxx'))) {
-    console.log('[DEV BYPASS] Using development bypass, skipped sending welcome email.');
+  // Don't log sharedCode (access code) — same log-leak reason as the OTP above.
+  if (process.env.NODE_ENV === 'development' && (!process.env.GMAIL_USER || process.env.GMAIL_USER === 'your.email@gmail.com' || (process.env.GMAIL_PASS || '').includes('xxxx'))) {
+    console.log('[DEV BYPASS] Welcome email skipped for', toEmail);
     return;
   }
 

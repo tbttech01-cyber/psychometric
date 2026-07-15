@@ -91,11 +91,23 @@ app.get(['/admin', '/admin/*'], (req, res) => {
   res.status(404).send('The admin UI has moved. Set ADMIN_WEB_URL to enable redirecting here.');
 });
 
-// Rate limiting on auth endpoints
-const authLimiter = rateLimit({ windowMs: 60 * 1000, max: 10, message: { success: false, message: 'Too many requests. Please wait a minute.' } });
-app.use('/api/v1/admin/login', authLimiter);
-app.use('/api/v1/user/login', authLimiter);
-app.use('/api/v1/user/verify-otp', authLimiter);
+// Rate limiting on auth + signup endpoints. Skipped under test so the suite's
+// rapid repeated calls from one IP don't trip the limiter.
+if (process.env.NODE_ENV !== 'test') {
+  const authLimiter = rateLimit({ windowMs: 60 * 1000, max: 10, message: { success: false, message: 'Too many requests. Please wait a minute.' } });
+  app.use('/api/v1/admin/login', authLimiter);
+  app.use('/api/v1/user/login', authLimiter);
+  app.use('/api/v1/user/verify-otp', authLimiter);
+
+  // Unauthenticated code + signup surface: throttle to blunt access-code
+  // brute-forcing and OTP-email flooding (the register resend path also has a
+  // 60s per-account cooldown). Separate instance so it doesn't share the login
+  // budget.
+  const signupLimiter = rateLimit({ windowMs: 60 * 1000, max: 15, message: { success: false, message: 'Too many requests. Please wait a minute.' } });
+  app.use('/api/v1/user/validate-code', signupLimiter);
+  app.use('/api/v1/user/select-code', signupLimiter);
+  app.use('/api/v1/user/register', signupLimiter);
+}
 
 // Routes
 app.use('/api/v1/admin', require('./routes/adminAuth'));

@@ -6,6 +6,7 @@ const AnswerOption = require('../models/AnswerOption');
 const AssessmentSession = require('../models/AssessmentSession');
 const User = require('../models/User');
 const QuestionSet = require('../models/QuestionSet');
+const escapeRegExp = require('../utils/escapeRegExp');
 
 // Reject a questionSetId that doesn't reference a real set. Returns true when
 // the value is absent/null (unassigning is allowed) or valid; sends a 400 and
@@ -21,7 +22,8 @@ async function validateQuestionSetId(questionSetId, res) {
 exports.listSharedIDs = async (req, res, next) => {
   try {
     const { search } = req.query;
-    const query = search ? { $or: [{ code: new RegExp(search, 'i') }, { label: new RegExp(search, 'i') }] } : {};
+    const searchRe = search ? new RegExp(escapeRegExp(search), 'i') : null;
+    const query = searchRe ? { $or: [{ code: searchRe }, { label: searchRe }] } : {};
     const data = await SharedUserID.find(query).sort({ createdAt: -1 })
       .populate('createdBy', 'email')
       .populate('questionSetId', 'name durationMinutes');
@@ -289,11 +291,8 @@ exports.listUsers = async (req, res, next) => {
     const { search, status, page = 1, limit = 10 } = req.query;
     const filter = {};
     if (search) {
-      filter.$or = [
-        { name: new RegExp(search, 'i') },
-        { email: new RegExp(search, 'i') },
-        { sharedCode: new RegExp(search, 'i') },
-      ];
+      const re = new RegExp(escapeRegExp(search), 'i');
+      filter.$or = [{ name: re }, { email: re }, { sharedCode: re }];
     }
     if (status === 'verified') filter.isVerified = true;
     if (status === 'unverified') filter.isVerified = false;

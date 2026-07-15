@@ -202,7 +202,7 @@ exports.startSession = async (req, res, next) => {
 
 exports.submitAssessment = async (req, res, next) => {
   try {
-    const { sessionId, answers, autoSubmitted = false } = req.body;
+    const { sessionId, answers } = req.body;
     const userId = req.user._id;
 
     const session = await AssessmentSession.findById(sessionId);
@@ -211,9 +211,16 @@ exports.submitAssessment = async (req, res, next) => {
     if (session.status !== 'in-progress')
       return res.status(400).json({ success: false, message: 'Session already submitted or expired.' });
 
-    const BUFFER_MS = 30 * 1000;
-    if (!autoSubmitted && Date.now() > session.expiresAt.getTime() + BUFFER_MS)
+    // Timing is server-authoritative — the client cannot send an `autoSubmitted`
+    // flag to waive the expiry cutoff or the all-answered rule. A submit past
+    // the grace window is rejected outright; a submit after expiry but within
+    // grace (e.g. the client's own timeout auto-submit) counts as auto-submitted
+    // and may be partial. GRACE absorbs network/clock skew on that auto-submit.
+    const GRACE_MS = 60 * 1000;
+    const now = Date.now();
+    if (now > session.expiresAt.getTime() + GRACE_MS)
       return res.status(400).json({ success: false, message: 'Assessment time has expired.' });
+    const autoSubmitted = now > session.expiresAt.getTime();
 
     // The questions this attempt is scored against are the session's frozen
     // snapshot (set at startSession), NOT the live set or all active questions
@@ -309,6 +316,19 @@ exports.submitAssessment = async (req, res, next) => {
       });
     }
 
+    // Atomically claim the session right before committing, so two concurrent
+    // submits can't both write answers/results. Result.sessionId is unique too,
+    // but this returns a clean 409 instead of a duplicate-key 500 and avoids a
+    // second UserAnswer.insertMany. All validation above ran on the still
+    // in-progress session, so an invalid submit never burns the attempt.
+    const claimed = await AssessmentSession.findOneAndUpdate(
+      { _id: sessionId, status: 'in-progress' },
+      { status: 'submitted', submittedAt: new Date(), autoSubmitted },
+      { new: true }
+    );
+    if (!claimed)
+      return res.status(409).json({ success: false, message: 'Submission already in progress or completed.' });
+
     await UserAnswer.insertMany(userAnswerDocs);
 
     // Build questionType map: questionId → typeName
@@ -336,11 +356,9 @@ exports.submitAssessment = async (req, res, next) => {
       categoryPercentages: scored.categoryPercentages,
     });
 
-    session.status = 'submitted';
-    session.submittedAt = new Date();
-    session.autoSubmitted = autoSubmitted;
-    session.totalAnswered = userAnswerDocs.filter(d => d.status === 'answered').length;
-    await session.save();
+    // Status/submittedAt/autoSubmitted were set atomically in the claim above.
+    claimed.totalAnswered = userAnswerDocs.filter(d => d.status === 'answered').length;
+    await claimed.save();
 
     await User.findByIdAndUpdate(userId, { hasCompletedAssessment: true });
 

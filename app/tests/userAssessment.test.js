@@ -6,6 +6,7 @@ const Admin = require('../backend/models/Admin');
 const Question = require('../backend/models/Question');
 const SharedUserID = require('../backend/models/SharedUserID');
 const QuestionSet = require('../backend/models/QuestionSet');
+const AssessmentSession = require('../backend/models/AssessmentSession');
 
 beforeAll(connect);
 afterAll(disconnect);
@@ -297,6 +298,39 @@ describe('Access Code gate — assessment locked until a code is selected', () =
 
     const q = await request(app).get('/api/v1/assessment/questions').set('Authorization', `Bearer ${token}`);
     expect(q.status).toBe(200);
+  });
+});
+
+describe('Assessment timing — server-authoritative expiry', () => {
+  const TIMING_EMAIL = 'timing-test-user@example.com';
+  let token, sessionId;
+
+  it('sets up a fresh in-progress session', async () => {
+    const vc = await request(app).post('/api/v1/user/validate-code').send({ code: 'TBT2024' });
+    await request(app).post('/api/v1/user/register').send({ codeId: vc.body.codeId, name: 'Timing Tester', email: TIMING_EMAIL, password: 'Password123' });
+    const user = await User.findOne({ email: TIMING_EMAIL });
+    const verify = await request(app).post('/api/v1/user/verify-otp').send({ email: TIMING_EMAIL, otp: user.otpCode });
+    token = verify.body.token;
+    await request(app).post('/api/v1/user/select-code').set('Authorization', `Bearer ${token}`).send({ code: 'TBT2024' });
+    const start = await request(app).post('/api/v1/assessment/start').set('Authorization', `Bearer ${token}`);
+    expect(start.status).toBe(201);
+    sessionId = start.body.sessionId;
+  });
+
+  it('rejects a submit past the grace window even with a forged autoSubmitted flag', async () => {
+    // Force the session well past expiry + grace, then try to submit with the
+    // client claiming autoSubmitted:true — the server must ignore that flag.
+    await AssessmentSession.updateOne({ _id: sessionId }, { expiresAt: new Date(Date.now() - 5 * 60 * 1000) });
+    const res = await request(app)
+      .post('/api/v1/assessment/submit')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ sessionId, answers: [{ questionId: '000000000000000000000000', status: 'skipped' }], autoSubmitted: true });
+    expect(res.status).toBe(400);
+    expect(res.body.message).toMatch(/time has expired/i);
+
+    // Session stays in-progress (the late submit was rejected, not consumed).
+    const session = await AssessmentSession.findById(sessionId);
+    expect(session.status).toBe('in-progress');
   });
 });
 
