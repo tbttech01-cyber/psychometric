@@ -6,6 +6,10 @@ const userAuth = require('../middleware/userAuth');
 
 router.post('/validate-code', [body('code').notEmpty()], validate, ctrl.validateCode);
 
+// Post-login access-code selection: authenticated (userAuth) because it binds
+// the chosen cohort/set to the current user and unlocks the assessment.
+router.post('/select-code', userAuth, [body('code').notEmpty()], validate, ctrl.selectCode);
+
 router.post('/register',
   [
     body('codeId').notEmpty(),

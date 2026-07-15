@@ -32,6 +32,10 @@
   <script src="/assets/js/validator.js"></script>
   <script>
     const token = api.requireAuth('user');
+    // Un-skippable Access Code step: without a validated code this login, go
+    // back to the access-code screen (the server would 403 the assessment
+    // endpoints anyway). Only check once we know there's a session to protect.
+    if (token) api.requireCode();
     const user = api.getUser();
     if (user) document.getElementById('greeting').textContent = `Welcome, ${user.name}! Take a moment to understand your strengths.`;
 
@@ -52,6 +56,9 @@
       const btn = document.getElementById('btn-start');
       btn.disabled = true; btn.textContent = 'Starting...';
       const { ok, data } = await api.post('/assessment/start', {}, token);
+      // Defensive: if the server says the Access Code step wasn't completed
+      // (e.g. a stale client flag), send the user back to enter their code.
+      if (!ok && data.code === 'CODE_REQUIRED') { api.clearCode(); window.location.href = '/user/index.html'; return; }
       if (!ok && !data.sessionId) { showToast(data.message || 'Failed to start.', 'error'); btn.disabled = false; btn.textContent = 'Start Assessment'; return; }
       // A 409 "already in progress" response still carries the existing session's
       // id/expiry — resume it instead of leaving assessment.html's localStorage
@@ -63,7 +70,7 @@
 
     document.getElementById('btn-logout').addEventListener('click', async () => {
       await api.post('/user/logout', {}, token).catch(() => {});
-      api.removeToken('user'); api.removeUser();
+      api.clearSession();
       window.location.href = '/user/login.html';
     });
   </script>

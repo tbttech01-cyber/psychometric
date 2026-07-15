@@ -26,7 +26,7 @@
       </div>
       <button id="btn-continue" class="btn btn-primary w-full">Continue</button>
       <div class="mt-4 text-center text-sm" style="color:var(--tbt-muted)">
-        Already have an account? <a href="/user/login.html" class="font-semibold" style="color:var(--tbt-primary)">Login</a>
+        Not you? <a id="link-logout" href="#" class="font-semibold" style="color:var(--tbt-primary)">Logout</a>
       </div>
     </div>
   </div>
@@ -34,6 +34,13 @@
   <script src="/assets/js/api.js"></script>
   <script src="/assets/js/validator.js"></script>
   <script>
+    // Step 2 of the flow (Login → Access Code → Question Set): this page is now
+    // behind login. Require a valid session; a candidate who has already
+    // finished goes straight to their result rather than re-entering a code.
+    const token = api.requireAuth('user');
+    const currentUser = api.getUser();
+    if (token && currentUser && currentUser.hasCompletedAssessment) window.location.href = '/user/result.html';
+
     const btn = document.getElementById('btn-continue');
     const codeInput = document.getElementById('code');
     codeInput.addEventListener('input', () => { codeInput.value = codeInput.value.toUpperCase(); });
@@ -42,11 +49,19 @@
       const code = codeInput.value.trim();
       if (!Validator.required(code)) return Validator.show('code', 'Access code is required.');
       btn.disabled = true; btn.textContent = 'Checking...';
-      const { ok, data } = await api.post('/user/validate-code', { code });
+      // Authenticated select-code: validates the code AND binds its question set
+      // to this user server-side, so the assessment loads that set dynamically.
+      const { ok, data } = await api.post('/user/select-code', { code }, token);
       btn.disabled = false; btn.textContent = 'Continue';
       if (!ok) { Validator.show('code', data.message || 'Invalid code.'); return; }
-      localStorage.setItem('tbt_code_id', data.codeId);
-      localStorage.setItem('tbt_code', code);
+      api.setCode(data.codeId, data.code);
+      window.location.href = '/user/welcome.html';
+    });
+
+    document.getElementById('link-logout').addEventListener('click', async (e) => {
+      e.preventDefault();
+      await api.post('/user/logout', {}, token).catch(() => {});
+      api.clearSession();
       window.location.href = '/user/login.html';
     });
   </script>

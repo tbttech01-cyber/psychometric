@@ -15,6 +15,30 @@ exports.validateCode = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
+// Post-login access-code step (authenticated). Validates the code and BINDS the
+// chosen cohort to the already-logged-in user, so the code entered after login —
+// not the one used at registration — drives which QuestionSet the assessment
+// draws from (see assessmentController.resolveUserSet). Flips the per-login
+// `codeSelected` gate that /assessment/questions and /start require, which is
+// what makes the Access Code step un-skippable server-side.
+exports.selectCode = async (req, res, next) => {
+  try {
+    const code = (req.body.code || '').trim().toUpperCase();
+    const shared = await SharedUserID.findOne({ code });
+    if (!shared) return res.status(404).json({ success: false, message: 'Invalid access code.' });
+    if (!shared.isActive) return res.status(403).json({ success: false, message: 'This access code is no longer active.' });
+    if (!shared.questionSetId)
+      return res.status(409).json({ success: false, message: 'No assessment has been assigned to this access code. Please contact your administrator.' });
+
+    req.user.sharedUserID = shared._id;
+    req.user.sharedCode = shared.code;
+    req.user.codeSelected = true;
+    await req.user.save();
+
+    res.json({ success: true, codeId: shared._id, code: shared.code, label: shared.label });
+  } catch (err) { next(err); }
+};
+
 exports.register = async (req, res, next) => {
   try {
     const { codeId, name, email, password } = req.body;
@@ -64,6 +88,9 @@ exports.verifyOTP = async (req, res, next) => {
     user.otpCode = undefined;
     user.otpExpiry = undefined;
     user.activeToken = token;
+    // A freshly verified user still goes through the Access Code step before the
+    // assessment unlocks (Register → Verify → Access Code → Question Set).
+    user.codeSelected = false;
     await user.save();
 
     await SharedUserID.findByIdAndUpdate(user.sharedUserID, { $inc: { usageCount: 1 } });
@@ -88,6 +115,9 @@ exports.login = async (req, res, next) => {
 
     const token = jwt.sign({ id: user._id, role: 'user' }, process.env.JWT_SECRET, { expiresIn: '2h' });
     user.activeToken = token;
+    // Force the Access Code step every login: the assessment stays locked until
+    // /user/select-code sets this true again for the new session.
+    user.codeSelected = false;
     await user.save();
 
     res.json({

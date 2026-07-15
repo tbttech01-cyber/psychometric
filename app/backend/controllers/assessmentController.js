@@ -91,6 +91,11 @@ exports.getQuestions = async (req, res, next) => {
       orderedIds = session.questionIds.map(id => id.toString());
       remainingSeconds = Math.max(0, Math.ceil((session.expiresAt - new Date()) / 1000));
     } else {
+      // No attempt under way yet: the candidate must have completed the
+      // post-login Access Code step. Enforced here (not just client-side) so
+      // question data can never be fetched by skipping straight to this page.
+      if (!req.user.codeSelected)
+        return res.status(403).json({ success: false, code: 'CODE_REQUIRED', message: 'Please enter your access code to begin.' });
       const resolved = await resolveUserSet(req.user);
       if (resolved.error) return res.status(403).json({ success: false, message: resolved.error });
       orderedIds = resolved.orderedIds;
@@ -165,6 +170,12 @@ exports.startSession = async (req, res, next) => {
     const inProgress = await AssessmentSession.findOne({ userId, status: 'in-progress' });
     if (inProgress)
       return res.status(409).json({ success: false, sessionId: inProgress._id, expiresAt: inProgress.expiresAt, message: 'Assessment already in progress.' });
+
+    // A new attempt requires the post-login Access Code step to have run this
+    // session — the same gate as getQuestions, so the assessment can't start
+    // without it. (Resuming an existing attempt is handled by the 409 above.)
+    if (!req.user.codeSelected)
+      return res.status(403).json({ success: false, code: 'CODE_REQUIRED', message: 'Please enter your access code to begin.' });
 
     // Resolve the user's assigned set and snapshot it onto the session: the
     // timer comes from the set's own durationMinutes, and questionIds freeze

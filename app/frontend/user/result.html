@@ -199,7 +199,7 @@
 
     document.getElementById('btn-logout').addEventListener('click', async () => {
       await api.post('/user/logout', {}, token).catch(() => {});
-      api.removeToken('user'); api.removeUser();
+      api.clearSession();
       window.location.href = '/user/login.html';
     });
 

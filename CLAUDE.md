@@ -100,6 +100,9 @@ backend/
     scoreCalculator.js    # aggregates evaluationEngine output into category + dimension results
     businessRecommendationEngine.js # rule-based business suggestions, driven by dimension percentages
     exportHelper.js       # PDF (pdfkit) and CSV (json2csv) export
+    businessMatrixSample.js # sample BusinessMatrixCell rows for the "Load sample data" admin button
+    ttsSettings.js        # reads/normalizes the `tts_config` Setting (voice/speed/on-off)
+    edgeTts.js            # Microsoft Edge neural-TTS client (msedge-tts) — used offline by generateQuestionAudio.js and the admin TTS endpoint
   scripts/
     seed.js                # main seeder — admin account, question types, questions, answer options
     seedData.js            # static seed data referenced by seed.js
@@ -120,6 +123,7 @@ backend/
 
 ```
 frontend/
+  index.html  # root redirect stub — window.location.replace('/user/index.html'); this is what `/` serves
   user/       # 7 HTML pages: index, register, otp-register, login, welcome, assessment, result
   src/tailwind.css  # Tailwind source — compiled to assets/css/tailwind.css by `npm run build`
   build-env.js      # writes assets/js/env.js (window.TBT_API_BASE) from the TBT_API_BASE env var
@@ -134,13 +138,14 @@ Admin and user auth are **not** symmetric:
 
 - **Admin** (`routes/adminAuth.js` / `controllers/adminAuthController.js`): direct `email + password` → JWT. No OTP step. The admin document tracks a single `activeToken`, which is cleared on logout or password change (effectively single-session).
 - **User** (`routes/userAuth.js` / `controllers/userAuthController.js`): OTP-over-email — POST registration → server emails a 6-digit OTP → client POSTs OTP to `/verify-otp` → JWT issued. `/resend-otp` is rate-limited to one request per 60 seconds server-side.
+- **Candidate flow — Login → Access Code → Question Set**: the entry point is `user/login.html` (the root stub `frontend/index.html` and `/` redirect there). After a successful login the candidate lands on `user/index.html`, which is the **post-login access-code screen** (there is no separate `access-code.html`) — it is `requireAuth`-guarded. Entering a code hits the **authenticated** `POST /user/select-code`, which validates the code AND **(re)binds `user.sharedUserID`/`sharedCode` to that cohort**, so the code entered *after login* — not the registration code — determines which QuestionSet the attempt draws from (`resolveUserSet`). The access-code step is **un-skippable**: `login`/`verify-otp` reset a per-login `User.codeSelected` flag to `false`, and `assessmentController.getQuestions`/`startSession` return `403 {code:'CODE_REQUIRED'}` until `select-code` sets it `true` (client mirrors this with the `tbt_code_selected` localStorage flag + `api.requireCode()` guard on `welcome.html`). New users register via a **Register link on `login.html`**; `register.html` now **self-collects the access code** (validates it via the public `POST /user/validate-code`, then registers) rather than depending on the access-code page being visited first, and `verify-otp` routes the new user through the same access-code screen (Register → Verify → Access Code → Question Set). Logout / session-expiry (`api.clearSession()`, plus a central 401 handler in `api.js` that bounces authenticated 401s to login) clears the token, cached user, access-code state, and in-progress session.
 - Both `/api/v1/admin/login`, `/api/v1/user/login`, and `/api/v1/user/verify-otp` additionally sit behind a shared 10-requests/minute rate limiter (`backend/app.js`).
 - Admin and user JWTs are verified by separate middleware (`middleware/adminAuth.js` / `middleware/userAuth.js`) and carry a `role` claim.
 - CORS is allowlist-based (`backend/app.js`): origins from `USER_APP_URL`, `ADMIN_APP_URL`, and `ADMIN_WEB_URL` env vars (the last one is for the standalone `admin-web` Next.js frontend calling the API cross-origin instead of being served statically) are always allowed, and `http://localhost:*` / any `*.vercel.app` origin is allowed unconditionally on top of that allowlist (so preview deploys work without an env var update).
 
 ### Key Domain Concepts
 
-- **SharedUserID** — an alphanumeric access code given to users; scoped to a particular assessment cohort. Carries a `questionSetId` — the **QuestionSet that cohort's users are assessed on** (nullable; users of an unassigned code are blocked at `/start`).
+- **SharedUserID** — an alphanumeric access code given to users; scoped to a particular assessment cohort. Carries a `questionSetId` — the **QuestionSet that cohort's users are assessed on** (nullable; selecting an unassigned code is rejected at `POST /user/select-code` with 409, and `/start` stays blocked because the access-code gate was never passed).
 - **QuestionSet** — a named, admin-managed group of questions with its own `durationMinutes` (per-set timer). `questionIds` is an **ordered array of Question refs where array position IS the per-set order** (decoupled from the globally-unique `Question.order` — the same question can sit at different positions in different sets). Questions are **shared**: a question can belong to many sets, and deleting a set never deletes its questions (deletion is blocked, 409, while any access code still references the set). Managed via `adminQuestionSets.js`; reordering is just a PUT with the array in a new sequence (no separate reorder endpoint).
 - **QuestionType** — the category grouping shown to admins/users (e.g., verbal, numerical). Each has a unique `order`. Distinct from `Question.questionType` below — the naming collision is real, don't conflate them.
 - **Question** — belongs to a `QuestionType` category (`typeId`) and additionally carries a `questionType` enum describing its *answer shape*: `LIKERT_SCALE`, `SITUATIONAL`, `NUMERICAL_ABILITY`, `PERCENTAGE_TYPE`, `PUZZLE_TYPE`, `LOGICAL_ABILITY`, `VERBAL_ABILITY`, `IMAGE_BASED`, `MULTI_SELECT`, `RANKING` (see `models/Question.js`'s `QUESTION_TYPES`). Each question also has a `dimension` (one of 12 psychometric traits in `Question.DIMENSIONS` — Communication, Leadership, Problem Solving, etc.) that its score rolls up into for the report's dimension breakdown, independent of its `QuestionType` category. Type-specific fields (`correctOptionId`, `correctOptionIds`, `idealOrder`, `scoringMode`) are all on one schema rather than split across models.

@@ -19,6 +19,11 @@
       <p class="text-sm mb-5" style="color:var(--tbt-muted)">Register to take your psychometric assessment</p>
 
       <div class="mb-3">
+        <label class="block text-sm font-semibold mb-1" for="code">Access Code</label>
+        <input id="code" type="text" placeholder="e.g. TBT2024" maxlength="20" class="w-full border-2 rounded-lg px-4 py-2.5 uppercase focus:outline-none" style="border-color:var(--tbt-border)" />
+        <p id="code-error" class="text-red-500 text-xs mt-1 hidden"></p>
+      </div>
+      <div class="mb-3">
         <label class="block text-sm font-semibold mb-1" for="name">Full Name</label>
         <input id="name" type="text" placeholder="Your full name" class="w-full border-2 rounded-lg px-4 py-2.5 focus:outline-none" style="border-color:var(--tbt-border)" />
         <p id="name-error" class="text-red-500 text-xs mt-1 hidden"></p>
@@ -44,15 +49,17 @@
   <script src="/assets/js/api.js"></script>
   <script src="/assets/js/validator.js"></script>
   <script>
-    const codeId = localStorage.getItem('tbt_code_id');
-    if (!codeId) window.location.href = '/user/index.html';
+    const codeInput = document.getElementById('code');
+    codeInput.addEventListener('input', () => { codeInput.value = codeInput.value.toUpperCase(); });
 
     document.getElementById('btn-register').addEventListener('click', async () => {
-      Validator.clearAll(['name','email','password']);
+      Validator.clearAll(['code','name','email','password']);
+      const code = codeInput.value.trim();
       const name = document.getElementById('name').value.trim();
       const email = document.getElementById('email').value.trim();
       const password = document.getElementById('password').value;
       let valid = true;
+      if (!Validator.required(code)) { Validator.show('code','Access code is required.'); valid = false; }
       if (!Validator.required(name)) { Validator.show('name','Name is required.'); valid = false; }
       if (!Validator.email(email)) { Validator.show('email','Valid email required.'); valid = false; }
       if (!Validator.password(password)) { Validator.show('password','Password must be at least 6 characters.'); valid = false; }
@@ -60,7 +67,15 @@
 
       const btn = document.getElementById('btn-register');
       btn.disabled = true; btn.textContent = 'Registering...';
-      const { ok, data } = await api.post('/user/register', { codeId, name, email, password });
+      // Resolve the access code to its id first (public validation), then
+      // register against it — registration is still cohort-scoped by the code.
+      const codeRes = await api.post('/user/validate-code', { code });
+      if (!codeRes.ok) {
+        Validator.show('code', codeRes.data.message || 'Invalid access code.');
+        btn.disabled = false; btn.textContent = 'Register';
+        return;
+      }
+      const { ok, data } = await api.post('/user/register', { codeId: codeRes.data.codeId, name, email, password });
       btn.disabled = false; btn.textContent = 'Register';
 
       if (!ok) { showToast(data.message || 'Registration failed.', 'error'); return; }

@@ -101,6 +101,15 @@ describe('User registration + OTP', () => {
     expect(res.body.token).toBeTruthy();
     userToken = res.body.token;
   });
+
+  it('selects the access code after login to unlock the assessment', async () => {
+    const res = await request(app)
+      .post('/api/v1/user/select-code')
+      .set('Authorization', `Bearer ${userToken}`)
+      .send({ code: 'TBT2024' });
+    expect(res.status).toBe(200);
+    expect(res.body.codeId).toBeTruthy();
+  });
 });
 
 describe('Assessment flow — all 10 question types', () => {
@@ -210,17 +219,34 @@ describe('Question Set — cohort assignment and per-set timer', () => {
     await request(app).post('/api/v1/user/register').send({ codeId, name: 'Cohort Tester', email, password: 'Password123' });
     const user = await User.findOne({ email });
     const res = await request(app).post('/api/v1/user/verify-otp').send({ email, otp: user.otpCode });
-    return res.body.token;
+    const token = res.body.token;
+    // Complete the post-login Access Code step so the assessment unlocks.
+    await request(app).post('/api/v1/user/select-code').set('Authorization', `Bearer ${token}`).send({ code });
+    return token;
   }
 
-  it('blocks /start when the cohort has no question set assigned', async () => {
+  it('blocks the access-code step when the cohort has no question set assigned', async () => {
     const admin = await Admin.findOne();
     await SharedUserID.create({ code: 'NOSETCODE', label: 'No set cohort', createdBy: admin._id, questionSetId: null });
-    const token = await tokenForCode('NOSETCODE', 'noset-user@example.com');
 
+    // Register + verify without selecting a code (tokenForCode would fail the
+    // select step here, which is exactly what this test asserts).
+    const vc = await request(app).post('/api/v1/user/validate-code').send({ code: 'NOSETCODE' });
+    await request(app).post('/api/v1/user/register').send({ codeId: vc.body.codeId, name: 'No Set Tester', email: 'noset-user@example.com', password: 'Password123' });
+    const user = await User.findOne({ email: 'noset-user@example.com' });
+    const verify = await request(app).post('/api/v1/user/verify-otp').send({ email: 'noset-user@example.com', otp: user.otpCode });
+    const token = verify.body.token;
+
+    // The block now surfaces at the access-code step: a valid code with no
+    // assessment assigned is rejected before it can be selected.
+    const sel = await request(app).post('/api/v1/user/select-code').set('Authorization', `Bearer ${token}`).send({ code: 'NOSETCODE' });
+    expect(sel.status).toBe(409);
+    expect(sel.body.message).toMatch(/no assessment has been assigned/i);
+
+    // And /start stays blocked because the access-code gate was never passed.
     const res = await request(app).post('/api/v1/assessment/start').set('Authorization', `Bearer ${token}`);
     expect(res.status).toBe(403);
-    expect(res.body.message).toMatch(/no assessment has been assigned/i);
+    expect(res.body.code).toBe('CODE_REQUIRED');
   });
 
   it('sizes the session timer from the assigned set, not the global default', async () => {
@@ -242,6 +268,38 @@ describe('Question Set — cohort assignment and per-set timer', () => {
   });
 });
 
+describe('Access Code gate — assessment locked until a code is selected', () => {
+  const GATE_EMAIL = 'gate-test-user@example.com';
+  let token;
+
+  it('registers + verifies a user who has not yet selected a code', async () => {
+    const vc = await request(app).post('/api/v1/user/validate-code').send({ code: 'TBT2024' });
+    await request(app).post('/api/v1/user/register').send({ codeId: vc.body.codeId, name: 'Gate Tester', email: GATE_EMAIL, password: 'Password123' });
+    const user = await User.findOne({ email: GATE_EMAIL });
+    const res = await request(app).post('/api/v1/user/verify-otp').send({ email: GATE_EMAIL, otp: user.otpCode });
+    token = res.body.token;
+    expect(token).toBeTruthy();
+  });
+
+  it('blocks /questions and /start until the access-code step runs (cannot be skipped)', async () => {
+    const q = await request(app).get('/api/v1/assessment/questions').set('Authorization', `Bearer ${token}`);
+    expect(q.status).toBe(403);
+    expect(q.body.code).toBe('CODE_REQUIRED');
+
+    const s = await request(app).post('/api/v1/assessment/start').set('Authorization', `Bearer ${token}`);
+    expect(s.status).toBe(403);
+    expect(s.body.code).toBe('CODE_REQUIRED');
+  });
+
+  it('unlocks the assessment once a valid access code is selected', async () => {
+    const sel = await request(app).post('/api/v1/user/select-code').set('Authorization', `Bearer ${token}`).send({ code: 'TBT2024' });
+    expect(sel.status).toBe(200);
+
+    const q = await request(app).get('/api/v1/assessment/questions').set('Authorization', `Bearer ${token}`);
+    expect(q.status).toBe(200);
+  });
+});
+
 describe('Assessment audio — candidate /questions payload', () => {
   const AUDIO_URI = 'data:audio/mpeg;base64,SGVsbG8gYXVkaW8=';
   let touchedIds = [];
@@ -251,7 +309,9 @@ describe('Assessment audio — candidate /questions payload', () => {
     await request(app).post('/api/v1/user/register').send({ codeId: vc.body.codeId, name: 'Audio Tester', email, password: 'Password123' });
     const user = await User.findOne({ email });
     const res = await request(app).post('/api/v1/user/verify-otp').send({ email, otp: user.otpCode });
-    return res.body.token;
+    const token = res.body.token;
+    await request(app).post('/api/v1/user/select-code').set('Authorization', `Bearer ${token}`).send({ code });
+    return token;
   }
 
   // Reset the borrowed questions so the audio flags don't leak into other suites.

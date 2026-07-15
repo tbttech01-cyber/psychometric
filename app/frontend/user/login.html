@@ -36,15 +36,12 @@
   <script src="/assets/js/api.js"></script>
   <script src="/assets/js/validator.js"></script>
   <script>
+    // Login is the entry point. An already-authenticated user skips straight to
+    // their next step: results if they've finished, otherwise the Access Code
+    // screen (index.html) — never past it.
     if (api.getToken('user')) {
       const user = api.getUser();
-      window.location.href = user && user.hasCompletedAssessment ? '/user/result.html' : '/user/welcome.html';
-    }
-    // Registration needs an access code (collected on index.html). If someone
-    // reached login directly without one, send the Register link back to the
-    // access-code page first so the code-first flow is preserved.
-    if (!localStorage.getItem('tbt_code_id')) {
-      document.getElementById('link-register').setAttribute('href', '/user/index.html');
+      window.location.href = user && user.hasCompletedAssessment ? '/user/result.html' : '/user/index.html';
     }
     document.getElementById('btn-login').addEventListener('click', async () => {
       Validator.clearAll(['email','password']);
@@ -61,7 +58,10 @@
       if (!ok) { showToast(data.message || 'Login failed.', 'error'); return; }
       api.setToken('user', data.token);
       api.setUser(data.user);
-      window.location.href = data.user.hasCompletedAssessment ? '/user/result.html' : '/user/welcome.html';
+      // Every login starts a fresh Access Code step (the server also reset the
+      // gate), so clear any stale code state before routing there.
+      api.clearCode();
+      window.location.href = data.user.hasCompletedAssessment ? '/user/result.html' : '/user/index.html';
     });
   </script>
 </body>
