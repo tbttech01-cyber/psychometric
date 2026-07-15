@@ -87,4 +87,42 @@ const api = {
     localStorage.removeItem('tbt_session_id');
     localStorage.removeItem('tbt_session_expires');
   },
+
+  // Shared logout-with-confirmation used by the candidate pages (welcome,
+  // access-code, result). Injects a themed modal on first use; Cancel /
+  // overlay-click / Escape dismiss it, Confirm revokes the token, clears
+  // session state, and returns to login. Duplicate-click safe.
+  logoutWithConfirm: (token) => {
+    let modal = document.getElementById('tbt-logout-modal');
+    if (modal) { modal.classList.remove('hidden'); modal.querySelector('[data-act="cancel"]').focus(); return; }
+    modal = document.createElement('div');
+    modal.id = 'tbt-logout-modal';
+    modal.className = 'fixed inset-0 z-50 flex items-center justify-center p-4';
+    modal.style.background = 'rgba(0,0,0,0.5)';
+    modal.setAttribute('role', 'dialog');
+    modal.setAttribute('aria-modal', 'true');
+    modal.setAttribute('aria-label', 'Confirm logout');
+    modal.innerHTML =
+      '<div class="card w-full max-w-sm text-center">' +
+      '<div class="text-4xl mb-3">👋</div>' +
+      '<h3 class="text-lg font-bold mb-1" style="color:var(--tbt-primary)">Logout?</h3>' +
+      '<p class="text-sm mb-5" style="color:var(--tbt-muted)">Are you sure you want to logout?</p>' +
+      '<div class="flex gap-3">' +
+      '<button data-act="cancel" class="btn btn-outline flex-1">Cancel</button>' +
+      '<button data-act="confirm" class="btn btn-primary flex-1">Yes, Logout</button>' +
+      '</div></div>';
+    document.body.appendChild(modal);
+    const close = () => modal.classList.add('hidden');
+    modal.querySelector('[data-act="cancel"]').addEventListener('click', close);
+    modal.addEventListener('click', (e) => { if (e.target === modal) close(); });
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !modal.classList.contains('hidden')) close(); });
+    modal.querySelector('[data-act="confirm"]').addEventListener('click', async () => {
+      const b = modal.querySelector('[data-act="confirm"]');
+      b.disabled = true; b.textContent = 'Logging out...';
+      await api.post('/user/logout', {}, token).catch(() => {});
+      api.clearSession();
+      window.location.href = '/user/login.html';
+    });
+    modal.querySelector('[data-act="cancel"]').focus();
+  },
 };

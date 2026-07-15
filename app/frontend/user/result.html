@@ -17,19 +17,6 @@
     </div>
   </header>
 
-  <!-- Logout confirmation -->
-  <div id="logout-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4" style="background:rgba(0,0,0,0.5)" role="dialog" aria-modal="true" aria-labelledby="logout-title">
-    <div class="card w-full max-w-sm text-center">
-      <div class="text-4xl mb-3">👋</div>
-      <h3 id="logout-title" class="text-lg font-bold mb-1" style="color:var(--tbt-primary)">Logout?</h3>
-      <p class="text-sm mb-5" style="color:var(--tbt-muted)">Are you sure you want to logout?</p>
-      <div class="flex gap-3">
-        <button id="logout-cancel" class="btn btn-outline flex-1">Cancel</button>
-        <button id="logout-confirm" class="btn btn-primary flex-1">Yes, Logout</button>
-      </div>
-    </div>
-  </div>
-
   <main class="max-w-4xl mx-auto px-4 py-8">
     <div id="loading" class="text-center py-20" role="status" aria-live="polite"><div class="spinner mx-auto mb-4"></div><p style="color:var(--tbt-muted)">Loading results...</p></div>
     <div id="result-content" class="hidden space-y-6">
@@ -216,21 +203,8 @@
       });
     }
 
-    // Logout is confirmed via a modal instead of firing immediately.
-    const logoutModal = document.getElementById('logout-modal');
-    const openLogout = () => { logoutModal.classList.remove('hidden'); document.getElementById('logout-cancel').focus(); };
-    const closeLogout = () => logoutModal.classList.add('hidden');
-    document.getElementById('btn-logout').addEventListener('click', openLogout);
-    document.getElementById('logout-cancel').addEventListener('click', closeLogout);
-    logoutModal.addEventListener('click', (e) => { if (e.target === logoutModal) closeLogout(); });
-    document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !logoutModal.classList.contains('hidden')) closeLogout(); });
-    document.getElementById('logout-confirm').addEventListener('click', async () => {
-      const btn = document.getElementById('logout-confirm');
-      btn.disabled = true; btn.textContent = 'Logging out...';   // prevent duplicate clicks
-      await api.post('/user/logout', {}, token).catch(() => {});
-      api.clearSession();
-      window.location.href = '/user/login.html';
-    });
+    // Logout is confirmed via a shared modal (see api.logoutWithConfirm).
+    document.getElementById('btn-logout').addEventListener('click', () => api.logoutWithConfirm(token));
 
     loadResult();
   </script>

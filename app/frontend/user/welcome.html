@@ -69,9 +69,7 @@
     });
 
     document.getElementById('btn-logout').addEventListener('click', async () => {
-      await api.post('/user/logout', {}, token).catch(() => {});
-      api.clearSession();
-      window.location.href = '/user/login.html';
+      api.logoutWithConfirm(token);
     });
   </script>
 </body>

@@ -61,11 +61,9 @@
       window.location.href = '/user/welcome.html';
     });
 
-    document.getElementById('link-logout').addEventListener('click', async (e) => {
+    document.getElementById('link-logout').addEventListener('click', (e) => {
       e.preventDefault();
-      await api.post('/user/logout', {}, token).catch(() => {});
-      api.clearSession();
-      window.location.href = '/user/login.html';
+      api.logoutWithConfirm(token);
     });
   </script>
 </body>
