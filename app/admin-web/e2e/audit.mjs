@@ -118,67 +118,102 @@ try {
     console.log("\n== Admin pages SKIPPED (set ADMIN_EMAIL + ADMIN_PASSWORD) ==");
   }
 
-  // ---- 3. Assessment flow --------------------------------------------------
+  // ---- 3. Assessment flow (HEADED — pauses for manual OTP) -----------------
+  // Admin login needs no OTP; candidate register/login does. This section runs
+  // in a VISIBLE browser so you can type the OTP when prompted. The "pause" is
+  // a long waitForURL: when you finish OTP in the window, the app navigates and
+  // the script resumes automatically. TEST_USER_MODE = "register" (default,
+  // triggers OTP) or "login" (verified user; still pauses if an OTP appears).
   if (process.env.TEST_CODE && process.env.TEST_USER_EMAIL && process.env.TEST_USER_PASSWORD) {
-    console.log("\n== Candidate assessment flow ==");
-    const c = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+    console.log("\n== Candidate assessment flow — a REAL browser window will open ==");
+    const hb = await chromium.launch({ headless: false, slowMo: 120 });
+    const c = await hb.newContext({ viewport: { width: 1280, height: 900 } });
     const p = await c.newPage();
-    try {
-      await p.goto(`${USER}/user/login.html`, { waitUntil: "networkidle" });
-      await p.fill("#email", process.env.TEST_USER_EMAIL);
-      await p.fill("#password", process.env.TEST_USER_PASSWORD);
-      await p.click("#btn-login");
-      await p.waitForURL("**/user/index.html", { timeout: 20000 });
-      step("user login -> access code screen", true);
+    const mode = (process.env.TEST_USER_MODE || "register").toLowerCase();
+    const OTP_WAIT_MS = 300000; // 5 min for you to fetch the email + type the OTP
 
+    async function waitForManualOtp() {
+      console.log("\n  ================= ACTION REQUIRED =================");
+      console.log("  An OTP was sent. TYPE IT IN THE OPEN BROWSER WINDOW and click Verify.");
+      console.log("  Waiting up to 5 minutes; the script continues automatically after you verify.");
+      console.log("  ==================================================\n");
+      await p.waitForURL("**/user/index.html", { timeout: OTP_WAIT_MS });
+    }
+
+    try {
+      if (mode === "register") {
+        await p.goto(`${USER}/user/register.html`, { waitUntil: "networkidle" });
+        await p.fill("#code", process.env.TEST_CODE);
+        await p.fill("#name", process.env.TEST_USER_NAME || "E2E Tester");
+        await p.fill("#email", process.env.TEST_USER_EMAIL);
+        await p.fill("#password", process.env.TEST_USER_PASSWORD);
+        await p.click("#btn-register");
+        await p.waitForURL("**/user/otp-register.html", { timeout: 20000 });
+        step("registration submitted -> OTP screen", true);
+        await waitForManualOtp();
+        step("OTP verified manually -> access code screen", true);
+      } else {
+        await p.goto(`${USER}/user/login.html`, { waitUntil: "networkidle" });
+        await p.fill("#email", process.env.TEST_USER_EMAIL);
+        await p.fill("#password", process.env.TEST_USER_PASSWORD);
+        await p.click("#btn-login");
+        try {
+          await p.waitForURL("**/user/index.html", { timeout: 15000 });
+          step("user login -> access code screen", true);
+        } catch {
+          if (/otp-register\.html/.test(p.url())) { await waitForManualOtp(); step("OTP verified manually -> access code screen", true); }
+          else throw new Error("login did not reach access-code screen; url=" + p.url());
+        }
+      }
+
+      // Access code -> welcome
       await p.fill("#code", process.env.TEST_CODE);
       await p.click("#btn-continue");
       await p.waitForURL("**/user/welcome.html", { timeout: 20000 });
       step("access code accepted -> welcome", true);
 
+      // Start -> assessment
       await p.click("#btn-start");
       await p.waitForURL("**/user/assessment.html", { timeout: 20000 });
       step("assessment started", true);
       await p.waitForTimeout(1500);
 
-      // Answer each page: pick the first available option / checkbox, then Next
-      // until the Submit button shows. Best-effort across question types.
+      // Answer each page (first radio / checkbox), Next until Submit appears.
       let guard = 0;
-      while (guard++ < 60) {
-        const next = p.locator("#btn-next");
-        const submit = p.locator("#btn-submit");
-        const submitVisible = await submit.isVisible().catch(() => false);
-        // choose an answer if inputs exist
+      while (guard++ < 80) {
+        const submitVisible = await p.locator("#btn-submit").isVisible().catch(() => false);
+        const nextVisible = await p.locator("#btn-next").isVisible().catch(() => false);
         const radio = p.locator('input[type="radio"]:visible').first();
         const check = p.locator('input[type="checkbox"]:visible').first();
         if (await radio.count()) await radio.check().catch(() => {});
         else if (await check.count()) await check.check().catch(() => {});
-        if (submitVisible && !(await next.isVisible().catch(() => false))) break;
-        if (await next.isVisible().catch(() => false)) { await next.click().catch(() => {}); await p.waitForTimeout(400); }
+        if (submitVisible && !nextVisible) break;
+        if (nextVisible) { await p.locator("#btn-next").click().catch(() => {}); await p.waitForTimeout(400); }
         else break;
       }
-      const submitBtn = p.locator("#btn-submit");
-      if (await submitBtn.isVisible().catch(() => false)) {
-        await submitBtn.click();
-        await p.waitForURL("**/user/result.html", { timeout: 30000 });
+
+      if (await p.locator("#btn-submit").isVisible().catch(() => false)) {
+        await p.locator("#btn-submit").click();
+        await p.waitForURL("**/user/result.html", { timeout: 40000 });
         step("assessment submitted -> result page", true);
         await p.waitForTimeout(1500);
         const hasContent = await p.locator("#result-content").isVisible().catch(() => false);
         const bodyText = await p.locator("body").innerText().catch(() => "");
-        const badValues = /(NaN|undefined|\$\{)/.test(bodyText);
-        step("result page renders content", hasContent && !badValues, badValues ? "found NaN/undefined" : "");
+        const bad = /(NaN|undefined|\$\{|\[object)/.test(bodyText);
+        step("result renders (no NaN/undefined)", hasContent && !bad, bad ? "found NaN/undefined/placeholder" : "");
+        await p.screenshot({ path: path.join(OUT, "assessment-result.png"), fullPage: true });
         // Refresh — result must persist.
         await p.reload({ waitUntil: "networkidle" });
         await p.waitForTimeout(1200);
-        const afterRefresh = await p.locator("#result-content").isVisible().catch(() => false);
-        step("result persists after refresh", afterRefresh);
+        step("result persists after refresh", await p.locator("#result-content").isVisible().catch(() => false));
       } else {
         step("assessment submit", false, "submit button never appeared");
       }
     } catch (e) {
-      step("assessment flow", false, String(e).slice(0, 120));
+      step("assessment flow", false, String(e).slice(0, 140));
     } finally {
       await c.close();
+      await hb.close();
     }
   } else {
     console.log("\n== Assessment flow SKIPPED (set TEST_CODE + TEST_USER_EMAIL + TEST_USER_PASSWORD) ==");
