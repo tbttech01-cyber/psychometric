@@ -100,6 +100,42 @@ jobs:
       - run: vercel build --prod --token="$VERCEL_TOKEN"
       - run: vercel deploy --prebuilt --prod --token="$VERCEL_TOKEN"
 
+  deploy-user-web:
+    name: Deploy candidate frontend to Vercel (production)
+    needs: test-backend
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: production
+
+    defaults:
+      run:
+        working-directory: app/frontend
+
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      # Identifiers only (not credentials) — same values as this project's
+      # gitignored app/frontend/.vercel/project.json ("user-web"). This is the
+      # standalone candidate frontend (served cross-origin from the API); it is
+      # a SEPARATE Vercel project from the backend, so it needs its own deploy
+      # job — a backend deploy never updates it. `vercel pull` brings this
+      # project's TBT_API_BASE env var, and `vercel build` runs its npm build
+      # (build-env.js) so the API origin is baked into assets/js/env.js.
+      VERCEL_ORG_ID: team_RUmkOwJ67yFsJKTGJys0u2rD
+      VERCEL_PROJECT_ID: prj_Ogk540OpdpbAnP8iPaqVQBSwDS34
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - run: npm install --global vercel@latest
+
+      - run: vercel pull --yes --environment=production --token="$VERCEL_TOKEN"
+      - run: vercel build --prod --token="$VERCEL_TOKEN"
+      - run: vercel deploy --prebuilt --prod --token="$VERCEL_TOKEN"
+
   deploy-admin-web:
     name: Deploy admin-web to Vercel (production)
     needs: build-admin-web
