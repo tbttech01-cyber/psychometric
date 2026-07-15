@@ -163,6 +163,12 @@ jobs:
       # gitignored app/admin-web/.vercel/project.json.
       VERCEL_ORG_ID: team_RUmkOwJ67yFsJKTGJys0u2rD
       VERCEL_PROJECT_ID: prj_ol6ircMQb1ZentvThTxPVUEMW4lY
+      # Backend API origin baked into the Next build (NEXT_PUBLIC_* is inlined at
+      # build time). Set here so a production build can NEVER fall back to the
+      # localhost default in lib/api.ts, regardless of dashboard config.
+      # TODO: switch to https://api.tamilbusinesstribe.com/api/v1 once that
+      # custom domain is configured on the backend project.
+      NEXT_PUBLIC_API_URL: https://backend-three-peach-48.vercel.app/api/v1
 
     steps:
       - uses: actions/checkout@v4
@@ -174,5 +180,7 @@ jobs:
       - run: npm install --global vercel@latest
 
       - run: vercel pull --yes --environment=production --token="$VERCEL_TOKEN"
+      # vercel build runs `next build` with this step's environment, so the
+      # job-level NEXT_PUBLIC_API_URL above is inlined into the client bundle.
       - run: vercel build --prod --token="$VERCEL_TOKEN"
       - run: vercel deploy --prebuilt --prod --token="$VERCEL_TOKEN"
