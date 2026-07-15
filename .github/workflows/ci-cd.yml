@@ -122,6 +122,11 @@ jobs:
       # (build-env.js) so the API origin is baked into assets/js/env.js.
       VERCEL_ORG_ID: team_RUmkOwJ67yFsJKTGJys0u2rD
       VERCEL_PROJECT_ID: prj_Ogk540OpdpbAnP8iPaqVQBSwDS34
+      # Absolute origin of the cross-origin API this standalone frontend calls.
+      # build-env.js bakes it into assets/js/env.js at build time; without it
+      # the build defaults to same-origin (empty), which 404s here because this
+      # project serves only static files (the API lives in the backend project).
+      TBT_API_BASE: https://backend-three-peach-48.vercel.app
 
     steps:
       - uses: actions/checkout@v4
@@ -133,6 +138,8 @@ jobs:
       - run: npm install --global vercel@latest
 
       - run: vercel pull --yes --environment=production --token="$VERCEL_TOKEN"
+      # vercel build runs `npm run build` (build-env.js) with this step's
+      # environment, so the job-level TBT_API_BASE above is baked into env.js.
       - run: vercel build --prod --token="$VERCEL_TOKEN"
       - run: vercel deploy --prebuilt --prod --token="$VERCEL_TOKEN"
 
