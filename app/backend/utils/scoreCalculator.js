@@ -121,8 +121,18 @@ function calculateResult(userAnswers, questionTypeMap, categoryQuestionMax, dime
   const percentage = maxScore ? parseFloat(((totalMarks / maxScore) * 100).toFixed(1)) : 0;
   const level = getLevel(percentage);
 
-  const highestCategoryScore = Math.max(...Object.values(categoryScores));
-  const highestCategory = Object.keys(categoryScores).filter(k => categoryScores[k] === highestCategoryScore);
+  // A "top category" only means something if the candidate actually scored in
+  // it. On a zero-score submission every category ties at 0, so the old
+  // `=== highestScore` filter returned ALL categories — which then rendered as
+  // a huge comma list (and made admin table rows wrap enormously). Guard it:
+  // no positive top score → no dominant category (empty list; the UI shows a
+  // "No dominant category" fallback). A genuine multi-way tie above 0 still
+  // lists the tied winners.
+  const scoreValues = Object.values(categoryScores);
+  const highestCategoryScore = scoreValues.length ? Math.max(...scoreValues) : 0;
+  const highestCategory = highestCategoryScore > 0
+    ? Object.keys(categoryScores).filter(k => categoryScores[k] === highestCategoryScore)
+    : [];
 
   const sortedCats = Object.entries(categoryScores).sort((a, b) => a[1] - b[1]);
   const improvementAreas = sortedCats.slice(0, 2).map(([cat, score]) => ({

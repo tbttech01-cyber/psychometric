@@ -119,12 +119,13 @@ export default function SharedIdsPage() {
           </div>
         </div>
 
-        <div className="card overflow-x-auto">
+        <div className="card">
           <div className="relative mb-4">
             <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2" style={{ color: "var(--tbt-muted)" }} />
             <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search codes..."
               className="border rounded-xl pl-10 pr-3.5 py-2.5 focus:outline-none w-full" style={{ borderColor: "var(--tbt-border)" }} />
           </div>
+          <div className="table-scroll">
           <table className="data-table">
             <thead><tr><th>Code</th><th>Label</th><th>Question Set</th><th>Status</th><th>Usage</th><th>Created</th><th>Actions</th></tr></thead>
             <tbody>
@@ -148,14 +149,14 @@ export default function SharedIdsPage() {
                   </tr>
                 ) : (
                   <tr key={r._id}>
-                    <td className="font-mono font-bold">{r.code}</td>
-                    <td>{r.label}</td>
-                    <td>{setNameOf(r) || <span style={{ color: "var(--tbt-muted)" }}>—</span>}</td>
+                    <td className="font-mono font-bold nowrap">{r.code}</td>
+                    <td className="truncate" style={{ maxWidth: 220 }} title={r.label}>{r.label}</td>
+                    <td className="truncate" style={{ maxWidth: 180 }} title={setNameOf(r) || ""}>{setNameOf(r) || <span style={{ color: "var(--tbt-muted)" }}>—</span>}</td>
                     <td><span className={`badge ${r.isActive ? "badge-active" : "badge-inactive"}`}>{r.isActive ? "Active" : "Inactive"}</span></td>
-                    <td>{r.usageCount}</td>
-                    <td>{new Date(r.createdAt).toLocaleDateString()}</td>
+                    <td className="nowrap">{r.usageCount}</td>
+                    <td className="nowrap">{new Date(r.createdAt).toLocaleDateString()}</td>
                     <td>
-                      <div className="flex gap-2">
+                      <div className="flex gap-2 flex-nowrap">
                         <button onClick={() => { setEditing(r); setEditLabel(r.label); setEditSetId(setIdOf(r)); }} className="btn btn-outline btn-sm">Edit</button>
                         <button onClick={() => toggleActivate(r)} className={`btn btn-sm ${r.isActive ? "btn-danger" : "btn-primary"}`}>
                           {r.isActive ? "Deactivate" : "Activate"}
@@ -165,8 +166,12 @@ export default function SharedIdsPage() {
                   </tr>
                 )
               ))}
+              {rows.length === 0 && (
+                <tr><td colSpan={7} className="text-center py-8" style={{ color: "var(--tbt-muted)" }}>No access codes found.</td></tr>
+              )}
             </tbody>
           </table>
+          </div>
         </div>
       </main>
 

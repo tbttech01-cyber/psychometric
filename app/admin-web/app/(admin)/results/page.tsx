@@ -21,6 +21,21 @@ type ResultRow = {
   userId?: { name: string; email: string; sharedCode: string };
 };
 
+// Top Category display rule: show the first 1–2 categories with a "+N more"
+// affordance and the full list in a title tooltip. A zero-score result has no
+// dominant category (the backend now returns an empty list for those; this also
+// covers legacy rows where every category tied at 0 and got saved), so show a
+// clear fallback instead of a long comma-separated list that wraps the row.
+function topCategoryDisplay(r: ResultRow): { text: string; title: string } {
+  const list = (r.highestCategory || []).filter(Boolean);
+  if (r.totalMarks === 0 || list.length === 0) {
+    return { text: "No dominant category", title: "No dominant category" };
+  }
+  const shown = list.slice(0, 2).join(", ");
+  const extra = list.length - 2;
+  return { text: extra > 0 ? `${shown} +${extra} more` : shown, title: list.join(", ") };
+}
+
 function pageWindow(current: number, total: number): (number | "...")[] {
   const pages: (number | "...")[] = [];
   const add = (p: number | "...") => pages.push(p);
@@ -184,9 +199,22 @@ export default function ResultsPage() {
           <button onClick={clearFilters} className="btn btn-outline btn-sm">Clear</button>
         </div>
 
-        <div className="card overflow-x-auto">
+        <div className="card">
           <p className="text-sm mb-3" style={{ color: "var(--tbt-muted)" }}>{total} results found</p>
-          <table className="data-table">
+          <div className="table-scroll">
+          <table className="data-table table-fixed">
+            <colgroup>
+              <col style={{ width: 36 }} />
+              <col style={{ width: "14%" }} />
+              <col style={{ width: "22%" }} />
+              <col style={{ width: 84 }} />
+              <col style={{ width: 84 }} />
+              <col style={{ width: 56 }} />
+              <col style={{ width: 132 }} />
+              <col style={{ width: "18%" }} />
+              <col style={{ width: 96 }} />
+              <col style={{ width: 140 }} />
+            </colgroup>
             <thead>
               <tr>
                 <th><input type="checkbox" checked={rows.length > 0 && selected.size === rows.length} onChange={(e) => toggleAll(e.target.checked)} /></th>
@@ -194,27 +222,35 @@ export default function ResultsPage() {
               </tr>
             </thead>
             <tbody>
-              {rows.map((r) => (
+              {rows.map((r) => {
+                const cat = topCategoryDisplay(r);
+                const empty = r.totalMarks === 0 || (r.highestCategory || []).filter(Boolean).length === 0;
+                return (
                 <tr key={r._id}>
                   <td><input type="checkbox" checked={selected.has(r._id)} onChange={() => toggleRow(r._id)} /></td>
-                  <td>{r.userId?.name || ""}</td>
-                  <td className="text-xs">{r.userId?.email || ""}</td>
-                  <td><span className="font-mono text-xs">{r.userId?.sharedCode || ""}</span></td>
-                  <td className="font-bold">{r.totalMarks}/{r.maxScore}</td>
-                  <td>{r.percentage}%</td>
+                  <td className="truncate" title={r.userId?.name || ""}>{r.userId?.name || "—"}</td>
+                  <td className="truncate text-xs" title={r.userId?.email || ""}>{r.userId?.email || "—"}</td>
+                  <td className="nowrap"><span className="font-mono text-xs">{r.userId?.sharedCode || "—"}</span></td>
+                  <td className="font-bold nowrap">{r.totalMarks}/{r.maxScore}</td>
+                  <td className="nowrap">{r.percentage}%</td>
                   <td><span className={levelBadgeClass(r.level)}>{r.level}</span></td>
-                  <td className="text-xs">{(r.highestCategory || []).join(", ")}</td>
-                  <td className="text-xs">{new Date(r.createdAt).toLocaleDateString()}</td>
+                  <td className="truncate text-xs" title={cat.title} style={empty ? { color: "var(--tbt-muted)", fontStyle: "italic" } : undefined}>{cat.text}</td>
+                  <td className="nowrap text-xs">{new Date(r.createdAt).toLocaleDateString()}</td>
                   <td>
-                    <div className="flex gap-2">
+                    <div className="flex gap-2 flex-nowrap">
                       <Link href={`/results/${r._id}`} className="btn btn-outline btn-sm">View</Link>
                       <button onClick={() => setDeleteTarget(r)} className="btn btn-danger btn-sm">Delete</button>
                     </div>
                   </td>
                 </tr>
-              ))}
+                );
+              })}
+              {rows.length === 0 && (
+                <tr><td colSpan={10} className="text-center py-8" style={{ color: "var(--tbt-muted)" }}>No results found.</td></tr>
+              )}
             </tbody>
           </table>
+          </div>
 
           <div className="flex justify-center items-center gap-1 mt-4 flex-wrap">
             <button disabled={page <= 1} onClick={() => setPage((p) => p - 1)} className="btn btn-outline btn-sm">‹</button>

@@ -44,8 +44,19 @@ body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; back
 .data-table th:last-child, .data-table td:last-child { padding-right: 0.25rem; }
 .data-table tr:hover td { background: #FAFAFA; }
 
+/* Reusable table layout helpers (shared across all admin list pages).
+   .table-scroll confines any horizontal overflow to the table region — never
+   the page. .table-fixed gives predictable, content-independent column widths
+   (set via <colgroup>) so one long email/value can't blow out the table or
+   make a row wrap into many lines. .truncate ellipsizes an overflowing cell to
+   its column width (pair with a title attribute for the full value). */
+.table-scroll { width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.data-table.table-fixed { table-layout: fixed; min-width: 880px; }
+.data-table td.truncate, .data-table th.truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.data-table td.nowrap, .data-table th.nowrap { white-space: nowrap; }
+
 /* Level badges */
-.badge { display: inline-flex; align-items: center; gap: 0.375rem; padding: 0.25rem 0.65rem; border-radius: 999px; font-size: 0.75rem; font-weight: 600; }
+.badge { display: inline-flex; align-items: center; gap: 0.375rem; padding: 0.25rem 0.65rem; border-radius: 999px; font-size: 0.75rem; font-weight: 600; white-space: nowrap; }
 .badge::before { content: ""; width: 6px; height: 6px; border-radius: 999px; background: currentColor; }
 .badge-excellent { background: #D1FAE5; color: #065F46; }
 .badge-good { background: #DBEAFE; color: #1E40AF; }
