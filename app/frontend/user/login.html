@@ -16,17 +16,19 @@
     </div>
     <div class="card">
       <h2 class="text-xl font-bold mb-5" style="color:var(--tbt-primary)">Sign In</h2>
-      <div class="mb-3">
-        <label class="block text-sm font-semibold mb-1" for="email">Email</label>
-        <input id="email" type="email" placeholder="you@example.com" class="w-full border-2 rounded-lg px-4 py-2.5 focus:outline-none" style="border-color:var(--tbt-border)" />
-        <p id="email-error" class="text-red-500 text-xs mt-1 hidden"></p>
-      </div>
-      <div class="mb-5">
-        <label class="block text-sm font-semibold mb-1" for="password">Password</label>
-        <input id="password" type="password" placeholder="Your password" class="w-full border-2 rounded-lg px-4 py-2.5 focus:outline-none" style="border-color:var(--tbt-border)" />
-        <p id="password-error" class="text-red-500 text-xs mt-1 hidden"></p>
-      </div>
-      <button id="btn-login" class="btn btn-primary w-full">Sign In</button>
+      <form id="login-form" novalidate>
+        <div class="mb-3">
+          <label class="block text-sm font-semibold mb-1" for="email">Email</label>
+          <input id="email" name="email" type="email" autocomplete="email" placeholder="you@example.com" class="w-full border-2 rounded-lg px-4 py-2.5 focus:outline-none" style="border-color:var(--tbt-border)" />
+          <p id="email-error" class="text-red-500 text-xs mt-1 hidden"></p>
+        </div>
+        <div class="mb-5">
+          <label class="block text-sm font-semibold mb-1" for="password">Password</label>
+          <input id="password" name="password" type="password" autocomplete="current-password" placeholder="Your password" class="w-full border-2 rounded-lg px-4 py-2.5 focus:outline-none" style="border-color:var(--tbt-border)" />
+          <p id="password-error" class="text-red-500 text-xs mt-1 hidden"></p>
+        </div>
+        <button id="btn-login" type="submit" class="btn btn-primary w-full">Sign In</button>
+      </form>
       <div class="mt-4 text-center text-sm" style="color:var(--tbt-muted)">
         Don't have an account? <a id="link-register" href="/user/register.html" class="font-semibold" style="color:var(--tbt-primary)">Register</a>
       </div>
@@ -43,7 +45,8 @@
       const user = api.getUser();
       window.location.href = user && user.hasCompletedAssessment ? '/user/result.html' : '/user/index.html';
     }
-    document.getElementById('btn-login').addEventListener('click', async () => {
+    document.getElementById('login-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
       Validator.clearAll(['email','password']);
       const email = document.getElementById('email').value.trim();
       const password = document.getElementById('password').value;

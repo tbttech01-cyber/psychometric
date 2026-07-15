@@ -16,17 +16,19 @@
       <p class="text-sm mb-1" style="color:var(--tbt-muted)">We sent a 6-digit code to</p>
       <p id="email-display" class="font-semibold mb-6" style="color:var(--tbt-primary)"></p>
 
-      <div class="otp-boxes flex justify-center mb-6">
-        <input class="otp-box" type="text" maxlength="1" data-idx="0" />
-        <input class="otp-box" type="text" maxlength="1" data-idx="1" />
-        <input class="otp-box" type="text" maxlength="1" data-idx="2" />
-        <input class="otp-box" type="text" maxlength="1" data-idx="3" />
-        <input class="otp-box" type="text" maxlength="1" data-idx="4" />
-        <input class="otp-box" type="text" maxlength="1" data-idx="5" />
-      </div>
+      <form id="otp-form" novalidate>
+        <div class="otp-boxes flex justify-center mb-6">
+          <input class="otp-box" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="1" data-idx="0" aria-label="OTP digit 1" />
+          <input class="otp-box" type="text" inputmode="numeric" maxlength="1" data-idx="1" aria-label="OTP digit 2" />
+          <input class="otp-box" type="text" inputmode="numeric" maxlength="1" data-idx="2" aria-label="OTP digit 3" />
+          <input class="otp-box" type="text" inputmode="numeric" maxlength="1" data-idx="3" aria-label="OTP digit 4" />
+          <input class="otp-box" type="text" inputmode="numeric" maxlength="1" data-idx="4" aria-label="OTP digit 5" />
+          <input class="otp-box" type="text" inputmode="numeric" maxlength="1" data-idx="5" aria-label="OTP digit 6" />
+        </div>
 
-      <button id="btn-verify" class="btn btn-primary w-full mb-3">Verify OTP</button>
-      <button id="btn-resend" class="text-sm font-semibold" style="color:var(--tbt-primary)">Resend OTP</button>
+        <button id="btn-verify" type="submit" class="btn btn-primary w-full mb-3">Verify OTP</button>
+      </form>
+      <button id="btn-resend" type="button" class="text-sm font-semibold" style="color:var(--tbt-primary)">Resend OTP</button>
       <p id="resend-timer" class="text-xs mt-1 hidden" style="color:var(--tbt-muted)">Resend in <span id="countdown">60</span>s</p>
     </div>
   </div>
@@ -50,7 +52,8 @@
 
     const getOTP = () => Array.from(boxes).map(b => b.value).join('');
 
-    document.getElementById('btn-verify').addEventListener('click', async () => {
+    document.getElementById('otp-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
       const otp = getOTP();
       if (!Validator.otp(otp)) return showToast('Enter all 6 digits.', 'error');
       const btn = document.getElementById('btn-verify');

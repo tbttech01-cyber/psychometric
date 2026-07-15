@@ -17,14 +17,16 @@
     <div class="card">
       <h2 class="text-xl font-bold text-center mb-1" style="color:var(--tbt-primary)">Welcome</h2>
       <p class="text-sm text-center mb-6" style="color:var(--tbt-muted)">Enter your access code to get started</p>
-      <div class="mb-4">
-        <label class="block text-sm font-semibold mb-1" for="code">Access Code</label>
-        <input id="code" type="text" placeholder="e.g. TBT2024" maxlength="20"
-          class="w-full border-2 rounded-lg px-4 py-3 text-center text-xl font-bold tracking-widest uppercase focus:outline-none transition"
-          style="border-color:var(--tbt-border)" />
-        <p id="code-error" class="text-red-500 text-xs mt-1 hidden"></p>
-      </div>
-      <button id="btn-continue" class="btn btn-primary w-full">Continue</button>
+      <form id="code-form" novalidate>
+        <div class="mb-4">
+          <label class="block text-sm font-semibold mb-1" for="code">Access Code</label>
+          <input id="code" name="code" type="text" autocomplete="off" placeholder="e.g. TBT2024" maxlength="20"
+            class="w-full border-2 rounded-lg px-4 py-3 text-center text-xl font-bold tracking-widest uppercase focus:outline-none transition"
+            style="border-color:var(--tbt-border)" />
+          <p id="code-error" class="text-red-500 text-xs mt-1 hidden"></p>
+        </div>
+        <button id="btn-continue" type="submit" class="btn btn-primary w-full">Continue</button>
+      </form>
       <div class="mt-4 text-center text-sm" style="color:var(--tbt-muted)">
         Not you? <a id="link-logout" href="#" class="font-semibold" style="color:var(--tbt-primary)">Logout</a>
       </div>
@@ -44,7 +46,8 @@
     const btn = document.getElementById('btn-continue');
     const codeInput = document.getElementById('code');
     codeInput.addEventListener('input', () => { codeInput.value = codeInput.value.toUpperCase(); });
-    btn.addEventListener('click', async () => {
+    document.getElementById('code-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
       Validator.clearAll(['code']);
       const code = codeInput.value.trim();
       if (!Validator.required(code)) return Validator.show('code', 'Access code is required.');

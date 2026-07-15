@@ -18,28 +18,30 @@
       <h2 class="text-xl font-bold mb-1" style="color:var(--tbt-primary)">Create Account</h2>
       <p class="text-sm mb-5" style="color:var(--tbt-muted)">Register to take your psychometric assessment</p>
 
-      <div class="mb-3">
-        <label class="block text-sm font-semibold mb-1" for="code">Access Code</label>
-        <input id="code" type="text" placeholder="e.g. TBT2024" maxlength="20" class="w-full border-2 rounded-lg px-4 py-2.5 uppercase focus:outline-none" style="border-color:var(--tbt-border)" />
-        <p id="code-error" class="text-red-500 text-xs mt-1 hidden"></p>
-      </div>
-      <div class="mb-3">
-        <label class="block text-sm font-semibold mb-1" for="name">Full Name</label>
-        <input id="name" type="text" placeholder="Your full name" class="w-full border-2 rounded-lg px-4 py-2.5 focus:outline-none" style="border-color:var(--tbt-border)" />
-        <p id="name-error" class="text-red-500 text-xs mt-1 hidden"></p>
-      </div>
-      <div class="mb-3">
-        <label class="block text-sm font-semibold mb-1" for="email">Email Address</label>
-        <input id="email" type="email" placeholder="you@example.com" class="w-full border-2 rounded-lg px-4 py-2.5 focus:outline-none" style="border-color:var(--tbt-border)" />
-        <p id="email-error" class="text-red-500 text-xs mt-1 hidden"></p>
-      </div>
-      <div class="mb-5">
-        <label class="block text-sm font-semibold mb-1" for="password">Password <span class="font-normal text-xs" style="color:var(--tbt-muted)">(min 6 characters)</span></label>
-        <input id="password" type="password" placeholder="Create a password" class="w-full border-2 rounded-lg px-4 py-2.5 focus:outline-none" style="border-color:var(--tbt-border)" />
-        <p id="password-error" class="text-red-500 text-xs mt-1 hidden"></p>
-      </div>
+      <form id="register-form" novalidate>
+        <div class="mb-3">
+          <label class="block text-sm font-semibold mb-1" for="code">Access Code</label>
+          <input id="code" name="code" type="text" autocomplete="off" placeholder="e.g. TBT2024" maxlength="20" class="w-full border-2 rounded-lg px-4 py-2.5 uppercase focus:outline-none" style="border-color:var(--tbt-border)" />
+          <p id="code-error" class="text-red-500 text-xs mt-1 hidden"></p>
+        </div>
+        <div class="mb-3">
+          <label class="block text-sm font-semibold mb-1" for="name">Full Name</label>
+          <input id="name" name="name" type="text" autocomplete="name" placeholder="Your full name" class="w-full border-2 rounded-lg px-4 py-2.5 focus:outline-none" style="border-color:var(--tbt-border)" />
+          <p id="name-error" class="text-red-500 text-xs mt-1 hidden"></p>
+        </div>
+        <div class="mb-3">
+          <label class="block text-sm font-semibold mb-1" for="email">Email Address</label>
+          <input id="email" name="email" type="email" autocomplete="email" placeholder="you@example.com" class="w-full border-2 rounded-lg px-4 py-2.5 focus:outline-none" style="border-color:var(--tbt-border)" />
+          <p id="email-error" class="text-red-500 text-xs mt-1 hidden"></p>
+        </div>
+        <div class="mb-5">
+          <label class="block text-sm font-semibold mb-1" for="password">Password <span class="font-normal text-xs" style="color:var(--tbt-muted)">(min 6 characters)</span></label>
+          <input id="password" name="password" type="password" autocomplete="new-password" placeholder="Create a password" class="w-full border-2 rounded-lg px-4 py-2.5 focus:outline-none" style="border-color:var(--tbt-border)" />
+          <p id="password-error" class="text-red-500 text-xs mt-1 hidden"></p>
+        </div>
 
-      <button id="btn-register" class="btn btn-primary w-full">Register</button>
+        <button id="btn-register" type="submit" class="btn btn-primary w-full">Register</button>
+      </form>
       <div class="mt-4 text-center text-sm" style="color:var(--tbt-muted)">
         Already registered? <a href="/user/login.html" class="font-semibold" style="color:var(--tbt-primary)">Login</a>
       </div>
@@ -52,7 +54,8 @@
     const codeInput = document.getElementById('code');
     codeInput.addEventListener('input', () => { codeInput.value = codeInput.value.toUpperCase(); });
 
-    document.getElementById('btn-register').addEventListener('click', async () => {
+    document.getElementById('register-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
       Validator.clearAll(['code','name','email','password']);
       const code = codeInput.value.trim();
       const name = document.getElementById('name').value.trim();
