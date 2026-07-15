@@ -655,6 +655,20 @@
       questionTimer.start();
     }
 
+    // Reset the viewport to the top of the page. Uses the two-argument
+    // scrollTo(x, y) form plus documentElement/body scrollTop fallbacks: the
+    // options form — window.scrollTo({ top, behavior }) — is a silent no-op in
+    // several packaged-app WebView runtimes, which left each new question page
+    // opening at the previous page's scroll position. Instant (not smooth) so
+    // the new page simply appears at the top with no scroll-up animation or
+    // flicker, and only ever called on explicit Next/Previous navigation so
+    // browser Back/Forward scroll restoration is untouched.
+    function scrollToTop() {
+      window.scrollTo(0, 0);
+      if (document.documentElement) document.documentElement.scrollTop = 0;
+      if (document.body) document.body.scrollTop = 0;
+    }
+
     function showSection(idx) {
       document.querySelectorAll('.q-section').forEach((s,i) => {
         s.classList.toggle('active', i === idx);
@@ -693,7 +707,7 @@
       // Moving to a section always shows it from its first question — otherwise
       // a long previous page leaves the candidate scrolled to the bottom and the
       // new page's question 1 starts off-screen.
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+      scrollToTop();
     }
 
     // Whether a raw question (not a render unit) currently has a
