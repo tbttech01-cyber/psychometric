@@ -1,5 +1,22 @@
 node_modules/
 .env
+.env.*
+!.env.example
 *.log
 .claude/
+
+# Large / generated docs and binaries that don't belong in source control
 *.pdf
+*.docx
+
+# Loose screenshots and images at the repo root
+/Screenshot*.png
+/*.jpg
+/*.jpeg
+
+# OS / editor cruft
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp

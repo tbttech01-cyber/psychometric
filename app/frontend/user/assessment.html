@@ -107,7 +107,14 @@
 
     async function loadQuestions() {
       const { ok, data } = await api.get('/assessment/questions', token);
-      if (!ok) { showToast('Failed to load questions.', 'error'); return; }
+      // Render an inline error + Retry instead of a permanent spinner, and
+      // guard data.data so a malformed OK response can't throw below.
+      if (!ok || !data || !data.data) {
+        document.getElementById('loading').innerHTML =
+          '<p class="mb-4" style="color:var(--tbt-danger)">' + ((data && data.message) || "Couldn't load your questions. Please check your connection.") + '</p>' +
+          '<button class="btn btn-primary" onclick="location.reload()">Retry</button>';
+        return;
+      }
       sections = data.data;
       // Index both audio sources for every question: the uploaded clip (if any)
       // takes priority, and every question also exposes its text for the

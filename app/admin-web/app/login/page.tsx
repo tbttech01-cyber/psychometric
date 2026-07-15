@@ -40,7 +40,7 @@ export default function LoginPage() {
     setLoading(true);
     const { ok, data } = await api.post("/admin/login", { email, password });
     setLoading(false);
-    if (!ok) {
+    if (!ok || !data.token) {
       showToast(data.message || "Login failed.", "error");
       return;
     }
@@ -119,9 +119,6 @@ export default function LoginPage() {
             <label className="text-sm font-semibold" htmlFor="password">
               Password *
             </label>
-            <span className="text-xs font-semibold" style={{ color: "var(--tbt-primary)" }}>
-              Forgot Password?
-            </span>
           </div>
           <div className="relative mb-1">
             <Lock size={18} className="absolute left-3.5 top-1/2 -translate-y-1/2" style={{ color: "var(--tbt-muted)" }} />

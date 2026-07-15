@@ -97,7 +97,13 @@
 
     async function loadResult() {
       const { ok, data } = await api.get('/assessment/result', token);
-      if (!ok) { showToast(data.message || 'No result found.', 'error'); return; }
+      // Render an inline error + Retry instead of leaving the spinner forever.
+      if (!ok || !data || !data.data) {
+        document.getElementById('loading').innerHTML =
+          '<p class="mb-4" style="color:var(--tbt-danger)">' + ((data && data.message) || "Couldn't load your results. Please check your connection.") + '</p>' +
+          '<button class="btn btn-primary" onclick="location.reload()">Retry</button>';
+        return;
+      }
       const r = data.data;
       document.getElementById('loading').classList.add('hidden');
       document.getElementById('result-content').classList.remove('hidden');
