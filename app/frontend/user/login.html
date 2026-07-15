@@ -28,7 +28,7 @@
       </div>
       <button id="btn-login" class="btn btn-primary w-full">Sign In</button>
       <div class="mt-4 text-center text-sm" style="color:var(--tbt-muted)">
-        New user? <a href="/user/index.html" class="font-semibold" style="color:var(--tbt-primary)">Enter Access Code</a>
+        Don't have an account? <a id="link-register" href="/user/register.html" class="font-semibold" style="color:var(--tbt-primary)">Register</a>
       </div>
     </div>
   </div>
@@ -39,6 +39,12 @@
     if (api.getToken('user')) {
       const user = api.getUser();
       window.location.href = user && user.hasCompletedAssessment ? '/user/result.html' : '/user/welcome.html';
+    }
+    // Registration needs an access code (collected on index.html). If someone
+    // reached login directly without one, send the Register link back to the
+    // access-code page first so the code-first flow is preserved.
+    if (!localStorage.getItem('tbt_code_id')) {
+      document.getElementById('link-register').setAttribute('href', '/user/index.html');
     }
     document.getElementById('btn-login').addEventListener('click', async () => {
       Validator.clearAll(['email','password']);
