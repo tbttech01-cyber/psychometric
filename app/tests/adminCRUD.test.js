@@ -114,6 +114,41 @@ describe('Admin CRUD: question audio', () => {
   });
 });
 
+describe('Admin CRUD: question reorder', () => {
+  let typeId;
+  const mk = (order, text) => ({
+    typeId, order, text, questionType: 'LIKERT_SCALE', dimension: 'Communication', marks: 5,
+    options: [1, 2, 3, 4, 5].map((n) => ({ optionText: `opt${n}`, score: n, order: n })),
+  });
+
+  beforeAll(async () => {
+    const res = await request(app).get('/api/v1/admin/question-types').set(auth());
+    typeId = res.body.data[0]._id;
+  });
+
+  it('swaps two questions\' orders and NEVER leaves a negative sentinel order', async () => {
+    const a = (await request(app).post('/api/v1/admin/questions').set(auth()).send(mk(9971, 'reorder A'))).body.data;
+    const b = (await request(app).post('/api/v1/admin/questions').set(auth()).send(mk(9972, 'reorder B'))).body.data;
+
+    const res = await request(app).post('/api/v1/admin/questions/reorder').set(auth())
+      .send({ orders: [{ id: a._id, order: 9972 }, { id: b._id, order: 9971 }] });
+    expect(res.status).toBe(200);
+
+    const list = await request(app).get('/api/v1/admin/questions').set(auth());
+    const rowA = list.body.data.find((q) => q._id === a._id);
+    const rowB = list.body.data.find((q) => q._id === b._id);
+    // Orders were swapped...
+    expect(rowA.order).toBe(9972);
+    expect(rowB.order).toBe(9971);
+    // ...and no ACTIVE question is left with a negative sentinel order (a
+    // soft-deleted question may legitimately carry one; a live one must not).
+    expect(list.body.data.filter((q) => q.isActive).every((q) => q.order >= 0)).toBe(true);
+
+    await request(app).delete(`/api/v1/admin/questions/${a._id}`).set(auth());
+    await request(app).delete(`/api/v1/admin/questions/${b._id}`).set(auth());
+  });
+});
+
 describe('Admin dashboard + export', () => {
   it('returns dashboard stats', async () => {
     const res = await request(app).get('/api/v1/admin/dashboard').set(auth());

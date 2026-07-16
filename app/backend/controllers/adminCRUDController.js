@@ -222,13 +222,20 @@ exports.updateQuestion = async (req, res, next) => {
 // `orders`: [{id, order}, ...] — the full desired final order for the given
 // subset of questions (e.g. a simple adjacent-pair swap from an up/down
 // button). Two passes avoid ever violating Question.order's unique index:
-// first move every affected question to a unique negative sentinel, then
+// first park every affected question at a unique HIGH temporary order, then
 // assign each its real target order.
+//
+// The temp orders are large POSITIVE values (not -Date.now()). Real orders are
+// small (1..N), so TEMP_BASE + i can never collide with a live order or with
+// another parked question. Crucially, if this handler is interrupted between
+// the two passes (e.g. a serverless timeout), the affected questions are left
+// with a VALID, bottom-sorted order — never a negative sentinel that would
+// surface as a garbage "#"/serial and jump the row to the top of the list.
+const REORDER_TEMP_BASE = 1_000_000_000;
 exports.reorderQuestions = async (req, res, next) => {
   try {
     const { orders } = req.body;
-    const base = -Date.now();
-    await Promise.all(orders.map((o, i) => Question.findByIdAndUpdate(o.id, { order: base - i })));
+    await Promise.all(orders.map((o, i) => Question.findByIdAndUpdate(o.id, { order: REORDER_TEMP_BASE + i })));
     await Promise.all(orders.map((o) => Question.findByIdAndUpdate(o.id, { order: o.order })));
     const data = await Question.find({ _id: { $in: orders.map((o) => o.id) } }).sort('order');
     res.json({ success: true, data });
