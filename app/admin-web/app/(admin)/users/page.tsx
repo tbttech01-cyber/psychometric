@@ -202,7 +202,7 @@ export default function UsersPage() {
               </label>
             </div>
 
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
               <button onClick={createUser} className="btn btn-primary">Create User &amp; Generate Code</button>
               <button onClick={() => setShowAdd(false)} className="btn btn-outline">Cancel</button>
             </div>
