@@ -130,7 +130,7 @@ export default function QuestionTypesPage() {
             <h3 className="font-bold mb-3" style={{ color: "var(--tbt-text)" }}>
               {editingId ? "Edit Category" : "Add New Category"}
             </h3>
-            <div className="grid md:grid-cols-2 gap-3 mb-3">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
               <input placeholder="Category name" value={form.name} maxLength={60} onChange={(e) => setForm({ ...form, name: e.target.value })}
                 className="border rounded-xl px-3.5 py-2.5 focus:outline-none" style={{ borderColor: "var(--tbt-border)" }} />
               <input type="number" min={1} placeholder="Display order" value={form.order}
@@ -155,7 +155,7 @@ export default function QuestionTypesPage() {
           </div>
         )}
 
-        <div className="grid md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {types.filter((t) => t.isActive).map((t) => (
             <div key={t._id} className="card">
               <div className="flex justify-between items-start mb-2">
@@ -170,9 +170,9 @@ export default function QuestionTypesPage() {
                 </div>
               </div>
               <p className="text-sm mb-3" style={{ color: "var(--tbt-muted)" }}>{t.description}</p>
-              <div className="flex justify-between items-center">
+              <div className="flex flex-wrap justify-between items-center gap-2">
                 <span className="badge badge-average">{counts[t._id] || 0} QUESTIONS</span>
-                <div className="flex gap-2 items-center">
+                <div className="flex flex-wrap gap-2 items-center">
                   <Link href={`/questions?typeId=${t._id}`} className="text-sm font-semibold" style={{ color: "var(--tbt-primary)" }}>View Questions →</Link>
                   <button onClick={() => openEdit(t)} className="btn btn-outline btn-sm">Edit</button>
                   <button

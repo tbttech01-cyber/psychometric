@@ -286,7 +286,7 @@ function QuestionsPageInner() {
                 ))}
               </select>
 
-              <div className="grid md:grid-cols-2 gap-3 mb-3">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
                 <select value={qType} onChange={(e) => setQType(e.target.value)}
                   className="border rounded-xl px-3.5 py-2.5 focus:outline-none" style={{ borderColor: "var(--tbt-border)" }}>
                   <option value="">Select category</option>
@@ -327,7 +327,7 @@ function QuestionsPageInner() {
               <textarea placeholder="e.g. This question checks how you handle a customer complaint. Read each option and pick the one closest to how you'd respond." value={qExplanationAudioText} onChange={(e) => setQExplanationAudioText(e.target.value)} maxLength={1000}
                 rows={2} className="border rounded-xl px-3.5 py-2.5 w-full focus:outline-none mb-3" style={{ borderColor: "var(--tbt-border)" }} />
 
-              <div className="grid md:grid-cols-2 gap-3 mb-3">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
                 <input placeholder={qQuestionType === "IMAGE_BASED" ? "Image URL (required)" : "Image URL (optional)"} value={qImageUrl}
                   onChange={(e) => setQImageUrl(e.target.value)}
                   className="border rounded-xl px-3.5 py-2.5 focus:outline-none" style={{ borderColor: "var(--tbt-border)" }} />
@@ -384,7 +384,7 @@ function QuestionsPageInner() {
 
               {SINGLE_CORRECT_TYPES.includes(qQuestionType) && (
                 <>
-                  <div className="grid md:grid-cols-2 gap-3 mb-3">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
                     <input type="number" min={1} placeholder="Time limit (seconds, optional)" value={qTimeLimitSeconds}
                       onChange={(e) => setQTimeLimitSeconds(e.target.value ? +e.target.value : "")}
                       className="border rounded-xl px-3.5 py-2.5 focus:outline-none" style={{ borderColor: "var(--tbt-border)" }} />

@@ -138,7 +138,7 @@ export default function UsersPage() {
                 <UserRound size={20} style={{ color: "var(--tbt-primary)" }} />
                 <h3 className="font-bold" style={{ color: "var(--tbt-text)" }}>Personal Information</h3>
               </div>
-              <div className="grid md:grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <input placeholder="Full name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })}
                   className="border rounded-xl px-3.5 py-2.5 w-full min-w-0 focus:outline-none" style={{ borderColor: "var(--tbt-border)" }} />
                 <input placeholder="Email address" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })}
@@ -155,7 +155,7 @@ export default function UsersPage() {
                 <IdCard size={20} style={{ color: "var(--tbt-primary)" }} />
                 <h3 className="font-bold" style={{ color: "var(--tbt-text)" }}>Candidate Configuration</h3>
               </div>
-              <div className="grid md:grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <select value={form.sharedCode} onChange={(e) => setForm({ ...form, sharedCode: e.target.value })}
                   className="border rounded-xl px-3.5 py-2.5 w-full min-w-0 focus:outline-none" style={{ borderColor: "var(--tbt-border)" }}>
                   <option value="">Select access code</option>
