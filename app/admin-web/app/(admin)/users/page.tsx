@@ -37,6 +37,8 @@ export default function UsersPage() {
   const [pages, setPages] = useState(1);
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("");
+  const [batch, setBatch] = useState("");
+  const [batches, setBatches] = useState<string[]>([]);
   const [showAdd, setShowAdd] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [sharedCodes, setSharedCodes] = useState<SharedIDOption[]>([]);
@@ -50,13 +52,15 @@ export default function UsersPage() {
     const params = new URLSearchParams({ page: String(page), limit: "10" });
     if (search) params.set("search", search);
     if (status) params.set("status", status);
-    const { ok, data } = await api.get<ApiEnvelope<UserRow[]> & { stats?: UserStats }>(`/admin/users?${params}`, token);
+    if (batch) params.set("batch", batch);
+    const { ok, data } = await api.get<ApiEnvelope<UserRow[]> & { stats?: UserStats; batches?: string[] }>(`/admin/users?${params}`, token);
     if (!ok) { showToast("Failed to load users.", "error"); return; }
     setRows(data.data);
     setStats(data.stats ?? null);
     setTotal(data.total ?? 0);
     setPages(data.pages || 1);
-  }, [page, search, status, token, showToast]);
+    if (data.batches) setBatches(data.batches);
+  }, [page, search, status, batch, token, showToast]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -221,8 +225,16 @@ export default function UsersPage() {
               <option value="completed">Completed Assessment</option>
             </select>
           </div>
+          <div>
+            <label className="block text-xs font-semibold mb-1">Batch</label>
+            <select value={batch} onChange={(e) => { setBatch(e.target.value); setPage(1); }}
+              className="border-2 rounded-lg px-3 py-2 focus:outline-none" style={{ borderColor: "var(--tbt-border)" }}>
+              <option value="">All Batches</option>
+              {batches.map((b) => <option key={b} value={b}>{b}</option>)}
+            </select>
+          </div>
           <button onClick={() => { setPage(1); load(); }} className="btn btn-primary btn-sm">Apply</button>
-          <button onClick={() => { setSearch(""); setStatus(""); setPage(1); }} className="btn btn-outline btn-sm">Clear</button>
+          <button onClick={() => { setSearch(""); setStatus(""); setBatch(""); setPage(1); }} className="btn btn-outline btn-sm">Clear</button>
         </div>
 
         <div className="card">
@@ -230,7 +242,7 @@ export default function UsersPage() {
           <div className="table-scroll">
           <table className="data-table">
             <thead>
-              <tr><th>Name</th><th>Email</th><th className="hidden xl:table-cell">Candidate ID</th><th className="hidden xl:table-cell">Access Code</th><th>Status</th><th>Assessment</th><th className="hidden xl:table-cell">Registered</th><th>Actions</th></tr>
+              <tr><th>Name</th><th>Email</th><th className="hidden xl:table-cell">Candidate ID</th><th className="hidden xl:table-cell">Access Code</th><th className="hidden lg:table-cell">Batch</th><th>Status</th><th>Assessment</th><th className="hidden xl:table-cell">Registered</th><th>Actions</th></tr>
             </thead>
             <tbody>
               {rows.map((u) => (
@@ -239,6 +251,7 @@ export default function UsersPage() {
                   <td className="text-xs truncate" style={{ maxWidth: 220 }} title={u.email}>{u.email}</td>
                   <td className="hidden xl:table-cell nowrap"><span className="font-mono text-xs">{u.candidateId || "—"}</span></td>
                   <td className="hidden xl:table-cell nowrap"><span className="font-mono text-xs">{u.sharedCode}</span></td>
+                  <td className="hidden lg:table-cell nowrap"><span className="text-xs">{u.batch || "—"}</span></td>
                   <td><span className={`badge ${u.isVerified ? "badge-active" : "badge-inactive"}`}>{u.isVerified ? "Verified" : "Unverified"}</span></td>
                   <td><span className={`badge ${u.hasCompletedAssessment ? "badge-good" : "badge-pending"}`}>{u.hasCompletedAssessment ? "Completed" : "Pending"}</span></td>
                   <td className="text-xs hidden xl:table-cell nowrap">{new Date(u.createdAt).toLocaleDateString()}</td>
@@ -246,7 +259,7 @@ export default function UsersPage() {
                 </tr>
               ))}
               {rows.length === 0 && (
-                <tr><td colSpan={8} className="text-center py-8" style={{ color: "var(--tbt-muted)" }}>No users found.</td></tr>
+                <tr><td colSpan={9} className="text-center py-8" style={{ color: "var(--tbt-muted)" }}>No users found.</td></tr>
               )}
             </tbody>
           </table>

@@ -288,7 +288,7 @@ exports.deleteAnswerOption = async (req, res, next) => {
 // ── Users ────────────────────────────────────────────────────────────────────
 exports.listUsers = async (req, res, next) => {
   try {
-    const { search, status, page = 1, limit = 10 } = req.query;
+    const { search, status, batch, page = 1, limit = 10 } = req.query;
     const filter = {};
     if (search) {
       const re = new RegExp(escapeRegExp(search), 'i');
@@ -297,8 +297,9 @@ exports.listUsers = async (req, res, next) => {
     if (status === 'verified') filter.isVerified = true;
     if (status === 'unverified') filter.isVerified = false;
     if (status === 'completed') filter.hasCompletedAssessment = true;
+    if (batch) filter.batch = batch; // exact-match batch filter
 
-    const [total, totalUsers, verifiedUsers, completedUsers, data] = await Promise.all([
+    const [total, totalUsers, verifiedUsers, completedUsers, data, batches] = await Promise.all([
       User.countDocuments(filter),
       User.countDocuments(),
       User.countDocuments({ isVerified: true }),
@@ -308,6 +309,9 @@ exports.listUsers = async (req, res, next) => {
         .sort({ createdAt: -1 })
         .skip((+page - 1) * +limit)
         .limit(+limit),
+      // Distinct batches (all of them, independent of the current filter) so the
+      // dropdown always lists every batch that exists.
+      User.distinct('batch'),
     ]);
 
     res.json({
@@ -317,6 +321,7 @@ exports.listUsers = async (req, res, next) => {
       page: +page,
       pages: Math.ceil(total / +limit),
       stats: { totalUsers, verifiedUsers, completedUsers, pendingUsers: totalUsers - verifiedUsers },
+      batches: (batches || []).filter(Boolean).sort(),
     });
   } catch (err) { next(err); }
 };
