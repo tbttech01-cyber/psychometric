@@ -15,8 +15,9 @@ router.get('/export/csv', ctrl.exportCSV);
 router.get('/settings', ctrl.getSettings);
 router.post('/settings', ctrl.updateSettings);
 
-router.get('/reassessments', ctrl.listReassessments);
-router.post('/reassessments/:userId/approve', ctrl.approveReassessment);
-router.post('/reassessments/:userId/reject', ctrl.rejectReassessment);
+router.get('/retest-requests', ctrl.listRetestRequests);
+router.get('/retest-requests/:id', ctrl.getRetestRequest);
+router.post('/retest-requests/:id/approve', ctrl.approveRetest);
+router.post('/retest-requests/:id/reject', ctrl.rejectRetest);
 
 module.exports = router;

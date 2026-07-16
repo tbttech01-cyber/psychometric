@@ -7,6 +7,10 @@ const assessmentSessionSchema = new mongoose.Schema({
   expiresAt:     { type: Date, required: true },
   status:        { type: String, enum: ['in-progress', 'submitted', 'expired'], default: 'in-progress' },
   autoSubmitted: { type: Boolean, default: false },
+  // Which attempt this is for the candidate (1 = first attempt, 2 = first
+  // approved retest, ...). Carried onto the Result at submit so every attempt
+  // is permanently distinguishable and history is preserved.
+  attemptNumber: { type: Number, default: 1 },
   totalAnswered: { type: Number, default: 0 },
   ipAddress:     { type: String },
 

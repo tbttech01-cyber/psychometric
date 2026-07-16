@@ -5,6 +5,7 @@ const SharedUserID = require('../models/SharedUserID');
 const Setting = require('../models/Setting');
 const { generatePDF, generateCSV } = require('../utils/exportHelper');
 const escapeRegExp = require('../utils/escapeRegExp');
+const RetestRequest = require('../models/RetestRequest');
 
 exports.getDashboard = async (req, res, next) => {
   try {
@@ -203,43 +204,68 @@ exports.updateSettings = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
-// --- Reassessment (retake) approvals -----------------------------------------
+// --- Retest requests ---------------------------------------------------------
 
-// Candidates who have requested a retake and are awaiting a decision.
-exports.listReassessments = async (req, res, next) => {
+const RETEST_STATUSES = ['pending', 'approved', 'rejected', 'used', 'expired'];
+
+// List retest requests, optionally filtered by status (the admin page's tabs).
+// `counts` per status powers the tab counters and the sidebar notification badge.
+exports.listRetestRequests = async (req, res, next) => {
   try {
-    const users = await User.find({ reassessmentStatus: 'requested' })
-      .select('name email sharedCode reassessmentRequestedAt hasCompletedAssessment')
-      .sort('-reassessmentRequestedAt');
-    res.json({ success: true, data: users, total: users.length });
+    const { status } = req.query;
+    const filter = {};
+    if (status && RETEST_STATUSES.includes(status)) filter.status = status;
+    const data = await RetestRequest.find(filter).sort('-createdAt').limit(500);
+    const counts = await RetestRequest.aggregate([{ $group: { _id: '$status', n: { $sum: 1 } } }]);
+    const countMap = counts.reduce((m, c) => { m[c._id] = c.n; return m; }, {});
+    res.json({ success: true, data, total: data.length, counts: countMap });
   } catch (err) { next(err); }
 };
 
-// Approve a pending request → status 'approved'. The candidate's next
-// startSession consumes it and re-opens exactly one attempt.
-exports.approveReassessment = async (req, res, next) => {
+// Detail view: the request + its snapshotted current result (dimension scores,
+// recommendations) + the candidate's full attempt history.
+exports.getRetestRequest = async (req, res, next) => {
   try {
-    const user = await User.findById(req.params.userId);
-    if (!user) return res.status(404).json({ success: false, message: 'User not found.' });
-    if (user.reassessmentStatus !== 'requested')
-      return res.status(400).json({ success: false, message: 'No pending reassessment request for this user.' });
-    user.reassessmentStatus = 'approved';
-    user.reassessmentDecidedAt = new Date();
-    await user.save();
-    res.json({ success: true, message: 'Reassessment approved. The candidate can now retake the assessment.' });
+    const reqDoc = await RetestRequest.findById(req.params.id)
+      .populate('currentResultId')
+      .populate('decidedBy', 'email');
+    if (!reqDoc) return res.status(404).json({ success: false, message: 'Request not found.' });
+    const history = await Result.find({ userId: reqDoc.userId }).sort('-createdAt')
+      .select('attemptNumber percentage level totalMarks maxScore createdAt');
+    res.json({ success: true, data: reqDoc, history });
   } catch (err) { next(err); }
 };
 
-// Reject a pending request → back to 'none'.
-exports.rejectReassessment = async (req, res, next) => {
+// Approve a PENDING request → 'approved'. Grants exactly one retest; the
+// candidate's next startSession consumes it (marks it 'used').
+exports.approveRetest = async (req, res, next) => {
   try {
-    const user = await User.findById(req.params.userId);
-    if (!user) return res.status(404).json({ success: false, message: 'User not found.' });
-    if (user.reassessmentStatus !== 'requested')
-      return res.status(400).json({ success: false, message: 'No pending reassessment request for this user.' });
-    user.reassessmentStatus = 'none';
-    user.reassessmentDecidedAt = new Date();
-    await user.save();
-    res.json({ success: true, message: 'Reassessment request rejected.' });
+    const reqDoc = await RetestRequest.findById(req.params.id);
+    if (!reqDoc) return res.status(404).json({ success: false, message: 'Request not found.' });
+    if (reqDoc.status !== 'pending')
+      return res.status(400).json({ success: false, message: `Cannot approve a request that is '${reqDoc.status}'.` });
+    reqDoc.status = 'approved';
+    reqDoc.decidedBy = req.admin && req.admin._id;
+    reqDoc.decidedAt = new Date();
+    reqDoc.rejectionNote = undefined;
+    await reqDoc.save();
+    res.json({ success: true, message: 'Retest approved. The candidate can now retake the assessment once.' });
+  } catch (err) { next(err); }
+};
+
+// Reject a PENDING request → 'rejected' with an optional note. The candidate
+// may submit a fresh request afterwards.
+exports.rejectRetest = async (req, res, next) => {
+  try {
+    const reqDoc = await RetestRequest.findById(req.params.id);
+    if (!reqDoc) return res.status(404).json({ success: false, message: 'Request not found.' });
+    if (reqDoc.status !== 'pending')
+      return res.status(400).json({ success: false, message: `Cannot reject a request that is '${reqDoc.status}'.` });
+    reqDoc.status = 'rejected';
+    reqDoc.decidedBy = req.admin && req.admin._id;
+    reqDoc.decidedAt = new Date();
+    reqDoc.rejectionNote = (req.body && typeof req.body.note === 'string') ? req.body.note.slice(0, 500) : undefined;
+    await reqDoc.save();
+    res.json({ success: true, message: 'Retest request rejected.' });
   } catch (err) { next(err); }
 };

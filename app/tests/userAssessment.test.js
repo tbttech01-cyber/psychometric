@@ -389,16 +389,25 @@ describe('Assessment audio — candidate /questions payload', () => {
   });
 });
 
-describe('Reassessment (retake) approval flow', () => {
-  // Runs after the main flow above, where `userToken`'s user completed the
-  // assessment (hasCompletedAssessment = true).
-  it('a completed candidate can request a reassessment', async () => {
-    const res = await request(app).post('/api/v1/assessment/reassessment').set('Authorization', `Bearer ${userToken}`);
+describe('Retest request → admin approval → attempt #2 (history preserved)', () => {
+  // Runs after the main flow, where `userToken`'s user completed attempt #1.
+  let adminToken, retestId, retestSessionId;
+
+  it('result page shows attempt #1 and allows a retest request', async () => {
+    const res = await request(app).get('/api/v1/assessment/result').set('Authorization', `Bearer ${userToken}`);
+    expect(res.status).toBe(200);
+    expect(res.body.attemptNumber).toBe(1);
+    expect(res.body.history.length).toBe(1);
+    expect(res.body.retest.canRequest).toBe(true);
+  });
+
+  it('a completed candidate can request a retest', async () => {
+    const res = await request(app).post('/api/v1/assessment/retest/request').set('Authorization', `Bearer ${userToken}`);
     expect(res.status).toBe(200);
   });
 
-  it('rejects a duplicate pending request', async () => {
-    const res = await request(app).post('/api/v1/assessment/reassessment').set('Authorization', `Bearer ${userToken}`);
+  it('blocks a duplicate request', async () => {
+    const res = await request(app).post('/api/v1/assessment/retest/request').set('Authorization', `Bearer ${userToken}`);
     expect(res.status).toBe(409);
   });
 
@@ -408,20 +417,44 @@ describe('Reassessment (retake) approval flow', () => {
     expect(res.body.message).toMatch(/already completed/i);
   });
 
-  it('admin sees the request, approves it, and one attempt re-opens', async () => {
+  it('admin sees the pending request (attempt #2) and approves it', async () => {
     const login = await request(app).post('/api/v1/admin/login').send({ email: process.env.ADMIN_EMAIL, password: process.env.ADMIN_PASSWORD });
-    const adminToken = login.body.token;
+    adminToken = login.body.token;
 
-    const list = await request(app).get('/api/v1/admin/reassessments').set('Authorization', `Bearer ${adminToken}`);
+    const list = await request(app).get('/api/v1/admin/retest-requests?status=pending').set('Authorization', `Bearer ${adminToken}`);
     expect(list.status).toBe(200);
-    const target = list.body.data.find((u) => u.email === EMAIL);
+    const target = list.body.data.find((r) => r.userEmail === EMAIL);
     expect(target).toBeTruthy();
+    expect(target.attemptNumber).toBe(2);
+    retestId = target._id;
 
-    const approve = await request(app).post(`/api/v1/admin/reassessments/${target._id}/approve`).set('Authorization', `Bearer ${adminToken}`);
+    const approve = await request(app).post(`/api/v1/admin/retest-requests/${retestId}/approve`).set('Authorization', `Bearer ${adminToken}`);
     expect(approve.status).toBe(200);
+  });
 
-    // Approval consumed -> the candidate can start a fresh attempt (201).
+  it('candidate starts attempt #2 (approval consumed)', async () => {
     const start = await request(app).post('/api/v1/assessment/start').set('Authorization', `Bearer ${userToken}`);
     expect(start.status).toBe(201);
+    expect(start.body.attemptNumber).toBe(2);
+    retestSessionId = start.body.sessionId;
+  });
+
+  it('submits attempt #2, preserving attempt #1 and its history', async () => {
+    const submit = await request(app).post('/api/v1/assessment/submit')
+      .set('Authorization', `Bearer ${userToken}`)
+      .send({ sessionId: retestSessionId, answers: allAnswers });
+    expect(submit.status).toBe(200);
+
+    const res = await request(app).get('/api/v1/assessment/result').set('Authorization', `Bearer ${userToken}`);
+    expect(res.body.attemptNumber).toBe(2);
+    expect(res.body.history.length).toBe(2);
+    expect(res.body.history.map((h) => h.attemptNumber).sort()).toEqual([1, 2]);
+  });
+
+  it('the approval expired after one use; a further start needs a new request', async () => {
+    const start = await request(app).post('/api/v1/assessment/start').set('Authorization', `Bearer ${userToken}`);
+    expect(start.status).toBe(403);
+    const reReq = await request(app).post('/api/v1/assessment/retest/request').set('Authorization', `Bearer ${userToken}`);
+    expect(reReq.status).toBe(200);
   });
 });

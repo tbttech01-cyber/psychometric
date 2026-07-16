@@ -11,6 +11,7 @@ const Setting = require('../models/Setting');
 const QuestionType = require('../models/QuestionType');
 const SharedUserID = require('../models/SharedUserID');
 const QuestionSet = require('../models/QuestionSet');
+const RetestRequest = require('../models/RetestRequest');
 const { calculateResult, computeQuestionMaxes } = require('../utils/scoreCalculator');
 const { evaluateAnswer } = require('../utils/evaluationEngine');
 
@@ -164,22 +165,20 @@ exports.startSession = async (req, res, next) => {
   try {
     const userId = req.user._id;
 
-    if (req.user.hasCompletedAssessment) {
-      // An admin-approved reassessment re-opens exactly one attempt: consume the
-      // approval (reset to 'none' + clear hasCompletedAssessment) so the normal
-      // flow below runs. Without an approval, a completed assessment is blocked.
-      if (req.user.reassessmentStatus === 'approved') {
-        req.user.hasCompletedAssessment = false;
-        req.user.reassessmentStatus = 'none';
-        await req.user.save();
-      } else {
-        return res.status(403).json({ success: false, message: 'You have already completed this assessment.' });
-      }
-    }
-
+    // Resuming an in-progress attempt takes priority over any gate below.
     const inProgress = await AssessmentSession.findOne({ userId, status: 'in-progress' });
     if (inProgress)
       return res.status(409).json({ success: false, sessionId: inProgress._id, expiresAt: inProgress.expiresAt, message: 'Assessment already in progress.' });
+
+    // A completed candidate can only start again via an admin-APPROVED retest
+    // request, which grants exactly one more attempt. The approval is consumed
+    // (marked 'used') below so it can never unlock a second retest.
+    let approvedRetest = null;
+    if (req.user.hasCompletedAssessment) {
+      approvedRetest = await RetestRequest.findOne({ userId, status: 'approved' }).sort('-createdAt');
+      if (!approvedRetest)
+        return res.status(403).json({ success: false, message: 'You have already completed this assessment.' });
+    }
 
     // A new attempt requires the post-login Access Code step to have run this
     // session — the same gate as getQuestions, so the assessment can't start
@@ -195,6 +194,9 @@ exports.startSession = async (req, res, next) => {
     if (resolved.error) return res.status(403).json({ success: false, message: resolved.error });
     const { set, orderedIds } = resolved;
 
+    // Attempt number = the count of the candidate's prior submitted results + 1.
+    const attemptNumber = (await Result.countDocuments({ userId })) + 1;
+
     const minutes = set.durationMinutes;
     const startedAt = new Date();
     const expiresAt = new Date(startedAt.getTime() + minutes * 60 * 1000);
@@ -204,9 +206,19 @@ exports.startSession = async (req, res, next) => {
       questionSetId: set._id,
       questionIds: orderedIds,
       durationMinutes: minutes,
+      attemptNumber,
     });
 
-    res.status(201).json({ success: true, sessionId: session._id, startedAt, expiresAt });
+    // Consume the retest approval exactly once. hasCompletedAssessment is left
+    // true, so an abandoned retest can't be silently restarted without a new
+    // approval — the used request is no longer 'approved', so the block returns.
+    if (approvedRetest) {
+      approvedRetest.status = 'used';
+      approvedRetest.usedAt = new Date();
+      await approvedRetest.save();
+    }
+
+    res.status(201).json({ success: true, sessionId: session._id, startedAt, expiresAt, attemptNumber });
   } catch (err) { next(err); }
 };
 
@@ -361,6 +373,7 @@ exports.submitAssessment = async (req, res, next) => {
 
     const resultDoc = await Result.create({
       userId, sessionId,
+      attemptNumber: session.attemptNumber || 1,
       ...scored,
       categoryScores: scored.categoryScores,
       categoryPercentages: scored.categoryPercentages,
@@ -376,50 +389,85 @@ exports.submitAssessment = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
+// Builds the retest UI state for a candidate: their latest request's status,
+// any rejection note, and whether they may (re)request now (completed + no
+// pending/approved request in flight).
+async function buildRetestState(user) {
+  const latest = await RetestRequest.findOne({ userId: user._id }).sort('-createdAt').select('status rejectionNote createdAt');
+  const active = await RetestRequest.findOne({ userId: user._id, status: { $in: ['pending', 'approved'] } }).select('_id');
+  return {
+    status: latest ? latest.status : 'none',
+    rejectionNote: latest ? latest.rejectionNote : undefined,
+    canRequest: !!user.hasCompletedAssessment && !active,
+  };
+}
+
 exports.getResult = async (req, res, next) => {
   try {
-    // Latest result — a candidate may have retaken after an approved
-    // reassessment, and each retake creates a new Result row.
+    // Latest result — a candidate may have retaken after an approved retest, and
+    // every attempt keeps its own Result row (attempt #1 is never overwritten).
     const result = await Result.findOne({ userId: req.user._id })
       .sort('-createdAt')
       .populate({
         path: 'userId',
         select: 'name email sharedCode sharedUserID',
-        populate: {
-          path: 'sharedUserID',
-          select: 'label'
-        }
+        populate: { path: 'sharedUserID', select: 'label' },
       });
     if (!result) return res.status(404).json({ success: false, message: 'No result found.' });
 
-    // The result page uses this to render the reassessment button (request /
-    // pending / start-retake). canRequest is true only for a completed
-    // candidate with no request in flight.
-    const reassessment = {
-      status: req.user.reassessmentStatus || 'none',
-      canRequest: !!req.user.hasCompletedAssessment && (req.user.reassessmentStatus || 'none') === 'none',
-    };
-    res.json({ success: true, data: result, reassessment });
+    // Full attempt history (newest first) for the "Previous Attempts" section.
+    const history = await Result.find({ userId: req.user._id })
+      .sort('-createdAt')
+      .select('attemptNumber percentage level totalMarks maxScore createdAt');
+
+    const retest = await buildRetestState(req.user);
+    res.json({ success: true, data: result, attemptNumber: result.attemptNumber || 1, history, retest });
   } catch (err) { next(err); }
 };
 
-// Candidate requests a retake. Allowed only after completing an assessment and
-// when no request is already in flight; sets status to 'requested' so it shows
-// up in the admin Reassessments queue for approval.
-exports.requestReassessment = async (req, res, next) => {
+// Candidate's own retest status (for polling the button state).
+exports.getMyRetest = async (req, res, next) => {
+  try {
+    const latest = await RetestRequest.findOne({ userId: req.user._id }).sort('-createdAt');
+    const retest = await buildRetestState(req.user);
+    res.json({ success: true, data: latest, retest });
+  } catch (err) { next(err); }
+};
+
+// Candidate requests a retest. Allowed only after completing an assessment and
+// when no request is already pending/approved; creates a RetestRequest snapshot
+// that surfaces in the admin queue for approval.
+exports.requestRetest = async (req, res, next) => {
   try {
     if (!req.user.hasCompletedAssessment)
-      return res.status(400).json({ success: false, message: 'You can request a reassessment only after completing your assessment.' });
-    const status = req.user.reassessmentStatus || 'none';
-    if (status === 'requested')
-      return res.status(409).json({ success: false, message: 'Your reassessment request is already pending admin approval.' });
-    if (status === 'approved')
-      return res.status(400).json({ success: false, message: 'Your reassessment is already approved — you can start it now.' });
+      return res.status(400).json({ success: false, message: 'You can request a retest only after completing your assessment.' });
 
-    req.user.reassessmentStatus = 'requested';
-    req.user.reassessmentRequestedAt = new Date();
-    await req.user.save();
-    res.json({ success: true, message: 'Reassessment request sent to the administrator for approval.' });
+    const active = await RetestRequest.findOne({ userId: req.user._id, status: { $in: ['pending', 'approved'] } });
+    if (active)
+      return res.status(409).json({ success: false, message: 'Retest request already submitted.' });
+
+    const latestResult = await Result.findOne({ userId: req.user._id }).sort('-createdAt').select('_id percentage level');
+    const attemptCount = await Result.countDocuments({ userId: req.user._id });
+    let questionSetId;
+    try { const shared = await SharedUserID.findById(req.user.sharedUserID).select('questionSetId'); questionSetId = shared && shared.questionSetId; } catch { /* optional */ }
+
+    await RetestRequest.create({
+      userId: req.user._id,
+      userName: req.user.name,
+      userEmail: req.user.email,
+      sharedCode: req.user.sharedCode,
+      questionSetId,
+      attemptNumber: attemptCount + 1,
+      currentResultId: latestResult && latestResult._id,
+      currentPercentage: latestResult && latestResult.percentage,
+      currentLevel: latestResult && latestResult.level,
+      reason: (req.body && typeof req.body.reason === 'string') ? req.body.reason.slice(0, 500) : undefined,
+      requestedByUser: true,
+      ipAddress: req.ip,
+      userAgent: req.headers['user-agent'],
+      status: 'pending',
+    });
+    res.json({ success: true, message: 'Retest request sent to the administrator for approval.' });
   } catch (err) { next(err); }
 };
 

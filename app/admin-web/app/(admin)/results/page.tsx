@@ -16,6 +16,7 @@ type ResultRow = {
   maxScore: number;
   percentage: number;
   level: string;
+  attemptNumber?: number;
   highestCategory?: string[];
   createdAt: string;
   userId?: { name: string; email: string; sharedCode: string };
@@ -205,20 +206,21 @@ export default function ResultsPage() {
           <table className="data-table table-fixed">
             <colgroup>
               <col style={{ width: 36 }} />
-              <col style={{ width: "14%" }} />
-              <col style={{ width: "22%" }} />
-              <col style={{ width: 84 }} />
-              <col style={{ width: 84 }} />
-              <col style={{ width: 56 }} />
-              <col style={{ width: 132 }} />
-              <col style={{ width: "18%" }} />
-              <col style={{ width: 96 }} />
-              <col style={{ width: 140 }} />
+              <col style={{ width: "13%" }} />
+              <col style={{ width: "20%" }} />
+              <col style={{ width: 78 }} />
+              <col style={{ width: 64 }} />
+              <col style={{ width: 80 }} />
+              <col style={{ width: 52 }} />
+              <col style={{ width: 128 }} />
+              <col style={{ width: "16%" }} />
+              <col style={{ width: 92 }} />
+              <col style={{ width: 138 }} />
             </colgroup>
             <thead>
               <tr>
                 <th><input type="checkbox" checked={rows.length > 0 && selected.size === rows.length} onChange={(e) => toggleAll(e.target.checked)} /></th>
-                <th>Name</th><th>Email</th><th>Code</th><th>Score</th><th>%</th><th>Level</th><th>Top Category</th><th>Date</th><th>Actions</th>
+                <th>Name</th><th>Email</th><th>Code</th><th>Attempt</th><th>Score</th><th>%</th><th>Level</th><th>Top Category</th><th>Date</th><th>Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -231,6 +233,7 @@ export default function ResultsPage() {
                   <td className="truncate" title={r.userId?.name || ""}>{r.userId?.name || "—"}</td>
                   <td className="truncate text-xs" title={r.userId?.email || ""}>{r.userId?.email || "—"}</td>
                   <td className="nowrap"><span className="font-mono text-xs">{r.userId?.sharedCode || "—"}</span></td>
+                  <td className="nowrap">#{r.attemptNumber ?? 1}</td>
                   <td className="font-bold nowrap">{r.totalMarks}/{r.maxScore}</td>
                   <td className="nowrap">{r.percentage}%</td>
                   <td><span className={levelBadgeClass(r.level)}>{r.level}</span></td>
@@ -246,7 +249,7 @@ export default function ResultsPage() {
                 );
               })}
               {rows.length === 0 && (
-                <tr><td colSpan={10} className="text-center py-8" style={{ color: "var(--tbt-muted)" }}>No results found.</td></tr>
+                <tr><td colSpan={11} className="text-center py-8" style={{ color: "var(--tbt-muted)" }}>No results found.</td></tr>
               )}
             </tbody>
           </table>

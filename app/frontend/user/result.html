@@ -14,9 +14,6 @@
     <div class="max-w-4xl mx-auto px-4 py-4 flex justify-between items-center gap-3 flex-wrap">
       <span class="font-bold text-lg" style="color:var(--tbt-primary)">Tamil Business Tribe</span>
       <div class="flex items-center gap-2 flex-wrap">
-        <button id="btn-reassess" class="btn btn-primary btn-sm hidden">Request Reassessment</button>
-        <button id="btn-reassess-start" class="btn btn-accent btn-sm hidden">Start Reassessment</button>
-        <span id="reassess-pending" class="text-xs font-semibold hidden" style="color:var(--tbt-muted)">⏳ Reassessment pending admin approval</span>
         <button id="btn-logout" class="btn btn-outline btn-sm">Logout</button>
       </div>
     </div>
@@ -28,7 +25,9 @@
 
       <!-- Score card -->
       <div class="card text-center">
+        <p id="completed-banner" class="text-sm font-semibold mb-2" style="color:var(--tbt-success)">✅ Assessment Completed Successfully</p>
         <h2 class="text-2xl font-extrabold mb-1" id="assessment-title" style="color:var(--tbt-primary)">Your Assessment Results</h2>
+        <span id="attempt-badge" class="inline-block text-xs font-bold uppercase tracking-wide mb-2 px-3 py-1 rounded-full hidden" style="background:var(--tbt-primary-light,#FEF2F2);color:var(--tbt-primary)"></span>
         <p id="result-name" class="mb-6" style="color:var(--tbt-muted)"></p>
         <div class="flex flex-col items-center justify-center gap-2 mb-4">
           <div class="gauge-circle" id="gauge" style="--pct:0%">
@@ -83,6 +82,23 @@
         <h3 class="font-bold text-lg mb-3" style="color:var(--tbt-primary)">Areas to Strengthen</h3>
         <div id="improvements" class="space-y-4"></div>
       </div>
+
+      <!-- Previous attempts -->
+      <div id="history-section" class="card hidden">
+        <h3 class="font-bold text-lg mb-3" style="color:var(--tbt-primary)">Previous Attempts</h3>
+        <div id="history-list" class="space-y-2"></div>
+      </div>
+
+      <!-- Need to retake? -->
+      <div id="retest-section" class="card hidden text-center">
+        <h3 class="font-bold text-lg mb-1" style="color:var(--tbt-primary)">Need to Retake?</h3>
+        <p class="text-sm mb-4" style="color:var(--tbt-muted)">If you wish to retake this assessment, you can request approval from the administrator.</p>
+        <p id="retest-msg" class="text-sm font-semibold mb-3 hidden"></p>
+        <div class="flex justify-center gap-3 flex-wrap">
+          <button id="btn-retest-request" class="btn btn-primary hidden">Request Retest</button>
+          <button id="btn-retest-start" class="btn btn-accent hidden">Start Retest</button>
+        </div>
+      </div>
     </div>
   </main>
 
@@ -112,7 +128,7 @@
       const r = data.data;
       document.getElementById('loading').classList.add('hidden');
       document.getElementById('result-content').classList.remove('hidden');
-      renderReassessment(data.reassessment);
+      renderAttemptInfo(data);
 
       const testLabel = r.userId?.sharedUserID?.label || 'Your Assessment';
       document.title = `${testLabel} Results — Tamil Business Tribe`;
@@ -212,29 +228,82 @@
     // Logout is confirmed via a shared modal (see api.logoutWithConfirm).
     document.getElementById('btn-logout').addEventListener('click', () => api.logoutWithConfirm(token));
 
-    // Reassessment (retake) request → admin approval → start retake.
-    const btnReassess = document.getElementById('btn-reassess');
-    const btnReassessStart = document.getElementById('btn-reassess-start');
-    const reassessPending = document.getElementById('reassess-pending');
-    function renderReassessment(info) {
-      const status = (info && info.status) || 'none';
-      btnReassess.classList.toggle('hidden', !(info && info.canRequest));
-      reassessPending.classList.toggle('hidden', status !== 'requested');
-      btnReassessStart.classList.toggle('hidden', status !== 'approved');
-    }
-    btnReassess.addEventListener('click', async () => {
-      btnReassess.disabled = true; btnReassess.textContent = 'Sending...';
-      const { ok, data } = await api.post('/assessment/reassessment', {}, token);
-      if (!ok) {
-        showToast(data.message || 'Could not send request.', 'error');
-        btnReassess.disabled = false; btnReassess.textContent = 'Request Reassessment';
-        return;
+    // Attempt number, previous-attempts history, and retest request/approval UI.
+    const btnRetestRequest = document.getElementById('btn-retest-request');
+    const btnRetestStart = document.getElementById('btn-retest-start');
+
+    function renderAttemptInfo(data) {
+      const attempt = data.attemptNumber || 1;
+      const ab = document.getElementById('attempt-badge');
+      ab.textContent = `Attempt ${attempt}`;
+      ab.classList.remove('hidden');
+
+      const history = Array.isArray(data.history) ? data.history : [];
+      const hs = document.getElementById('history-section');
+      if (history.length > 1) {
+        document.getElementById('history-list').innerHTML = history.map((h) =>
+          `<div class="flex items-center justify-between gap-3 text-sm border-b pb-2" style="border-color:var(--tbt-border)">
+             <span class="font-semibold">Attempt ${h.attemptNumber || 1}</span>
+             <span style="color:var(--tbt-muted)">${new Date(h.createdAt).toLocaleDateString()}</span>
+             <span class="font-bold">${h.percentage}%</span>
+             <span class="text-xs" style="color:var(--tbt-muted)">${h.level || ''}</span>
+           </div>`).join('');
+        hs.classList.remove('hidden');
+      } else {
+        hs.classList.add('hidden');
       }
-      showToast(data.message || 'Reassessment request sent for approval.', 'success');
-      renderReassessment({ status: 'requested', canRequest: false });
+
+      renderRetest(data.retest);
+    }
+
+    function renderRetest(retest) {
+      const section = document.getElementById('retest-section');
+      const msg = document.getElementById('retest-msg');
+      btnRetestRequest.classList.add('hidden');
+      btnRetestStart.classList.add('hidden');
+      msg.classList.add('hidden');
+      if (!retest) { section.classList.add('hidden'); return; }
+      const status = retest.status || 'none';
+
+      if (status === 'pending') {
+        section.classList.remove('hidden');
+        msg.textContent = '⏳ Waiting for admin approval.';
+        msg.style.color = 'var(--tbt-muted)';
+        msg.classList.remove('hidden');
+      } else if (status === 'approved') {
+        section.classList.remove('hidden');
+        msg.textContent = '✅ Retest approved. You can start now.';
+        msg.style.color = 'var(--tbt-success)';
+        msg.classList.remove('hidden');
+        btnRetestStart.classList.remove('hidden');
+      } else if (retest.canRequest) {
+        section.classList.remove('hidden');
+        if (status === 'rejected') {
+          // textContent (not innerHTML) — admin note is rendered safely.
+          msg.textContent = '❌ Your previous retest request was rejected' + (retest.rejectionNote ? `: ${retest.rejectionNote}` : '.');
+          msg.style.color = 'var(--tbt-danger)';
+          msg.classList.remove('hidden');
+          btnRetestRequest.textContent = 'Request Again';
+        } else {
+          btnRetestRequest.textContent = 'Request Retest';
+        }
+        btnRetestRequest.classList.remove('hidden');
+      } else {
+        section.classList.add('hidden');
+      }
+    }
+
+    btnRetestRequest.addEventListener('click', async () => {
+      btnRetestRequest.disabled = true; btnRetestRequest.textContent = 'Sending...';
+      const { ok, data } = await api.post('/assessment/retest/request', {}, token);
+      btnRetestRequest.disabled = false;
+      if (!ok) { showToast(data.message || 'Could not send request.', 'error'); btnRetestRequest.textContent = 'Request Retest'; return; }
+      showToast(data.message || 'Retest request sent for approval.', 'success');
+      renderRetest({ status: 'pending', canRequest: false });
     });
-    // Approved → begin a fresh attempt from the access-code screen.
-    btnReassessStart.addEventListener('click', () => { window.location.href = '/user/index.html'; });
+    // Approved → begin the granted attempt from the access-code screen (reuses
+    // the existing access-code → welcome → start flow; start consumes the approval).
+    btnRetestStart.addEventListener('click', () => { window.location.href = '/user/index.html'; });
 
     loadResult();
   </script>

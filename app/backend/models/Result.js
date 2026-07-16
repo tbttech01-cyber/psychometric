@@ -3,6 +3,9 @@ const mongoose = require('mongoose');
 const resultSchema = new mongoose.Schema({
   userId:              { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
   sessionId:           { type: mongoose.Schema.Types.ObjectId, ref: 'AssessmentSession', required: true, unique: true },
+  // 1 = first attempt; 2+ = an admin-approved retest. Every attempt keeps its
+  // own Result (attempt #1 is never overwritten).
+  attemptNumber:       { type: Number, default: 1 },
   totalMarks:          { type: Number, required: true },
   maxScore:            { type: Number, required: true },
   percentage:          { type: Number, required: true },

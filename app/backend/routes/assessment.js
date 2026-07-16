@@ -33,7 +33,8 @@ router.post('/submit',
 );
 
 router.get('/result', userAuth, ctrl.getResult);
-router.post('/reassessment', userAuth, ctrl.requestReassessment);
+router.post('/retest/request', userAuth, ctrl.requestRetest);
+router.get('/retest/my-request', userAuth, ctrl.getMyRetest);
 router.get('/settings', userAuth, ctrl.getSettings);
 
 module.exports = router;

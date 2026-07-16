@@ -21,7 +21,8 @@ import {
   X,
   type LucideIcon,
 } from "lucide-react";
-import { api, getToken, removeToken } from "@/lib/api";
+import { useEffect, useState } from "react";
+import { api, getToken, removeToken, type ApiEnvelope } from "@/lib/api";
 
 const NAV_ITEMS: { href: string; label: string; icon: LucideIcon }[] = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutGrid },
@@ -32,7 +33,7 @@ const NAV_ITEMS: { href: string; label: string; icon: LucideIcon }[] = [
   { href: "/question-sets", label: "Question Sets", icon: Layers },
   { href: "/answer-options", label: "Answer Options", icon: ListChecks },
   { href: "/results", label: "Results", icon: BarChart3 },
-  { href: "/reassessments", label: "Reassessments", icon: RefreshCcw },
+  { href: "/retest-requests", label: "Retest Requests", icon: RefreshCcw },
   { href: "/reports", label: "Reports", icon: FileText },
   { href: "/settings", label: "Settings", icon: SettingsIcon },
   { href: "/business-matrix", label: "Business Matrix", icon: Grid3x3 },
@@ -42,6 +43,22 @@ const NAV_ITEMS: { href: string; label: string; icon: LucideIcon }[] = [
 export default function Sidebar({ mobileOpen = false, onClose }: { mobileOpen?: boolean; onClose?: () => void }) {
   const pathname = usePathname();
   const router = useRouter();
+  const [pendingRetests, setPendingRetests] = useState(0);
+
+  // In-app notification: poll the pending retest-request count for the sidebar
+  // badge (refreshes on route change too, so approving/rejecting updates it).
+  useEffect(() => {
+    let alive = true;
+    const fetchCount = async () => {
+      const { ok, data } = await api.get<ApiEnvelope<unknown[]> & { counts?: Record<string, number> }>(
+        "/admin/retest-requests?status=pending", getToken()
+      );
+      if (alive && ok) setPendingRetests((data.counts && data.counts.pending) || (data.data ? data.data.length : 0));
+    };
+    fetchCount();
+    const t = setInterval(fetchCount, 30000);
+    return () => { alive = false; clearInterval(t); };
+  }, [pathname]);
 
   async function handleLogout() {
     const token = getToken();
@@ -79,6 +96,11 @@ export default function Sidebar({ mobileOpen = false, onClose }: { mobileOpen?: 
               <Link key={item.href} href={item.href} className={active ? "active" : ""} onClick={onClose}>
                 <Icon size={18} strokeWidth={2} />
                 {item.label}
+                {item.href === "/retest-requests" && pendingRetests > 0 && (
+                  <span className="ml-auto text-xs font-bold px-2 py-0.5 rounded-full" style={{ background: "var(--tbt-primary)", color: "#fff" }}>
+                    {pendingRetests}
+                  </span>
+                )}
               </Link>
             );
           })}

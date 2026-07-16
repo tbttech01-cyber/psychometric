@@ -16,13 +16,6 @@ const userSchema = new mongoose.Schema({
   // sharedUserID/sharedCode to the chosen cohort. See userAuthController.
   codeSelected:           { type: Boolean, default: false },
   hasCompletedAssessment: { type: Boolean, default: false },
-  // Reassessment (retake) approval workflow. A candidate who has completed the
-  // assessment can request a retake; an admin must approve it before a new
-  // attempt is allowed. 'approved' is consumed on the next startSession (which
-  // resets it to 'none' and re-opens exactly one attempt) — see assessmentController.
-  reassessmentStatus:      { type: String, enum: ['none', 'requested', 'approved'], default: 'none' },
-  reassessmentRequestedAt: { type: Date },
-  reassessmentDecidedAt:   { type: Date },
   phone:                  { type: String, trim: true },
   candidateId:            { type: String, unique: true, sparse: true },
   batch:                  { type: String, trim: true },
