@@ -24,7 +24,13 @@
         </div>
         <div class="mb-5">
           <label class="block text-sm font-semibold mb-1" for="password">Password</label>
-          <input id="password" name="password" type="password" autocomplete="current-password" placeholder="Your password" class="w-full border-2 rounded-lg px-4 py-2.5 focus:outline-none" style="border-color:var(--tbt-border)" />
+          <div style="position:relative">
+            <input id="password" name="password" type="password" autocomplete="current-password" placeholder="Your password" class="w-full border-2 rounded-lg px-4 py-2.5 focus:outline-none" style="border-color:var(--tbt-border);padding-right:2.75rem" />
+            <button type="button" id="toggle-password" aria-label="Show password" style="position:absolute;top:0;bottom:0;right:0;display:flex;align-items:center;padding:0 0.75rem;background:none;border:none;cursor:pointer;color:var(--tbt-muted)">
+              <svg id="eye-open" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
+              <svg id="eye-off" class="hidden" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9.88 9.88a3 3 0 1 0 4.24 4.24"/><path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68"/><path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61"/><line x1="2" x2="22" y1="2" y2="22"/></svg>
+            </button>
+          </div>
           <p id="password-error" class="text-red-500 text-xs mt-1 hidden"></p>
         </div>
         <button id="btn-login" type="submit" class="btn btn-primary w-full">Sign In</button>
@@ -45,6 +51,20 @@
       const user = api.getUser();
       window.location.href = user && user.hasCompletedAssessment ? '/user/result.html' : '/user/index.html';
     }
+    // Show/hide the password while typing.
+    (function () {
+      const btn = document.getElementById('toggle-password');
+      const inp = document.getElementById('password');
+      const open = document.getElementById('eye-open');
+      const off = document.getElementById('eye-off');
+      btn.addEventListener('click', () => {
+        const reveal = inp.type === 'password';
+        inp.type = reveal ? 'text' : 'password';
+        open.classList.toggle('hidden', reveal);
+        off.classList.toggle('hidden', !reveal);
+        btn.setAttribute('aria-label', reveal ? 'Hide password' : 'Show password');
+      });
+    })();
     document.getElementById('login-form').addEventListener('submit', async (e) => {
       e.preventDefault();
       Validator.clearAll(['email','password']);
