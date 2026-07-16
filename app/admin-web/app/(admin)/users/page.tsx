@@ -157,7 +157,7 @@ export default function UsersPage() {
               </div>
               <div className="grid md:grid-cols-2 gap-3">
                 <select value={form.sharedCode} onChange={(e) => setForm({ ...form, sharedCode: e.target.value })}
-                  className="border rounded-xl px-3.5 py-2.5 w-full min-w-0 font-mono focus:outline-none" style={{ borderColor: "var(--tbt-border)" }}>
+                  className="border rounded-xl px-3.5 py-2.5 w-full min-w-0 focus:outline-none" style={{ borderColor: "var(--tbt-border)" }}>
                   <option value="">Select access code</option>
                   {sharedCodes.map((s) => (
                     <option key={s._id} value={s.code}>{s.code} — {s.label}</option>
