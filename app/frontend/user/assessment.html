@@ -72,6 +72,8 @@
     // stopAllPlayback, the single choke point that prevents any overlap.
     let audioUrls = {};       // qid -> uploaded audio data URI (priority source)
     let questionTexts = {};   // qid -> plain question text (text-to-speech source)
+    let explanationTexts = {}; // qid -> admin-authored spoken explanation ("Explain" button)
+    let explainingQid = null;  // question whose explanation is currently being spoken
     let currentAudio = null;  // live HTMLAudioElement (uploaded-audio mode)
     let currentUtterance = null; // live SpeechSynthesisUtterance (tts mode)
     let activeQid = null;     // question whose audio/speech is currently live
@@ -119,11 +121,12 @@
       // Index both audio sources for every question: the uploaded clip (if any)
       // takes priority, and every question also exposes its text for the
       // text-to-speech fallback so EVERY question gets a working audio button.
-      audioUrls = {}; questionTexts = {}; neuralReady = {};
+      audioUrls = {}; questionTexts = {}; explanationTexts = {}; neuralReady = {};
       sections.forEach((s) => s.questions.forEach((q) => {
         if (q.hasAudio && q.audioUrl) audioUrls[q._id] = q.audioUrl;
         if (q.neuralAudio) neuralReady[q._id] = true;
         questionTexts[q._id] = q.text || '';
+        explanationTexts[q._id] = q.explanationAudioText || '';
       }));
       restoreAutosave();
       renderUnits = buildRenderUnits(sections);
@@ -251,6 +254,11 @@
             onclick="stopPlayback('${q._id}')" aria-label="Stop audio">
             <span class="audio-icon">${AUDIO_ICONS.stop}</span><span>Stop</span>
           </button>
+          ${(q.explanationAudioText && String(q.explanationAudioText).trim()) ? `
+          <button type="button" class="btn btn-outline btn-sm" id="explain-btn-${q._id}"
+            onclick="explainQuestion('${q._id}')" aria-label="Hear an explanation of this question">
+            <span>💡</span><span id="explain-label-${q._id}">Explain</span>
+          </button>` : ''}
           <span class="audio-error text-xs hidden" id="audio-error-${q._id}" role="alert" style="color:var(--tbt-danger)"></span>
         </div>`;
     }
@@ -350,6 +358,35 @@
       }
       activeQid = null; activeMode = null; activeState = 'idle';
       if (prev) setAudioState(prev, 'play');
+      // Reset the "Explain" button too — its speech shares currentUtterance and
+      // was cancelled above, so its label must return to "Explain".
+      if (explainingQid) { setExplainState(explainingQid, false); explainingQid = null; }
+    }
+
+    // "Explain" button — speaks the admin-authored spoken explanation via the
+    // browser voice. Toggles off on a second tap; shares the single-playback
+    // choke point (stopAllPlayback) so it never overlaps question audio.
+    function setExplainState(qid, on) {
+      const l = document.getElementById(`explain-label-${qid}`);
+      if (l) l.textContent = on ? 'Stop' : 'Explain';
+    }
+    function explainQuestion(qid) {
+      const text = (explanationTexts[qid] || '').trim();
+      if (!text) return;
+      if (explainingQid === qid) { stopAllPlayback(); return; } // toggle off
+      stopAllPlayback();                                        // stop question audio / prior explanation
+      if (!TTS_OK) { showAudioError(qid, 'Audio is not supported in this browser.'); return; }
+      const ss = window.speechSynthesis;
+      const u = new SpeechSynthesisUtterance(text);
+      const { lang, voice } = pickSpeech(text);
+      u.lang = lang; if (voice) u.voice = voice;
+      u.rate = TTS_RATE; u.pitch = TTS_PITCH; u.volume = TTS_VOLUME;
+      currentUtterance = u; explainingQid = qid;
+      setExplainState(qid, true);
+      u.onend = () => { if (currentUtterance === u) { currentUtterance = null; explainingQid = null; setExplainState(qid, false); } };
+      u.onerror = () => { if (currentUtterance === u) { currentUtterance = null; explainingQid = null; setExplainState(qid, false); } };
+      const go = () => { if (currentUtterance !== u) return; try { ss.speak(u); if (ss.paused) ss.resume(); } catch { u.onerror(); } };
+      if (ss.speaking || ss.pending) { try { ss.cancel(); } catch { /* ignore */ } setTimeout(go, 90); } else go();
     }
 
     // Uploaded-audio playback. Handlers are guarded on element IDENTITY because

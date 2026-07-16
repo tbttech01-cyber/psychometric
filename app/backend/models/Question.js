@@ -29,6 +29,10 @@ const questionSchema = new mongoose.Schema({
   imageUrl:         { type: String, default: '' },
   instructionText:  { type: String, maxlength: 500, default: '' },
   isReverseScored:  { type: Boolean, default: false },
+  // Admin-authored spoken explanation of the question. The candidate hears it
+  // (browser voice) via a separate "Explain" button during the assessment.
+  // Distinct from `explanation` below (which is a reports-only field).
+  explanationAudioText: { type: String, maxlength: 1000, default: '' },
 
   // Type-specific fields. Only LIKERT_SCALE/NUMERICAL_ABILITY rules are
   // enforced in Phase 1 — the rest exist now so later phases (SITUATIONAL,

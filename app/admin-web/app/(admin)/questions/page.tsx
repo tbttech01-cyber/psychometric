@@ -90,6 +90,7 @@ function QuestionsPageInner() {
   const [qAudioUrl, setQAudioUrl] = useState("");
   const [qImageUrl, setQImageUrl] = useState("");
   const [qInstructionText, setQInstructionText] = useState("");
+  const [qExplanationAudioText, setQExplanationAudioText] = useState("");
   const [qScoringMode, setQScoringMode] = useState<"exact" | "partial" | "">("");
   const [options, setOptions] = useState<AnswerOption[]>(defaultOptionsFor("LIKERT_SCALE"));
   const [deleteTarget, setDeleteTarget] = useState<Question | null>(null);
@@ -145,6 +146,7 @@ function QuestionsPageInner() {
     setQAudioUrl("");
     setQImageUrl("");
     setQInstructionText("");
+    setQExplanationAudioText("");
     setQScoringMode("");
     setOptions(defaultOptionsFor("LIKERT_SCALE"));
   }
@@ -181,6 +183,7 @@ function QuestionsPageInner() {
     setQAudioUrl(q.audioUrl || "");
     setQImageUrl(q.imageUrl || "");
     setQInstructionText(q.instructionText || "");
+    setQExplanationAudioText(q.explanationAudioText || "");
     setQScoringMode(q.scoringMode || "");
     setOptions(q.options && q.options.length ? q.options : defaultOptionsFor(q.questionType || "LIKERT_SCALE"));
     setShowForm(true);
@@ -204,6 +207,7 @@ function QuestionsPageInner() {
       audioUrl: qAudioUrl.trim() || undefined,
       imageUrl: qImageUrl.trim() || undefined,
       instructionText: qInstructionText.trim() || undefined,
+      explanationAudioText: qExplanationAudioText.trim() || undefined,
       scoringMode: qQuestionType === "MULTI_SELECT" ? (qScoringMode || undefined) : undefined,
       options: options.map((o, i) => ({ ...o, order: i + 1 })),
     };
@@ -317,6 +321,10 @@ function QuestionsPageInner() {
                 rows={2} className="border rounded-xl px-3.5 py-2.5 w-full focus:outline-none mb-3" style={{ borderColor: "var(--tbt-border)" }} />
 
               <textarea placeholder="Instruction text shown above the question (optional)" value={qInstructionText} onChange={(e) => setQInstructionText(e.target.value)} maxLength={500}
+                rows={2} className="border rounded-xl px-3.5 py-2.5 w-full focus:outline-none mb-3" style={{ borderColor: "var(--tbt-border)" }} />
+
+              <label className="block text-xs font-semibold mb-1" style={{ color: "var(--tbt-muted)" }}>🔊 Spoken explanation (optional) — read aloud when the candidate taps &quot;Explain&quot;</label>
+              <textarea placeholder="e.g. This question checks how you handle a customer complaint. Read each option and pick the one closest to how you'd respond." value={qExplanationAudioText} onChange={(e) => setQExplanationAudioText(e.target.value)} maxLength={1000}
                 rows={2} className="border rounded-xl px-3.5 py-2.5 w-full focus:outline-none mb-3" style={{ borderColor: "var(--tbt-border)" }} />
 
               <div className="grid md:grid-cols-2 gap-3 mb-3">
