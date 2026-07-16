@@ -92,6 +92,11 @@
       showToast('New OTP sent!', 'success');
       startResendTimer();
     });
+
+    // An OTP was just sent during registration, so honour the server's 60s
+    // resend cooldown immediately — show the countdown instead of an enabled
+    // button that would just return a "please wait" error on the first click.
+    startResendTimer();
   </script>
 </body>
 </html>
