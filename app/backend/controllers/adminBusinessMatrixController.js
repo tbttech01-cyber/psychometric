@@ -15,8 +15,11 @@ exports.seedSample = async (req, res, next) => {
 
 exports.getMatrix = async (req, res, next) => {
   try {
-    const types = await QuestionType.find({ isActive: true }).sort({ order: 1 });
-    const cells = await BusinessMatrixCell.find();
+    // Independent reads — run in parallel to halve the DB round-trips.
+    const [types, cells] = await Promise.all([
+      QuestionType.find({ isActive: true }).sort({ order: 1 }),
+      BusinessMatrixCell.find(),
+    ]);
     const total = types.length * types.length;
     const configured = cells.filter((c) => c.isActive).length;
     res.json({ success: true, types, cells, completion: { configured, total } });

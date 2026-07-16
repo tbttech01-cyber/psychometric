@@ -22,11 +22,15 @@ async function normalizeQuestionIds(questionIds, res) {
 
 exports.listSets = async (req, res, next) => {
   try {
-    const sets = await QuestionSet.find().sort({ createdAt: -1 }).lean();
-    // Count codes assigned to each set in one query rather than N.
-    const counts = await SharedUserID.aggregate([
-      { $match: { questionSetId: { $ne: null } } },
-      { $group: { _id: '$questionSetId', count: { $sum: 1 } } },
+    // Both reads are independent — run them in parallel so the endpoint costs
+    // one DB round-trip instead of two (the cluster round-trip dominates latency).
+    const [sets, counts] = await Promise.all([
+      QuestionSet.find().sort({ createdAt: -1 }).lean(),
+      // Count codes assigned to each set in one query rather than N.
+      SharedUserID.aggregate([
+        { $match: { questionSetId: { $ne: null } } },
+        { $group: { _id: '$questionSetId', count: { $sum: 1 } } },
+      ]),
     ]);
     const assignedBySet = Object.fromEntries(counts.map(c => [String(c._id), c.count]));
     const data = sets.map(s => ({

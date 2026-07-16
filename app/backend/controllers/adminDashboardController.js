@@ -9,12 +9,16 @@ const RetestRequest = require('../models/RetestRequest');
 
 exports.getDashboard = async (req, res, next) => {
   try {
-    const [totalUsers, completedSessions, inProgressSessions, activeSharedCodes, results] = await Promise.all([
+    // Everything the dashboard needs from the DB in ONE parallel batch —
+    // including recentResults, which used to be a separate sequential query
+    // after this block (an extra full cluster round-trip on every load).
+    const [totalUsers, completedSessions, inProgressSessions, activeSharedCodes, results, recentResults] = await Promise.all([
       User.countDocuments({ isVerified: true }),
       AssessmentSession.countDocuments({ status: 'submitted' }),
       AssessmentSession.countDocuments({ status: 'in-progress' }),
       SharedUserID.countDocuments({ isActive: true }),
       Result.find().sort({ createdAt: -1 }),
+      Result.find().sort({ createdAt: -1 }).limit(10).populate('userId', 'name email sharedCode'),
     ]);
 
     // Percentage, not raw points — categories/questions can be added or
@@ -51,10 +55,6 @@ exports.getDashboard = async (req, res, next) => {
       labels: Object.keys(businessCount),
       data: Object.values(businessCount),
     };
-
-    const recentResults = await Result.find()
-      .sort({ createdAt: -1 }).limit(10)
-      .populate('userId', 'name email sharedCode');
 
     res.json({
       success: true,
@@ -94,11 +94,14 @@ exports.getResults = async (req, res, next) => {
       query = Result.find(filter).populate('userId', 'name email sharedCode');
     }
 
-    const total = await Result.countDocuments(filter);
-    const results = await query
-      .sort(SORT_OPTIONS[sortBy] || SORT_OPTIONS['date-desc'])
-      .skip((+page - 1) * +limit)
-      .limit(+limit);
+    // Count + page fetch are independent — run in parallel (one round-trip).
+    const [total, results] = await Promise.all([
+      Result.countDocuments(filter),
+      query
+        .sort(SORT_OPTIONS[sortBy] || SORT_OPTIONS['date-desc'])
+        .skip((+page - 1) * +limit)
+        .limit(+limit),
+    ]);
 
     res.json({ success: true, data: results, total, page: +page, pages: Math.ceil(total / +limit) });
   } catch (err) { next(err); }
