@@ -189,9 +189,9 @@ export default function VoicePage() {
             <table className="data-table">
               <thead><tr><th>#</th><th>Question</th><th>Status</th><th>Actions</th></tr></thead>
               <tbody>
-                {rows.map((r) => (
+                {rows.map((r, i) => (
                   <tr key={r._id}>
-                    <td>{r.order}</td>
+                    <td>{i + 1}</td>
                     <td className="max-w-md truncate" title={r.text}>{r.text}</td>
                     <td><span className={`badge ${STATUS_BADGE[r.status].cls}`}>{STATUS_BADGE[r.status].text}</span></td>
                     <td>

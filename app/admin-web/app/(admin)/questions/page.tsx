@@ -234,17 +234,31 @@ function QuestionsPageInner() {
     loadAllOrders();
   }
 
-  const filteredRows = rows.filter((q) => {
-    if (fStatus === "active" && !q.isActive) return false;
-    if (fStatus === "inactive" && q.isActive) return false;
-    if (fSearch && !q.text.toLowerCase().includes(fSearch.toLowerCase())) return false;
-    return true;
-  });
+  const filteredRows = rows
+    .filter((q) => {
+      if (fStatus === "active" && !q.isActive) return false;
+      if (fStatus === "inactive" && q.isActive) return false;
+      if (fSearch && !q.text.toLowerCase().includes(fSearch.toLowerCase())) return false;
+      return true;
+    })
+    // The backend sorts by `order`, but a soft-deleted question carries a
+    // sentinel NEGATIVE order (see adminCRUDController deleteQuestion/reorder)
+    // that would otherwise sort it to the top. Keep active questions in their
+    // real sortOrder and sink inactive ones below, so the visible serial numbers
+    // (rendered from row position below, NOT from `order`) stay 1..N for the
+    // live set. Ordering logic itself is unchanged — this only affects display.
+    .sort((a, b) => {
+      if (a.isActive !== b.isActive) return a.isActive ? -1 : 1;
+      return a.order - b.order;
+    });
 
   async function moveQuestion(i: number, dir: -1 | 1) {
     const j = i + dir;
     if (j < 0 || j >= filteredRows.length) return;
     const a = filteredRows[i], b = filteredRows[j];
+    // Only reorder within the active set — a soft-deleted question's sentinel
+    // negative order must never be swapped onto a live question.
+    if (!a.isActive || !b.isActive) return;
     const { ok, data } = await api.post<ApiEnvelope>("/admin/questions/reorder", {
       orders: [{ id: a._id, order: b.order }, { id: b._id, order: a.order }],
     }, token);
@@ -464,12 +478,12 @@ function QuestionsPageInner() {
                   <tr key={q._id}>
                     <td className="font-bold">
                       <div className="flex items-center gap-1">
-                        <span>{q.order}</span>
+                        <span>{i + 1}</span>
                         <div className="flex flex-col">
-                          <button onClick={() => moveQuestion(i, -1)} disabled={i === 0} className="icon-btn disabled:opacity-30" title="Move up" style={{ padding: 0 }}>
+                          <button onClick={() => moveQuestion(i, -1)} disabled={!q.isActive || i === 0 || !filteredRows[i - 1]?.isActive} className="icon-btn disabled:opacity-30" title="Move up" style={{ padding: 0 }}>
                             <ArrowUp size={12} />
                           </button>
-                          <button onClick={() => moveQuestion(i, 1)} disabled={i === filteredRows.length - 1} className="icon-btn disabled:opacity-30" title="Move down" style={{ padding: 0 }}>
+                          <button onClick={() => moveQuestion(i, 1)} disabled={!q.isActive || i === filteredRows.length - 1 || !filteredRows[i + 1]?.isActive} className="icon-btn disabled:opacity-30" title="Move down" style={{ padding: 0 }}>
                             <ArrowDown size={12} />
                           </button>
                         </div>
