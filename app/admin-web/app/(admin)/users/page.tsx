@@ -140,13 +140,13 @@ export default function UsersPage() {
               </div>
               <div className="grid md:grid-cols-2 gap-3">
                 <input placeholder="Full name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })}
-                  className="border rounded-xl px-3.5 py-2.5 focus:outline-none" style={{ borderColor: "var(--tbt-border)" }} />
+                  className="border rounded-xl px-3.5 py-2.5 w-full min-w-0 focus:outline-none" style={{ borderColor: "var(--tbt-border)" }} />
                 <input placeholder="Email address" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })}
-                  className="border rounded-xl px-3.5 py-2.5 focus:outline-none" style={{ borderColor: "var(--tbt-border)" }} />
+                  className="border rounded-xl px-3.5 py-2.5 w-full min-w-0 focus:outline-none" style={{ borderColor: "var(--tbt-border)" }} />
                 <input placeholder="Phone number (optional)" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })}
-                  className="border rounded-xl px-3.5 py-2.5 focus:outline-none" style={{ borderColor: "var(--tbt-border)" }} />
+                  className="border rounded-xl px-3.5 py-2.5 w-full min-w-0 focus:outline-none" style={{ borderColor: "var(--tbt-border)" }} />
                 <input placeholder="Temporary password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })}
-                  className="border rounded-xl px-3.5 py-2.5 focus:outline-none" style={{ borderColor: "var(--tbt-border)" }} />
+                  className="border rounded-xl px-3.5 py-2.5 w-full min-w-0 focus:outline-none" style={{ borderColor: "var(--tbt-border)" }} />
               </div>
             </div>
 
@@ -157,16 +157,16 @@ export default function UsersPage() {
               </div>
               <div className="grid md:grid-cols-2 gap-3">
                 <select value={form.sharedCode} onChange={(e) => setForm({ ...form, sharedCode: e.target.value })}
-                  className="border rounded-xl px-3.5 py-2.5 font-mono focus:outline-none" style={{ borderColor: "var(--tbt-border)" }}>
+                  className="border rounded-xl px-3.5 py-2.5 w-full min-w-0 font-mono focus:outline-none" style={{ borderColor: "var(--tbt-border)" }}>
                   <option value="">Select access code</option>
                   {sharedCodes.map((s) => (
                     <option key={s._id} value={s.code}>{s.code} — {s.label}</option>
                   ))}
                 </select>
                 <input placeholder="Assessment batch (optional)" value={form.batch} onChange={(e) => setForm({ ...form, batch: e.target.value })}
-                  className="border rounded-xl px-3.5 py-2.5 focus:outline-none" style={{ borderColor: "var(--tbt-border)" }} />
+                  className="border rounded-xl px-3.5 py-2.5 w-full min-w-0 focus:outline-none" style={{ borderColor: "var(--tbt-border)" }} />
                 <input type="date" value={form.accessExpiry} onChange={(e) => setForm({ ...form, accessExpiry: e.target.value })}
-                  className="border rounded-xl px-3.5 py-2.5 focus:outline-none" style={{ borderColor: "var(--tbt-border)" }} />
+                  className="border rounded-xl px-3.5 py-2.5 w-full min-w-0 focus:outline-none" style={{ borderColor: "var(--tbt-border)" }} />
                 <div className="flex gap-2">
                   <input readOnly placeholder="Candidate ID" value={form.candidateId}
                     className="border rounded-xl px-3.5 py-2.5 flex-1 min-w-0 font-mono bg-gray-50 focus:outline-none" style={{ borderColor: "var(--tbt-border)" }} />
