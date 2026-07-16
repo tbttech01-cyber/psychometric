@@ -185,7 +185,7 @@ export default function UsersPage() {
                 style={{ background: "#F9FAFB", border: "1px solid var(--tbt-border)" }}
               >
                 <ShieldCheck size={18} style={{ color: "var(--tbt-muted)" }} className="shrink-0" />
-                <span className="flex-1 text-sm">
+                <span className="flex-1 min-w-0 text-sm">
                   <span className="font-semibold block">Restricted Access</span>
                   <span style={{ color: "var(--tbt-muted)" }}>Only authorized admins can view this candidate&apos;s results.</span>
                 </span>
