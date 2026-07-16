@@ -169,8 +169,8 @@ export default function UsersPage() {
                   className="border rounded-xl px-3.5 py-2.5 focus:outline-none" style={{ borderColor: "var(--tbt-border)" }} />
                 <div className="flex gap-2">
                   <input readOnly placeholder="Candidate ID" value={form.candidateId}
-                    className="border rounded-xl px-3.5 py-2.5 flex-1 font-mono bg-gray-50 focus:outline-none" style={{ borderColor: "var(--tbt-border)" }} />
-                  <button onClick={generateCandidateId} className="btn btn-outline btn-sm"><RefreshCw size={14} /> Generate</button>
+                    className="border rounded-xl px-3.5 py-2.5 flex-1 min-w-0 font-mono bg-gray-50 focus:outline-none" style={{ borderColor: "var(--tbt-border)" }} />
+                  <button onClick={generateCandidateId} className="btn btn-outline btn-sm shrink-0"><RefreshCw size={14} /> Generate</button>
                 </div>
               </div>
             </div>

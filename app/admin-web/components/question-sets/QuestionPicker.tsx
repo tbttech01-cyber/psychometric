@@ -60,14 +60,14 @@ export default function QuestionPicker({
             {categories.map((c) => <option key={c._id} value={c._id}>{c.name}</option>)}
           </select>
           <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search questions..."
-            className="border rounded-xl px-3 py-2 text-sm flex-1 focus:outline-none" style={{ borderColor: "var(--tbt-border)" }} />
+            className="border rounded-xl px-3 py-2 text-sm flex-1 min-w-0 focus:outline-none" style={{ borderColor: "var(--tbt-border)" }} />
         </div>
         <div className="border rounded-xl divide-y max-h-80 overflow-y-auto" style={{ borderColor: "var(--tbt-border)" }}>
           {filtered.length === 0 && <p className="p-3 text-sm" style={{ color: "var(--tbt-muted)" }}>No questions match.</p>}
           {filtered.map((q) => (
             <label key={q._id} className="flex items-start gap-2 p-2.5 cursor-pointer text-sm hover:bg-black/5">
-              <input type="checkbox" checked={selectedSet.has(q._id)} onChange={() => toggle(q._id)} className="mt-1" />
-              <span>
+              <input type="checkbox" checked={selectedSet.has(q._id)} onChange={() => toggle(q._id)} className="mt-1 shrink-0" />
+              <span className="min-w-0">
                 <span style={{ color: "var(--tbt-text)" }}>{q.text}</span>
                 <span className="block text-xs" style={{ color: "var(--tbt-muted)" }}>
                   {catNameOf(q)} · {QUESTION_TYPE_LABELS[q.questionType]}
@@ -89,9 +89,9 @@ export default function QuestionPicker({
             const q = byId.get(id);
             return (
               <div key={id} className="flex items-center gap-2 p-2.5 text-sm">
-                <span className="font-mono text-xs w-6" style={{ color: "var(--tbt-muted)" }}>{i + 1}.</span>
-                <span className="flex-1" style={{ color: "var(--tbt-text)" }}>{q ? q.text : "(missing question)"}</span>
-                <button type="button" onClick={() => move(i, -1)} disabled={i === 0} className="p-1 disabled:opacity-30" aria-label="Move up"><ChevronUp size={16} /></button>
+                <span className="font-mono text-xs w-6 shrink-0" style={{ color: "var(--tbt-muted)" }}>{i + 1}.</span>
+                <span className="flex-1 min-w-0 truncate" title={q ? q.text : ""} style={{ color: "var(--tbt-text)" }}>{q ? q.text : "(missing question)"}</span>
+                <button type="button" onClick={() => move(i, -1)} disabled={i === 0} className="p-1 disabled:opacity-30 shrink-0" aria-label="Move up"><ChevronUp size={16} /></button>
                 <button type="button" onClick={() => move(i, 1)} disabled={i === value.length - 1} className="p-1 disabled:opacity-30" aria-label="Move down"><ChevronDown size={16} /></button>
                 <button type="button" onClick={() => toggle(id)} className="p-1" aria-label="Remove"><X size={16} /></button>
               </div>
