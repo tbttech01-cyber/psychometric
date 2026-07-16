@@ -165,10 +165,22 @@ exports.startSession = async (req, res, next) => {
   try {
     const userId = req.user._id;
 
-    // Resuming an in-progress attempt takes priority over any gate below.
+    // Resuming a still-live in-progress attempt takes priority over any gate
+    // below. But if that attempt has already expired past the submit grace
+    // window (the candidate abandoned it), retire it here — otherwise it would
+    // stay 'in-progress' forever, and every future start would 409 while submit
+    // rejects it as expired, permanently stranding the candidate.
     const inProgress = await AssessmentSession.findOne({ userId, status: 'in-progress' });
-    if (inProgress)
-      return res.status(409).json({ success: false, sessionId: inProgress._id, expiresAt: inProgress.expiresAt, message: 'Assessment already in progress.' });
+    if (inProgress) {
+      const GRACE_MS = 60 * 1000;
+      const dead = Date.now() > inProgress.expiresAt.getTime() + GRACE_MS;
+      if (!dead)
+        return res.status(409).json({ success: false, sessionId: inProgress._id, expiresAt: inProgress.expiresAt, message: 'Assessment already in progress.' });
+      inProgress.status = 'expired';
+      await inProgress.save();
+      // fall through to start a fresh attempt (retest approval, if any, is still
+      // required below — an abandoned retest that expired stays consumed).
+    }
 
     // A completed candidate can only start again via an admin-APPROVED retest
     // request, which grants exactly one more attempt. The approval is consumed

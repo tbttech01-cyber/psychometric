@@ -332,6 +332,16 @@ describe('Assessment timing — server-authoritative expiry', () => {
     const session = await AssessmentSession.findById(sessionId);
     expect(session.status).toBe('in-progress');
   });
+
+  it('auto-retires an expired abandoned session so the candidate can start fresh', async () => {
+    // The session above is expired past grace. A new start must NOT 409 forever
+    // — it retires the dead session and issues a fresh attempt.
+    const res = await request(app).post('/api/v1/assessment/start').set('Authorization', `Bearer ${token}`);
+    expect(res.status).toBe(201);
+    expect(res.body.sessionId).not.toBe(sessionId);
+    const old = await AssessmentSession.findById(sessionId);
+    expect(old.status).toBe('expired');
+  });
 });
 
 describe('Assessment audio — candidate /questions payload', () => {
