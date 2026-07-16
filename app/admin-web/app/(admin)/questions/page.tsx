@@ -357,7 +357,7 @@ function QuestionsPageInner() {
                         className="block w-full text-sm" />
                       {qAudioUrl && (
                         <div className="flex items-center gap-2">
-                          <audio controls src={qAudioUrl} className="flex-1 h-9" />
+                          <audio controls src={qAudioUrl} className="flex-1 min-w-0 h-9" />
                           <button type="button" onClick={() => setQAudioUrl("")} className="btn btn-outline btn-sm shrink-0">Remove</button>
                         </div>
                       )}

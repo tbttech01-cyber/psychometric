@@ -111,7 +111,8 @@ export default function BusinessMatrixPage() {
           </div>
         </div>
 
-        <div className="card overflow-x-auto">
+        <div className="card">
+          <div className="table-scroll">
           <table className="border-separate" style={{ borderSpacing: "0.5rem" }}>
             <thead>
               <tr>
@@ -176,6 +177,7 @@ export default function BusinessMatrixPage() {
               ))}
             </tbody>
           </table>
+          </div>
         </div>
       </main>
 

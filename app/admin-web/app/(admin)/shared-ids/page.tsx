@@ -136,7 +136,7 @@ export default function SharedIdsPage() {
                     <td colSpan={6}>
                       <div className="flex gap-2 items-center flex-wrap">
                         <input value={editLabel} onChange={(e) => setEditLabel(e.target.value)}
-                          className="border-2 rounded-lg px-3 py-1.5 flex-1 focus:outline-none" style={{ borderColor: "var(--tbt-border)" }} />
+                          className="border-2 rounded-lg px-3 py-1.5 flex-1 min-w-0 focus:outline-none" style={{ borderColor: "var(--tbt-border)" }} />
                         <select value={editSetId} onChange={(e) => setEditSetId(e.target.value)}
                           className="border-2 rounded-lg px-3 py-1.5 focus:outline-none" style={{ borderColor: "var(--tbt-border)" }}>
                           <option value="">No question set</option>

@@ -46,7 +46,8 @@ export default function AnswerOptionsPage() {
           </select>
         </div>
         {options && (
-          <div className="card overflow-x-auto">
+          <div className="card">
+            <div className="table-scroll">
             <table className="data-table">
               <thead><tr><th>Order</th><th>Option Text</th><th>Score</th></tr></thead>
               <tbody>
@@ -59,6 +60,7 @@ export default function AnswerOptionsPage() {
                 ))}
               </tbody>
             </table>
+            </div>
           </div>
         )}
       </main>

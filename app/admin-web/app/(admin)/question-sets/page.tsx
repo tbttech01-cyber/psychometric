@@ -144,7 +144,8 @@ export default function QuestionSetsPage() {
           </div>
         )}
 
-        <div className="card overflow-x-auto">
+        <div className="card">
+          <div className="table-scroll">
           <table className="data-table">
             <thead><tr><th>Name</th><th>Questions</th><th>Timer</th><th>Assigned Codes</th><th>Status</th><th>Actions</th></tr></thead>
             <tbody>
@@ -168,6 +169,7 @@ export default function QuestionSetsPage() {
               ))}
             </tbody>
           </table>
+          </div>
         </div>
       </main>
 
