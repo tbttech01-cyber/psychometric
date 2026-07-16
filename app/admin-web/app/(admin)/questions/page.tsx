@@ -452,8 +452,9 @@ function QuestionsPageInner() {
           </div>
         </div>
 
-        <div className="card overflow-x-auto">
+        <div className="card">
           <p className="text-sm mb-3" style={{ color: "var(--tbt-muted)" }}>{filteredRows.length} question(s)</p>
+          <div className="table-scroll">
           <table className="data-table">
             <thead><tr><th>#</th><th>Category</th><th>Type</th><th className="hidden xl:table-cell">Dimension</th><th className="hidden xl:table-cell">Difficulty</th><th className="hidden xl:table-cell">Marks</th><th>Question Text</th><th>Status</th><th>Actions</th></tr></thead>
             <tbody>
@@ -492,6 +493,7 @@ function QuestionsPageInner() {
               })}
             </tbody>
           </table>
+          </div>
         </div>
       </main>
 

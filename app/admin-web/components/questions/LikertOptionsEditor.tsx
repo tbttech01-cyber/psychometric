@@ -62,7 +62,7 @@ export default function LikertOptionsEditor({
               value={o.optionText}
               placeholder="Option text"
               onChange={(e) => updateOption(i, { optionText: e.target.value })}
-              className="border rounded-xl px-3.5 py-2.5 flex-1 focus:outline-none"
+              className="border rounded-xl px-3.5 py-2.5 flex-1 min-w-0 focus:outline-none"
               style={{ borderColor: "var(--tbt-border)" }}
             />
             <input

@@ -51,7 +51,7 @@ export default function RankingOptionsEditor({
               value={o.optionText}
               placeholder="Item text"
               onChange={(e) => updateOption(i, { optionText: e.target.value })}
-              className="border rounded-xl px-3.5 py-2.5 flex-1 focus:outline-none"
+              className="border rounded-xl px-3.5 py-2.5 flex-1 min-w-0 focus:outline-none"
               style={{ borderColor: "var(--tbt-border)" }}
             />
             <button type="button" onClick={() => move(i, -1)} disabled={i === 0} className="icon-btn disabled:opacity-30" title="Move up">
