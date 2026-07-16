@@ -303,7 +303,17 @@
     });
     // Approved → begin the granted attempt from the access-code screen (reuses
     // the existing access-code → welcome → start flow; start consumes the approval).
-    btnRetestStart.addEventListener('click', () => { window.location.href = '/user/index.html'; });
+    // Clear any leftover session + autosaved answers first so the retest always
+    // opens fresh at question 1 and never resumes/restores a previous attempt.
+    btnRetestStart.addEventListener('click', () => {
+      localStorage.removeItem('tbt_session_id');
+      localStorage.removeItem('tbt_session_expires');
+      for (let i = localStorage.length - 1; i >= 0; i--) {
+        const k = localStorage.key(i);
+        if (k && k.startsWith('tbt_assessment_answers_')) localStorage.removeItem(k);
+      }
+      window.location.href = '/user/index.html';
+    });
 
     loadResult();
   </script>

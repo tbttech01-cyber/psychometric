@@ -442,11 +442,28 @@ describe('Retest request → admin approval → attempt #2 (history preserved)',
     expect(approve.status).toBe(200);
   });
 
-  it('candidate starts attempt #2 (approval consumed)', async () => {
+  it('an approved retest starts FRESH at a new session, retiring any lingering in-progress attempt', async () => {
+    // Simulate a stale, still-live in-progress attempt (e.g. a retest the
+    // candidate opened, half-answered, then abandoned without submitting).
+    const user = await User.findOne({ email: EMAIL });
+    const stale = await AssessmentSession.create({
+      userId: user._id,
+      startedAt: new Date(),
+      expiresAt: new Date(Date.now() + 30 * 60 * 1000), // well within the timer — NOT dead
+      status: 'in-progress',
+      attemptNumber: 2,
+    });
+
+    // Pressing "Start Retest" must NOT 409-resume the stale attempt — it must
+    // open a brand-new session (question 1, fresh timer) and retire the old one.
     const start = await request(app).post('/api/v1/assessment/start').set('Authorization', `Bearer ${userToken}`);
     expect(start.status).toBe(201);
     expect(start.body.attemptNumber).toBe(2);
+    expect(start.body.sessionId).not.toBe(String(stale._id));
     retestSessionId = start.body.sessionId;
+
+    const retired = await AssessmentSession.findById(stale._id);
+    expect(retired.status).toBe('expired');
   });
 
   it('submits attempt #2, preserving attempt #1 and its history', async () => {
