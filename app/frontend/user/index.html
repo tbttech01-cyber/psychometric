@@ -38,10 +38,20 @@
   <script>
     // Step 2 of the flow (Login → Access Code → Question Set): this page is now
     // behind login. Require a valid session; a candidate who has already
-    // finished goes straight to their result rather than re-entering a code.
+    // finished goes straight to their result rather than re-entering a code —
+    // UNLESS an admin has APPROVED a retest, in which case they must be allowed
+    // to enter their access code here to begin the granted attempt (the entire
+    // "Start Retest" flow routes back through this page).
     const token = api.requireAuth('user');
     const currentUser = api.getUser();
-    if (token && currentUser && currentUser.hasCompletedAssessment) window.location.href = '/user/result.html';
+    if (token && currentUser && currentUser.hasCompletedAssessment) {
+      api.get('/assessment/retest/my-request', token)
+        .then(({ ok, data }) => {
+          const approved = ok && data && data.retest && data.retest.status === 'approved';
+          if (!approved) window.location.href = '/user/result.html';
+        })
+        .catch(() => { window.location.href = '/user/result.html'; });
+    }
 
     const btn = document.getElementById('btn-continue');
     const codeInput = document.getElementById('code');
