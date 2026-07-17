@@ -105,17 +105,21 @@ export default function SharedIdsPage() {
         <div className="card">
           <h3 className="font-bold mb-3" style={{ color: "var(--tbt-text)" }}>Create New Code</h3>
           <p className="text-xs mb-3" style={{ color: "var(--tbt-muted)" }}>Access codes cannot be changed after creation.</p>
-          <div className="flex gap-3 flex-wrap">
+          {/* One aligned row on desktop, clean full-width stack on mobile.
+              items-stretch guarantees every control shares the exact same height
+              and vertical baseline; h-11 + consistent padding/radius/leading keep
+              them identical regardless of the code field's monospace font. */}
+          <div className="flex flex-col lg:flex-row lg:flex-wrap lg:items-stretch gap-3">
             <input value={newCode} onChange={(e) => setNewCode(e.target.value.toUpperCase())} placeholder="Code (e.g. TBT2025)" maxLength={20}
-              className="border rounded-xl px-3.5 py-2.5 uppercase font-mono focus:outline-none" style={{ borderColor: "var(--tbt-border)" }} />
+              className="h-11 border rounded-xl px-3.5 leading-tight uppercase font-mono focus:outline-none w-full lg:w-44" style={{ borderColor: "var(--tbt-border)" }} />
             <input value={newLabel} onChange={(e) => setNewLabel(e.target.value)} placeholder="Label / Group name"
-              className="border rounded-xl px-3.5 py-2.5 flex-1 min-w-48 focus:outline-none" style={{ borderColor: "var(--tbt-border)" }} />
+              className="h-11 border rounded-xl px-3.5 leading-tight focus:outline-none w-full lg:flex-1 lg:min-w-[12rem]" style={{ borderColor: "var(--tbt-border)" }} />
             <select value={newSetId} onChange={(e) => setNewSetId(e.target.value)}
-              className="border rounded-xl px-3.5 py-2.5 focus:outline-none" style={{ borderColor: "var(--tbt-border)" }}>
+              className="h-11 border rounded-xl px-3.5 leading-tight focus:outline-none w-full lg:w-auto" style={{ borderColor: "var(--tbt-border)" }}>
               <option value="">No question set</option>
               {sets.map((s) => <option key={s._id} value={s._id}>{s.name}</option>)}
             </select>
-            <button onClick={createCode} className="btn btn-primary">Create</button>
+            <button onClick={createCode} className="btn btn-primary h-11 w-full lg:w-auto">Create</button>
           </div>
         </div>
 
