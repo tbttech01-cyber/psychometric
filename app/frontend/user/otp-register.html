@@ -37,7 +37,7 @@
   <script src="/assets/js/validator.js"></script>
   <script>
     const email = localStorage.getItem('tbt_pending_email');
-    if (!email) window.location.href = '/user/login.html';
+    if (!email) window.location.href = '/';
     document.getElementById('email-display').textContent = email;
 
     const boxes = document.querySelectorAll('.otp-box');
@@ -67,7 +67,7 @@
       // Verification logs the user in, but the Access Code step still gates the
       // assessment (Register → Verify → Access Code → Question Set).
       api.clearCode();
-      window.location.href = '/user/index.html';
+      window.location.replace('/assessment-code');
     });
 
     let resendSeconds = 0;

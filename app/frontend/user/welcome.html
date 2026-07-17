@@ -32,6 +32,7 @@
   <script src="/assets/js/validator.js"></script>
   <script>
     const token = api.requireAuth('user');
+    api.protectBack(); // a bfcache back-restore must re-run these guards
     // Un-skippable Access Code step: without a validated code this login, go
     // back to the access-code screen (the server would 403 the assessment
     // endpoints anyway). Only check once we know there's a session to protect.
@@ -58,14 +59,14 @@
       const { ok, data } = await api.post('/assessment/start', {}, token);
       // Defensive: if the server says the Access Code step wasn't completed
       // (e.g. a stale client flag), send the user back to enter their code.
-      if (!ok && data.code === 'CODE_REQUIRED') { api.clearCode(); window.location.href = '/user/index.html'; return; }
+      if (!ok && data.code === 'CODE_REQUIRED') { api.clearCode(); window.location.href = '/assessment-code'; return; }
       if (!ok && !data.sessionId) { showToast(data.message || 'Failed to start.', 'error'); btn.disabled = false; btn.textContent = 'Start Assessment'; return; }
       // A 409 "already in progress" response still carries the existing session's
       // id/expiry — resume it instead of leaving assessment.html's localStorage
       // guard with nothing to find (which would just bounce the user back here).
       localStorage.setItem('tbt_session_id', data.sessionId);
       localStorage.setItem('tbt_session_expires', data.expiresAt);
-      window.location.href = '/user/assessment.html';
+      window.location.href = '/assessment';
     });
 
     document.getElementById('btn-logout').addEventListener('click', async () => {

@@ -49,7 +49,7 @@
         <button id="btn-register" type="submit" class="btn btn-primary w-full">Register</button>
       </form>
       <div class="mt-4 text-center text-sm" style="color:var(--tbt-muted)">
-        Already registered? <a href="/user/login.html" class="font-semibold" style="color:var(--tbt-primary)">Login</a>
+        Already registered? <a href="/" class="font-semibold" style="color:var(--tbt-primary)">Login</a>
       </div>
     </div>
   </div>
@@ -105,7 +105,7 @@
       if (!ok) { showToast(data.message || 'Registration failed.', 'error'); return; }
       localStorage.setItem('tbt_pending_email', email);
       showToast(data.message, 'success');
-      setTimeout(() => window.location.href = '/user/otp-register.html', 1000);
+      setTimeout(() => window.location.href = '/verify-otp', 1000);
     });
   </script>
 </body>

@@ -61,9 +61,18 @@
   <script src="/assets/js/timer.js"></script>
   <script>
     const token = api.requireAuth('user');
+    api.protectBack(); // a bfcache back-restore must re-run these guards
     const sessionId = localStorage.getItem('tbt_session_id');
     const expiresAt = localStorage.getItem('tbt_session_expires');
-    if (!sessionId || !expiresAt) window.location.href = '/user/welcome.html';
+    // Guard order (only when authenticated, so an unauthenticated hit is left to
+    // requireAuth above → login, not bounced to instructions):
+    //   no validated code this login → back to the access-code page;
+    //   no active session snapshot   → assessment never started/already submitted
+    //                                   → back to the instructions/start page.
+    if (token) {
+      if (!api.requireCode()) { /* redirecting to /assessment-code */ }
+      else if (!sessionId || !expiresAt) window.location.replace('/instructions');
+    }
 
     let sections = [], renderUnits = [], answers = {}, timedOut = {}, timeSpent = {}, questionStartTimes = {}, currentSection = 0, timer, questionTimer = null;
     // Every question shows an audio button. An uploaded clip (data URI) plays
@@ -850,7 +859,9 @@
       if (!ok) { showToast(data.message || 'Submission failed.', 'error'); btn.disabled = false; btn.textContent = 'Submit Assessment'; return; }
       localStorage.removeItem('tbt_session_id'); localStorage.removeItem('tbt_session_expires'); localStorage.removeItem(autosaveKey());
       const user = api.getUser(); if (user) { user.hasCompletedAssessment = true; api.setUser(user); }
-      window.location.href = '/user/result.html';
+      // replace() so the browser Back button cannot return to the just-submitted
+      // assessment (the session is gone; this keeps the workflow one-directional).
+      window.location.replace('/result');
     }
 
     // Exiting the assessment (closing the tab, navigating away, mobile

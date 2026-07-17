@@ -43,14 +43,15 @@
     // to enter their access code here to begin the granted attempt (the entire
     // "Start Retest" flow routes back through this page).
     const token = api.requireAuth('user');
+    api.protectBack(); // a bfcache back-restore must re-run these guards
     const currentUser = api.getUser();
     if (token && currentUser && currentUser.hasCompletedAssessment) {
       api.get('/assessment/retest/my-request', token)
         .then(({ ok, data }) => {
           const approved = ok && data && data.retest && data.retest.status === 'approved';
-          if (!approved) window.location.href = '/user/result.html';
+          if (!approved) window.location.replace('/result');
         })
-        .catch(() => { window.location.href = '/user/result.html'; });
+        .catch(() => { window.location.replace('/result'); });
     }
 
     const btn = document.getElementById('btn-continue');
@@ -68,7 +69,7 @@
       btn.disabled = false; btn.textContent = 'Continue';
       if (!ok) { Validator.show('code', data.message || 'Invalid code.'); return; }
       api.setCode(data.codeId, data.code);
-      window.location.href = '/user/welcome.html';
+      window.location.href = '/instructions';
     });
 
     document.getElementById('link-logout').addEventListener('click', (e) => {

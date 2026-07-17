@@ -16,8 +16,10 @@ const _req = async (method, path, body, token) => {
     // own 401s (e.g. bad credentials) surface to the caller as normal.
     if (token && res.status === 401 && typeof window !== 'undefined') {
       api.clearSession();
-      if (!window.location.pathname.endsWith('/login.html'))
-        window.location.href = '/user/login.html';
+      const p = window.location.pathname;
+      // Login is served at "/" (clean route); also tolerate the raw .html path.
+      if (p !== '/' && !p.endsWith('/login.html'))
+        window.location.replace('/');
     }
     return { ok: res.ok, status: res.status, data };
   } catch (error) {
@@ -43,10 +45,18 @@ const api = {
   requireAuth: (role = 'user') => {
     const token = localStorage.getItem(`tbt_${role}_token`);
     if (!token) {
-      window.location.href = '/user/login.html';
+      window.location.replace('/');
       return null;
     }
     return token;
+  },
+
+  // bfcache hardening: when a protected page is restored from the browser's
+  // back/forward cache (persisted=true), its guard scripts do NOT re-run, which
+  // would let the back button reveal a page the user should no longer see (e.g.
+  // the assessment after submitting). Force a fresh load so every guard re-runs.
+  protectBack: () => {
+    window.addEventListener('pageshow', (e) => { if (e.persisted) window.location.reload(); });
   },
 
   // --- Post-login access-code gate -------------------------------------------
@@ -70,7 +80,7 @@ const api = {
   // back to the access-code screen if the step hasn't been completed this login.
   requireCode: () => {
     if (localStorage.getItem('tbt_code_selected') !== '1') {
-      window.location.href = '/user/index.html';
+      window.location.replace('/assessment-code');
       return false;
     }
     return true;
@@ -121,7 +131,7 @@ const api = {
       b.disabled = true; b.textContent = 'Logging out...';
       await api.post('/user/logout', {}, token).catch(() => {});
       api.clearSession();
-      window.location.href = '/user/login.html';
+      window.location.replace('/');
     });
     modal.querySelector('[data-act="cancel"]').focus();
   },

@@ -108,6 +108,7 @@
   <script src="/assets/js/charts.js"></script>
   <script>
     const token = api.requireAuth('user');
+    api.protectBack(); // a bfcache back-restore must re-run these guards
     // A fixed palette looks better for small counts, but the category count
     // is admin-configurable and unbounded, so it must not run out or repeat.
     const CAT_COLORS_BASE = ['#3B82F6','#8B5CF6','#F59E0B','#EF4444','#EC4899','#10B981','#F97316','#06B6D4'];
@@ -117,8 +118,14 @@
     }
 
     async function loadResult() {
-      const { ok, data } = await api.get('/assessment/result', token);
-      // Render an inline error + Retry instead of leaving the spinner forever.
+      const { ok, status, data } = await api.get('/assessment/result', token);
+      // Workflow guard: a 404 means this user has no result yet — they have not
+      // completed the assessment, so they must not sit on the result page. Send
+      // them back into the flow at the access-code step. (401 is already handled
+      // globally in api.js — expired session bounces to login.)
+      if (status === 404) { window.location.replace('/assessment-code'); return; }
+      // Any other failure (network / transient server error) → inline Retry
+      // rather than leaving the spinner forever.
       if (!ok || !data || !data.data) {
         document.getElementById('loading').innerHTML =
           '<p class="mb-4" style="color:var(--tbt-danger)">' + ((data && data.message) || "Couldn't load your results. Please check your connection.") + '</p>' +
@@ -312,7 +319,7 @@
         const k = localStorage.key(i);
         if (k && k.startsWith('tbt_assessment_answers_')) localStorage.removeItem(k);
       }
-      window.location.href = '/user/index.html';
+      window.location.href = '/assessment-code';
     });
 
     loadResult();

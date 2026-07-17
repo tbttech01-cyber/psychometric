@@ -7,6 +7,9 @@
   <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
 </head>
 <body>
+  <!-- Fallback only: the "/" route is rewritten to the login page in vercel.json.
+       This stub is served for /index.html; it points at the login file directly
+       (not "/") so it can never redirect-loop if the rewrite doesn't match. -->
   <script>window.location.replace('/user/login.html');</script>
 </body>
 </html>

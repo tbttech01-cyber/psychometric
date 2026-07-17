@@ -1,3 +1,13 @@
 {
-  "outputDirectory": "."
+  "outputDirectory": ".",
+  "trailingSlash": false,
+  "rewrites": [
+    { "source": "/", "destination": "/user/login.html" },
+    { "source": "/assessment-code", "destination": "/user/index.html" },
+    { "source": "/instructions", "destination": "/user/welcome.html" },
+    { "source": "/assessment", "destination": "/user/assessment.html" },
+    { "source": "/result", "destination": "/user/result.html" },
+    { "source": "/register", "destination": "/user/register.html" },
+    { "source": "/verify-otp", "destination": "/user/otp-register.html" }
+  ]
 }
