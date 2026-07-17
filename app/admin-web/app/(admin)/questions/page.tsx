@@ -1,8 +1,9 @@
 "use client";
 
-import { Suspense, useEffect, useState, useCallback } from "react";
+import { Suspense, useEffect, useState, useCallback, useRef } from "react";
+import { createPortal } from "react-dom";
 import { useSearchParams } from "next/navigation";
-import { Search, ShieldCheck, ArrowUp, ArrowDown } from "lucide-react";
+import { Search, ShieldCheck, ArrowUp, ArrowDown, X } from "lucide-react";
 import { api, getToken, type ApiEnvelope } from "@/lib/api";
 import { useToast } from "@/components/ToastProvider";
 import PageHeader from "@/components/PageHeader";
@@ -97,6 +98,12 @@ function QuestionsPageInner() {
   const [usedOrders, setUsedOrders] = useState<number[]>([]);
   const [saving, setSaving] = useState(false);
 
+  // Edit/Add modal a11y: the control that opened it (to restore focus on close),
+  // the dialog panel (focus trap), and the close button (initial focus).
+  const triggerRef = useRef<HTMLElement | null>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const closeBtnRef = useRef<HTMLButtonElement>(null);
+
   const loadTypes = useCallback(async () => {
     const { ok, data } = await api.get<ApiEnvelope<QCategory[]>>("/admin/question-types", token);
     if (ok) setTypes(data.data);
@@ -121,6 +128,39 @@ function QuestionsPageInner() {
   useEffect(() => { loadTypes(); }, [loadTypes]);
   useEffect(() => { load(); }, [load]);
   useEffect(() => { loadAllOrders(); }, [loadAllOrders]);
+
+  // While the edit/add modal is open: lock background scroll, move focus into the
+  // dialog, trap Tab within it, close on Escape, and return focus to the opener
+  // when it closes. Only affects behaviour while `showForm` is true.
+  useEffect(() => {
+    if (!showForm) return;
+    const opener = triggerRef.current;
+    // The modal is portalled to <body>; the app shell is h-screen overflow-hidden
+    // and the overlay covers the viewport, so the background list can't scroll
+    // behind it and its scroll position is untouched (preserved on close).
+    // Belt-and-braces body lock too.
+    const prevBody = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    // preventScroll so focusing into the modal never scrolls the list container.
+    const focusTimer = window.setTimeout(() => closeBtnRef.current?.focus({ preventScroll: true }), 0);
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") { e.preventDefault(); setShowForm(false); return; }
+      if (e.key === "Tab" && panelRef.current) {
+        const f = panelRef.current.querySelectorAll<HTMLElement>('a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])');
+        if (!f.length) return;
+        const first = f[0], last = f[f.length - 1];
+        if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+        else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+      }
+    };
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.body.style.overflow = prevBody;
+      window.clearTimeout(focusTimer);
+      document.removeEventListener("keydown", onKey);
+      opener?.focus?.({ preventScroll: true });
+    };
+  }, [showForm]);
 
   function nextAvailableOrder() {
     const used = new Set(usedOrders);
@@ -152,6 +192,7 @@ function QuestionsPageInner() {
   }
 
   function openAdd() {
+    triggerRef.current = document.activeElement as HTMLElement;
     resetForm();
     setShowForm(true);
   }
@@ -163,6 +204,7 @@ function QuestionsPageInner() {
   }
 
   async function openEdit(id: string) {
+    triggerRef.current = document.activeElement as HTMLElement; // the Edit button — focus returns here on close
     const { ok, data } = await api.get<ApiEnvelope<Question>>(`/admin/questions/${id}`, token);
     if (!ok) { showToast("Failed to load question.", "error"); return; }
     const q = data.data;
@@ -285,12 +327,23 @@ function QuestionsPageInner() {
         }
       />
       <main className="p-6 space-y-4 max-w-6xl mx-auto">
-        {showForm && (
-          <div className="grid lg:grid-cols-2 gap-4">
-            <div className="card">
-              <h3 className="font-bold mb-3" style={{ color: "var(--tbt-text)" }}>{editingId ? "Edit Question" : "Add Question"}</h3>
+        {showForm && createPortal(
+          <div className="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="q-edit-title"
+            onMouseDown={(e) => { if (e.target === e.currentTarget) setShowForm(false); }}>
+            {/* Centered popup. Reuses the EXISTING edit form + live preview and all
+                their state/handlers — only the presentation moved from top-of-page
+                into this modal. Header + footer stay fixed; the body scrolls. */}
+            <div ref={panelRef} onMouseDown={(e) => e.stopPropagation()} className="bg-white w-full flex flex-col"
+              style={{ maxWidth: "72rem", maxHeight: "calc(100vh - 2rem)", borderRadius: "1.25rem", boxShadow: "0 20px 50px rgba(0,0,0,0.28)" }}>
+              <div className="flex items-center justify-between gap-3 px-5 py-4 border-b shrink-0" style={{ borderColor: "var(--tbt-border)" }}>
+                <h3 id="q-edit-title" className="font-bold text-lg" style={{ color: "var(--tbt-text)" }}>{editingId ? "Edit Question" : "Add Question"}</h3>
+                <button ref={closeBtnRef} onClick={() => setShowForm(false)} aria-label="Close edit dialog" className="icon-btn"><X size={18} /></button>
+              </div>
+              <div className="overflow-y-auto p-4" style={{ flex: "1 1 auto" }}>
+                <div className="grid lg:grid-cols-2 gap-4">
+                  <div className="card">
 
-              <label className="block text-xs font-semibold mb-1" style={{ color: "var(--tbt-muted)" }}>Question Type</label>
+              <label className="block text-xs font-semibold mb-1 text-center" style={{ color: "var(--tbt-muted)" }}>Question Type</label>
               <select value={qQuestionType} onChange={(e) => onQuestionTypeChange(e.target.value as QuestionTypeKind)}
                 className="border rounded-xl px-3.5 py-2.5 focus:outline-none w-full mb-3" style={{ borderColor: "var(--tbt-border)" }}>
                 {QUESTION_TYPES.map((t) => (
@@ -337,7 +390,7 @@ function QuestionsPageInner() {
               <textarea placeholder="Instruction text shown above the question (optional)" value={qInstructionText} onChange={(e) => setQInstructionText(e.target.value)} maxLength={500}
                 rows={2} className="border rounded-xl px-3.5 py-2.5 w-full focus:outline-none mb-3" style={{ borderColor: "var(--tbt-border)" }} />
 
-              <label className="block text-xs font-semibold mb-1" style={{ color: "var(--tbt-muted)" }}>🔊 Spoken explanation (optional) — read aloud when the candidate taps &quot;Explain&quot;</label>
+              <label className="block text-xs font-semibold mb-1 text-center" style={{ color: "var(--tbt-muted)" }}>🔊 Spoken explanation (optional) — read aloud when the candidate taps &quot;Explain&quot;</label>
               <textarea placeholder="e.g. This question checks how you handle a customer complaint. Read each option and pick the one closest to how you'd respond." value={qExplanationAudioText} onChange={(e) => setQExplanationAudioText(e.target.value)} maxLength={1000}
                 rows={2} className="border rounded-xl px-3.5 py-2.5 w-full focus:outline-none mb-3" style={{ borderColor: "var(--tbt-border)" }} />
 
@@ -421,21 +474,25 @@ function QuestionsPageInner() {
                 <RankingOptionsEditor options={options} onChange={setOptions} />
               )}
 
-              <div className="flex gap-2 mt-4">
-                <button onClick={save} disabled={saving} className="btn btn-primary">{saving ? "Saving..." : "Save Question"}</button>
+                  </div>
+
+                  <QuestionPreview
+                    question={{
+                      text: qText, questionType: qQuestionType, timeLimitSeconds: qTimeLimitSeconds || null,
+                      instructionText: qInstructionText, imageUrl: qImageUrl, hasAudio: qHasAudio, audioUrl: qAudioUrl,
+                      options,
+                    }}
+                    category={previewCategory}
+                  />
+                </div>
+              </div>
+              <div className="flex justify-end gap-2 px-5 py-4 border-t shrink-0" style={{ borderColor: "var(--tbt-border)" }}>
                 <button onClick={() => setShowForm(false)} className="btn btn-outline">Cancel</button>
+                <button onClick={save} disabled={saving} className="btn btn-primary">{saving ? "Saving..." : "Save Question"}</button>
               </div>
             </div>
-
-            <QuestionPreview
-              question={{
-                text: qText, questionType: qQuestionType, timeLimitSeconds: qTimeLimitSeconds || null,
-                instructionText: qInstructionText, imageUrl: qImageUrl, hasAudio: qHasAudio, audioUrl: qAudioUrl,
-                options,
-              }}
-              category={previewCategory}
-            />
-          </div>
+          </div>,
+          document.body
         )}
 
         <div className="card flex flex-wrap gap-3 items-end">
