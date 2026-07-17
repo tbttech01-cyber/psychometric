@@ -2,6 +2,8 @@ const request = require('supertest');
 const app = require('../backend/app');
 const { connect, disconnect } = require('./dbConnect');
 const Admin = require('../backend/models/Admin');
+const User = require('../backend/models/User');
+const SharedUserID = require('../backend/models/SharedUserID');
 const jwt = require('jsonwebtoken');
 
 beforeAll(connect);
@@ -146,6 +148,68 @@ describe('Admin CRUD: question reorder', () => {
 
     await request(app).delete(`/api/v1/admin/questions/${a._id}`).set(auth());
     await request(app).delete(`/api/v1/admin/questions/${b._id}`).set(auth());
+  });
+});
+
+describe('Admin CRUD: user verification toggle', () => {
+  let userId;
+
+  beforeAll(async () => {
+    const shared = await SharedUserID.findOne({ code: 'TBT2024' });
+    const u = await User.create({
+      name: 'Verify Toggle Test', email: 'verify-toggle-test@example.com',
+      passwordHash: 'x', sharedUserID: shared._id, sharedCode: shared.code,
+      isVerified: false, otpCode: '123456', otpExpiry: new Date(Date.now() + 60000),
+    });
+    userId = u._id.toString();
+  });
+
+  afterAll(async () => { await User.deleteOne({ email: 'verify-toggle-test@example.com' }); });
+
+  it('marks an unverified user as verified and clears any pending OTP', async () => {
+    const res = await request(app)
+      .patch(`/api/v1/admin/users/${userId}/verification`)
+      .set(auth())
+      .send({ isVerified: true });
+    expect(res.status).toBe(200);
+    expect(res.body.data.isVerified).toBe(true);
+    const fresh = await User.findById(userId);
+    expect(fresh.isVerified).toBe(true);
+    expect(fresh.otpCode == null).toBe(true);
+    expect(fresh.otpExpiry == null).toBe(true);
+  });
+
+  it('marks a verified user back to unverified', async () => {
+    const res = await request(app)
+      .patch(`/api/v1/admin/users/${userId}/verification`)
+      .set(auth())
+      .send({ isVerified: false });
+    expect(res.status).toBe(200);
+    expect(res.body.data.isVerified).toBe(false);
+    expect((await User.findById(userId)).isVerified).toBe(false);
+  });
+
+  it('rejects a non-boolean isVerified payload', async () => {
+    const res = await request(app)
+      .patch(`/api/v1/admin/users/${userId}/verification`)
+      .set(auth())
+      .send({ isVerified: 'nope' });
+    expect(res.status).toBe(400);
+  });
+
+  it('returns 404 for a missing user', async () => {
+    const res = await request(app)
+      .patch('/api/v1/admin/users/64b7c0000000000000000000/verification')
+      .set(auth())
+      .send({ isVerified: true });
+    expect(res.status).toBe(404);
+  });
+
+  it('requires admin auth', async () => {
+    const res = await request(app)
+      .patch(`/api/v1/admin/users/${userId}/verification`)
+      .send({ isVerified: true });
+    expect(res.status).toBe(401);
   });
 });
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { Users as UsersIcon, CheckCircle2, Clock, Trophy, UserRound, IdCard, KeyRound, ShieldCheck, RefreshCw } from "lucide-react";
+import { Users as UsersIcon, CheckCircle2, Clock, Trophy, UserRound, IdCard, KeyRound, ShieldCheck, RefreshCw, Pencil } from "lucide-react";
 import { api, getToken, type ApiEnvelope } from "@/lib/api";
 import { useToast } from "@/components/ToastProvider";
 import StatCard from "@/components/StatCard";
@@ -41,6 +41,8 @@ export default function UsersPage() {
   const [batches, setBatches] = useState<string[]>([]);
   const [showAdd, setShowAdd] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [verifyTarget, setVerifyTarget] = useState<UserRow | null>(null);
+  const [busyId, setBusyId] = useState<string | null>(null);
   const [sharedCodes, setSharedCodes] = useState<SharedIDOption[]>([]);
 
   const [form, setForm] = useState({
@@ -110,6 +112,36 @@ export default function UsersPage() {
     showToast("User deleted.", "success");
     load();
   }
+
+  async function confirmVerification() {
+    if (!verifyTarget) return;
+    const target = verifyTarget;
+    const next = !target.isVerified;
+    setVerifyTarget(null);
+    setBusyId(target._id);
+    const { ok, data } = await api.patch<ApiEnvelope>(`/admin/users/${target._id}/verification`, { isVerified: next }, token);
+    setBusyId(null);
+    if (!ok) { showToast(data.message || "Update failed.", "error"); return; }
+    showToast(next ? "User marked as Verified." : "User marked as Unverified.", "success");
+    setRows((rs) => rs.map((r) => (r._id === target._id ? { ...r, isVerified: next } : r)));
+    load(); // refresh stats + honour any active status filter
+  }
+
+  // A clickable verification badge — same pill look, now toggles status via the
+  // confirm modal. Shared by the desktop table and the mobile card list.
+  const VerificationBadge = ({ u }: { u: UserRow }) => (
+    <button
+      type="button"
+      onClick={() => setVerifyTarget(u)}
+      disabled={busyId === u._id}
+      title={u.isVerified ? "Verified — click to mark as Unverified" : "Unverified — click to mark as Verified"}
+      className="inline-flex items-center gap-1 rounded-full transition-opacity hover:opacity-75 disabled:opacity-50"
+      style={{ cursor: "pointer" }}
+    >
+      <span className={`badge ${u.isVerified ? "badge-active" : "badge-inactive"}`}>{u.isVerified ? "Verified" : "Unverified"}</span>
+      <Pencil size={11} style={{ color: "var(--tbt-muted)" }} aria-hidden />
+    </button>
+  );
 
   return (
     <>
@@ -257,7 +289,7 @@ export default function UsersPage() {
                   <td className="hidden min-[1400px]:table-cell nowrap"><span className="font-mono text-xs">{u.candidateId || "—"}</span></td>
                   <td className="hidden min-[1400px]:table-cell nowrap"><span className="font-mono text-xs">{u.sharedCode}</span></td>
                   <td className="nowrap"><span className="text-xs">{u.batch || "—"}</span></td>
-                  <td className="nowrap"><span className={`badge ${u.isVerified ? "badge-active" : "badge-inactive"}`}>{u.isVerified ? "Verified" : "Unverified"}</span></td>
+                  <td className="nowrap"><VerificationBadge u={u} /></td>
                   <td className="nowrap"><span className={`badge ${u.hasCompletedAssessment ? "badge-good" : "badge-pending"}`}>{u.hasCompletedAssessment ? "Completed" : "Pending"}</span></td>
                   <td className="text-xs hidden min-[1400px]:table-cell nowrap">{new Date(u.createdAt).toLocaleDateString()}</td>
                   <td className="nowrap"><button onClick={() => setDeleteId(u._id)} className="btn btn-danger btn-sm">Delete</button></td>
@@ -284,8 +316,8 @@ export default function UsersPage() {
                   </div>
                   <button onClick={() => setDeleteId(u._id)} className="btn btn-danger btn-sm shrink-0">Delete</button>
                 </div>
-                <div className="flex flex-wrap gap-1.5 mt-2">
-                  <span className={`badge ${u.isVerified ? "badge-active" : "badge-inactive"}`}>{u.isVerified ? "Verified" : "Unverified"}</span>
+                <div className="flex flex-wrap items-center gap-1.5 mt-2">
+                  <VerificationBadge u={u} />
                   <span className={`badge ${u.hasCompletedAssessment ? "badge-good" : "badge-pending"}`}>{u.hasCompletedAssessment ? "Completed" : "Pending"}</span>
                 </div>
                 <div className="grid grid-cols-2 gap-x-3 gap-y-1 mt-2.5 text-xs" style={{ color: "var(--tbt-muted)" }}>
@@ -315,6 +347,26 @@ export default function UsersPage() {
           warning="Any submitted assessment results for this user will remain in the system for audit purposes."
           onConfirm={confirmDelete}
           onCancel={() => setDeleteId(null)}
+        />
+      )}
+
+      {verifyTarget && (
+        <ConfirmModal
+          title={verifyTarget.isVerified ? "Mark as Unverified?" : "Mark as Verified?"}
+          message={
+            verifyTarget.isVerified
+              ? `Mark "${verifyTarget.name}" as Unverified?`
+              : `Mark "${verifyTarget.name}" as Verified? They will then be able to log in without completing the email OTP step.`
+          }
+          warning={
+            verifyTarget.isVerified
+              ? "This candidate will be blocked from logging in until they verify their email again."
+              : undefined
+          }
+          confirmLabel={verifyTarget.isVerified ? "Yes, Unverify" : "Yes, Verify"}
+          danger={verifyTarget.isVerified}
+          onConfirm={confirmVerification}
+          onCancel={() => setVerifyTarget(null)}
         />
       )}
     </>

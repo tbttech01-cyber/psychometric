@@ -21,6 +21,10 @@ router.post('/users',
   ],
   validate, ctrl.createUser
 );
+router.patch('/users/:id/verification',
+  [body('isVerified').isBoolean().withMessage('isVerified must be true or false.').toBoolean()],
+  validate, ctrl.setUserVerification
+);
 router.delete('/users/:id', ctrl.deleteUser);
 
 // Shared User IDs

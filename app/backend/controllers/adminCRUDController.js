@@ -388,3 +388,19 @@ exports.deleteUser = async (req, res, next) => {
     res.json({ success: true });
   } catch (err) { next(err); }
 };
+
+// Admin override of a candidate's email-verification status. Verifying is the
+// same end-state the OTP flow reaches (login is gated on isVerified — see
+// userAuthController), so manually verifying also clears any pending OTP.
+// Unverifying revokes login until the candidate verifies again.
+exports.setUserVerification = async (req, res, next) => {
+  try {
+    const { isVerified } = req.body;
+    const user = await User.findById(req.params.id);
+    if (!user) return res.status(404).json({ success: false, message: 'Not found.' });
+    user.isVerified = isVerified;
+    if (isVerified) { user.otpCode = undefined; user.otpExpiry = undefined; }
+    await user.save();
+    res.json({ success: true, data: { _id: user._id, isVerified: user.isVerified } });
+  } catch (err) { next(err); }
+};
