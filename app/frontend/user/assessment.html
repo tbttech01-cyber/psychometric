@@ -75,14 +75,15 @@
     }
 
     let sections = [], renderUnits = [], answers = {}, timedOut = {}, timeSpent = {}, questionStartTimes = {}, currentSection = 0, timer, questionTimer = null;
-    // Every question shows an audio button. An uploaded clip (data URI) plays
-    // when present; otherwise the question text is read aloud via the Web Speech
-    // API. Only ONE question's audio OR speech may be live at a time — see
-    // stopAllPlayback, the single choke point that prevents any overlap.
+    // Every question shows a single "Play Question" button. What it speaks:
+    // if the admin authored a Spoken explanation for the question, THAT is read
+    // aloud (browser voice); otherwise it plays the question's uploaded clip /
+    // cached neural audio / the question text via Web Speech. Only ONE question's
+    // audio OR speech may be live at a time — see stopAllPlayback, the single
+    // choke point that prevents any overlap.
     let audioUrls = {};       // qid -> uploaded audio data URI (priority source)
     let questionTexts = {};   // qid -> plain question text (text-to-speech source)
-    let explanationTexts = {}; // qid -> admin-authored spoken explanation ("Explain" button)
-    let explainingQid = null;  // question whose explanation is currently being spoken
+    let explanationTexts = {}; // qid -> admin-authored spoken explanation (spoken by Play when set)
     let currentAudio = null;  // live HTMLAudioElement (uploaded-audio mode)
     let currentUtterance = null; // live SpeechSynthesisUtterance (tts mode)
     let activeQid = null;     // question whose audio/speech is currently live
@@ -263,11 +264,6 @@
             onclick="stopPlayback('${q._id}')" aria-label="Stop audio">
             <span class="audio-icon">${AUDIO_ICONS.stop}</span><span>Stop</span>
           </button>
-          ${(q.explanationAudioText && String(q.explanationAudioText).trim()) ? `
-          <button type="button" class="btn btn-outline btn-sm" id="explain-btn-${q._id}"
-            onclick="explainQuestion('${q._id}')" aria-label="Hear an explanation of this question">
-            <span>💡</span><span id="explain-label-${q._id}">Explain</span>
-          </button>` : ''}
           <span class="audio-error text-xs hidden" id="audio-error-${q._id}" role="alert" style="color:var(--tbt-danger)"></span>
         </div>`;
     }
@@ -367,35 +363,6 @@
       }
       activeQid = null; activeMode = null; activeState = 'idle';
       if (prev) setAudioState(prev, 'play');
-      // Reset the "Explain" button too — its speech shares currentUtterance and
-      // was cancelled above, so its label must return to "Explain".
-      if (explainingQid) { setExplainState(explainingQid, false); explainingQid = null; }
-    }
-
-    // "Explain" button — speaks the admin-authored spoken explanation via the
-    // browser voice. Toggles off on a second tap; shares the single-playback
-    // choke point (stopAllPlayback) so it never overlaps question audio.
-    function setExplainState(qid, on) {
-      const l = document.getElementById(`explain-label-${qid}`);
-      if (l) l.textContent = on ? 'Stop' : 'Explain';
-    }
-    function explainQuestion(qid) {
-      const text = (explanationTexts[qid] || '').trim();
-      if (!text) return;
-      if (explainingQid === qid) { stopAllPlayback(); return; } // toggle off
-      stopAllPlayback();                                        // stop question audio / prior explanation
-      if (!TTS_OK) { showAudioError(qid, 'Audio is not supported in this browser.'); return; }
-      const ss = window.speechSynthesis;
-      const u = new SpeechSynthesisUtterance(text);
-      const { lang, voice } = pickSpeech(text);
-      u.lang = lang; if (voice) u.voice = voice;
-      u.rate = TTS_RATE; u.pitch = TTS_PITCH; u.volume = TTS_VOLUME;
-      currentUtterance = u; explainingQid = qid;
-      setExplainState(qid, true);
-      u.onend = () => { if (currentUtterance === u) { currentUtterance = null; explainingQid = null; setExplainState(qid, false); } };
-      u.onerror = () => { if (currentUtterance === u) { currentUtterance = null; explainingQid = null; setExplainState(qid, false); } };
-      const go = () => { if (currentUtterance !== u) return; try { ss.speak(u); if (ss.paused) ss.resume(); } catch { u.onerror(); } };
-      if (ss.speaking || ss.pending) { try { ss.cancel(); } catch { /* ignore */ } setTimeout(go, 90); } else go();
     }
 
     // Uploaded-audio playback. Handlers are guarded on element IDENTITY because
@@ -416,10 +383,10 @@
 
     // Text-to-speech playback of the question text (the fallback for questions
     // with no uploaded clip). Uses window.speechSynthesis / SpeechSynthesisUtterance.
-    function startTts(qid) {
-      const text = (questionTexts[qid] || '').trim();
+    function startTts(qid, text) {
+      text = (text || '').trim();
       if (!TTS_OK) { setAudioState(qid, 'play'); showAudioError(qid, 'Audio is not supported in this browser.'); return; }
-      if (!text) { showAudioError(qid, 'No question text to read.'); return; }
+      if (!text) { showAudioError(qid, 'No text to read.'); return; }
       const ss = window.speechSynthesis;
       const u = new SpeechSynthesisUtterance(text);
       const { lang, voice } = pickSpeech(text);
@@ -474,13 +441,17 @@
       stopAllPlayback();
       const myToken = ++playToken;
       hideAudioError(qid);
+      // Spoken explanation takes over the Play button when the admin set one:
+      // it's read aloud (browser voice) instead of the question's own audio.
+      const explanation = (explanationTexts[qid] || '').trim();
+      if (explanation) { startTts(qid, explanation); return; }                 // 0) spoken explanation
       if (audioUrls[qid]) { startAudio(qid, audioUrls[qid]); return; }         // 1) uploaded
       if (neuralReady[qid]) {                                                  // 2) cached neural
         let url = neuralAudioUrls[qid];
         if (url === undefined) { setLoading(qid); url = await fetchNeural(qid); if (myToken !== playToken) return; }
         if (url && url !== 'none') { startAudio(qid, url); return; }
       }
-      startTts(qid);                                                          // 3) browser speech
+      startTts(qid, questionTexts[qid]);                                       // 3) browser speech (question text)
     }
 
     function pausePlayback(qid) {

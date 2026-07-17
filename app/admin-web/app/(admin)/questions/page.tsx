@@ -390,7 +390,7 @@ function QuestionsPageInner() {
               <textarea placeholder="Instruction text shown above the question (optional)" value={qInstructionText} onChange={(e) => setQInstructionText(e.target.value)} maxLength={500}
                 rows={2} className="border rounded-xl px-3.5 py-2.5 w-full focus:outline-none mb-3" style={{ borderColor: "var(--tbt-border)" }} />
 
-              <label className="block text-xs font-semibold mb-1 text-center" style={{ color: "var(--tbt-muted)" }}>🔊 Spoken explanation (optional) — read aloud when the candidate taps &quot;Explain&quot;</label>
+              <label className="block text-xs font-semibold mb-1 text-center" style={{ color: "var(--tbt-muted)" }}>🔊 Spoken explanation (optional) — read aloud when the candidate taps &quot;Play Question&quot; (replaces reading the question text)</label>
               <textarea placeholder="e.g. This question checks how you handle a customer complaint. Read each option and pick the one closest to how you'd respond." value={qExplanationAudioText} onChange={(e) => setQExplanationAudioText(e.target.value)} maxLength={1000}
                 rows={2} className="border rounded-xl px-3.5 py-2.5 w-full focus:outline-none mb-3" style={{ borderColor: "var(--tbt-border)" }} />
 
