@@ -239,7 +239,8 @@ export default function UsersPage() {
 
         <div className="card">
           <p className="text-sm mb-3" style={{ color: "var(--tbt-muted)" }}>{total} user(s) found</p>
-          <div className="table-scroll">
+          {/* Tablet / desktop: full table (columns drop responsively). */}
+          <div className="hidden md:block table-scroll">
           <table className="data-table">
             <thead>
               <tr><th>Name</th><th>Email</th><th className="hidden xl:table-cell">Candidate ID</th><th className="hidden xl:table-cell">Access Code</th><th className="hidden lg:table-cell">Batch</th><th>Status</th><th>Assessment</th><th className="hidden xl:table-cell">Registered</th><th>Actions</th></tr>
@@ -263,6 +264,36 @@ export default function UsersPage() {
               )}
             </tbody>
           </table>
+          </div>
+
+          {/* Mobile: one stacked card per user — Status, Assessment and the
+              Delete action are all visible without the sideways scroll a wide
+              table forces on a phone. */}
+          <div className="md:hidden space-y-2.5">
+            {rows.map((u) => (
+              <div key={u._id} className="rounded-xl border p-3" style={{ borderColor: "var(--tbt-border)" }}>
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="font-semibold truncate" style={{ color: "var(--tbt-text)" }} title={u.name}>{u.name}</p>
+                    <p className="text-xs truncate" style={{ color: "var(--tbt-muted)" }} title={u.email}>{u.email}</p>
+                  </div>
+                  <button onClick={() => setDeleteId(u._id)} className="btn btn-danger btn-sm shrink-0">Delete</button>
+                </div>
+                <div className="flex flex-wrap gap-1.5 mt-2">
+                  <span className={`badge ${u.isVerified ? "badge-active" : "badge-inactive"}`}>{u.isVerified ? "Verified" : "Unverified"}</span>
+                  <span className={`badge ${u.hasCompletedAssessment ? "badge-good" : "badge-pending"}`}>{u.hasCompletedAssessment ? "Completed" : "Pending"}</span>
+                </div>
+                <div className="grid grid-cols-2 gap-x-3 gap-y-1 mt-2.5 text-xs" style={{ color: "var(--tbt-muted)" }}>
+                  <span>Code: <span className="font-mono" style={{ color: "var(--tbt-text)" }}>{u.sharedCode}</span></span>
+                  <span>Batch: <span style={{ color: "var(--tbt-text)" }}>{u.batch || "—"}</span></span>
+                  <span>ID: <span className="font-mono" style={{ color: "var(--tbt-text)" }}>{u.candidateId || "—"}</span></span>
+                  <span>Registered: <span style={{ color: "var(--tbt-text)" }}>{new Date(u.createdAt).toLocaleDateString()}</span></span>
+                </div>
+              </div>
+            ))}
+            {rows.length === 0 && (
+              <p className="text-center py-8 text-sm" style={{ color: "var(--tbt-muted)" }}>No users found.</p>
+            )}
           </div>
           <div className="flex justify-between items-center mt-4">
             <button disabled={page <= 1} onClick={() => setPage((p) => p - 1)} className="btn btn-outline btn-sm">← Prev</button>
