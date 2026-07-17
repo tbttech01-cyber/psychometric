@@ -95,6 +95,28 @@ describe('User registration + OTP', () => {
     expect(res.status).toBe(400);
   });
 
+  it('re-registering an UNVERIFIED account updates the password (latest attempt wins)', async () => {
+    const email = 'rereg-test-user@example.com';
+    // First attempt with one password (stays unverified).
+    await request(app).post('/api/v1/user/register').send({ codeId, name: 'First', email, password: 'FirstPass1' });
+    // Second attempt with a DIFFERENT password before verifying.
+    const second = await request(app).post('/api/v1/user/register').send({ codeId, name: 'Second', email, password: 'SecondPass2' });
+    expect(second.status).toBe(200); // OTP resent
+
+    // Verify with the latest OTP.
+    const user = await User.findOne({ email });
+    const verify = await request(app).post('/api/v1/user/verify-otp').send({ email, otp: user.otpCode });
+    expect(verify.status).toBe(200);
+
+    // The SECOND (latest) password must now log in...
+    const good = await request(app).post('/api/v1/user/login').send({ email, password: 'SecondPass2' });
+    expect(good.status).toBe(200);
+    expect(good.body.token).toBeTruthy();
+    // ...and the first, superseded password must NOT.
+    const bad = await request(app).post('/api/v1/user/login').send({ email, password: 'FirstPass1' });
+    expect(bad.status).toBe(401);
+  });
+
   it('verifies the correct OTP and issues a JWT', async () => {
     const user = await User.findOne({ email: EMAIL });
     const res = await request(app).post('/api/v1/user/verify-otp').send({ email: EMAIL, otp: user.otpCode });

@@ -53,7 +53,15 @@ exports.register = async (req, res, next) => {
       if (existing.isVerified)
         return res.status(409).json({ success: false, message: 'Email already registered. Please login.' });
 
-      // Resend OTP for unverified
+      // Unverified re-registration: refresh the account with the details from
+      // THIS attempt before resending the OTP. Previously only the OTP was
+      // resent, so the name/password/access-code from the first attempt stuck —
+      // after verifying, the candidate's just-entered password failed as
+      // "Invalid credentials". Update them so the latest registration wins.
+      existing.name = name.trim();
+      existing.passwordHash = await bcrypt.hash(password, 10);
+      existing.sharedUserID = shared._id;
+      existing.sharedCode = shared.code;
       const { otp, expiry } = generateOTP();
       existing.otpCode = otp; existing.otpExpiry = expiry;
       await existing.save();
