@@ -8,5 +8,13 @@
     { "source": "/result", "destination": "/user/result.html" },
     { "source": "/register", "destination": "/user/register.html" },
     { "source": "/verify-otp", "destination": "/user/otp-register.html" }
+  ],
+  "headers": [
+    {
+      "source": "/((?!assets/).*)",
+      "headers": [
+        { "key": "Cache-Control", "value": "no-store, no-cache, must-revalidate, max-age=0" }
+      ]
+    }
   ]
 }

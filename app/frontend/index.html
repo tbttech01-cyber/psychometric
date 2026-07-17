@@ -14,7 +14,7 @@
       <img src="/assets/tbt-logo.png" alt="Tamil Business Tribe" class="mx-auto w-48 mb-4 object-contain" />
       <p class="text-blue-200 text-sm">Psychometric Assessment Platform</p>
     </div>
-    <div class="card">
+    <div class="card" id="login-card">
       <h2 class="text-xl font-bold mb-5" style="color:var(--tbt-primary)">Sign In</h2>
       <form id="login-form" novalidate>
         <div class="mb-3">
@@ -45,12 +45,23 @@
   <script src="/assets/js/validator.js"></script>
   <script>
     // Login is the entry point. An already-authenticated user skips straight to
-    // their next step: results if they've finished, otherwise the Access Code
-    // screen (index.html) — never past it.
-    if (api.getToken('user')) {
-      const user = api.getUser();
-      window.location.replace(user && user.hasCompletedAssessment ? '/result' : '/assessment-code');
-    }
+    // their next step — BUT only after the stored token is confirmed still valid
+    // server-side. A stale/expired session (e.g. a returning user whose token
+    // was cleared server-side) must land back on login, never get redirected
+    // past it into a dead end. Trust-but-verify:
+    (async function () {
+      const token = api.getToken('user');
+      if (!token) return; // no session → show the login form
+      document.getElementById('login-card').style.visibility = 'hidden';
+      const { ok } = await api.get('/assessment/settings', token);
+      if (ok) {
+        const user = api.getUser();
+        window.location.replace(user && user.hasCompletedAssessment ? '/result' : '/assessment-code');
+        return;
+      }
+      api.clearSession(); // invalid/expired → reset and show login
+      document.getElementById('login-card').style.visibility = '';
+    })();
     // Show/hide the password while typing.
     (function () {
       const btn = document.getElementById('toggle-password');
