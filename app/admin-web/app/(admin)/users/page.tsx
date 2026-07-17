@@ -239,24 +239,28 @@ export default function UsersPage() {
 
         <div className="card">
           <p className="text-sm mb-3" style={{ color: "var(--tbt-muted)" }}>{total} user(s) found</p>
-          {/* Tablet / desktop: full table (columns drop responsively). */}
-          <div className="hidden md:block table-scroll">
+          {/* lg+ : table. The three secondary columns (Candidate ID, Access
+              Code, Registered) only appear at >=1400px, where there is room for
+              all of them — below that they'd overflow and clip the Actions
+              column on 1280-1366 laptops. .table-scroll keeps any residual
+              overflow inside the card (never a page-level scroll). */}
+          <div className="hidden xl:block table-scroll">
           <table className="data-table">
             <thead>
-              <tr><th>Name</th><th>Email</th><th className="hidden xl:table-cell">Candidate ID</th><th className="hidden xl:table-cell">Access Code</th><th className="hidden lg:table-cell">Batch</th><th>Status</th><th>Assessment</th><th className="hidden xl:table-cell">Registered</th><th>Actions</th></tr>
+              <tr><th>Name</th><th>Email</th><th className="hidden min-[1400px]:table-cell nowrap">Candidate ID</th><th className="hidden min-[1400px]:table-cell nowrap">Access Code</th><th className="nowrap">Batch</th><th className="nowrap">Status</th><th className="nowrap">Assessment</th><th className="hidden min-[1400px]:table-cell nowrap">Registered</th><th className="nowrap">Actions</th></tr>
             </thead>
             <tbody>
               {rows.map((u) => (
                 <tr key={u._id}>
-                  <td className="font-semibold truncate" style={{ maxWidth: 180 }} title={u.name}>{u.name}</td>
-                  <td className="text-xs truncate" style={{ maxWidth: 220 }} title={u.email}>{u.email}</td>
-                  <td className="hidden xl:table-cell nowrap"><span className="font-mono text-xs">{u.candidateId || "—"}</span></td>
-                  <td className="hidden xl:table-cell nowrap"><span className="font-mono text-xs">{u.sharedCode}</span></td>
-                  <td className="hidden lg:table-cell nowrap"><span className="text-xs">{u.batch || "—"}</span></td>
-                  <td><span className={`badge ${u.isVerified ? "badge-active" : "badge-inactive"}`}>{u.isVerified ? "Verified" : "Unverified"}</span></td>
-                  <td><span className={`badge ${u.hasCompletedAssessment ? "badge-good" : "badge-pending"}`}>{u.hasCompletedAssessment ? "Completed" : "Pending"}</span></td>
-                  <td className="text-xs hidden xl:table-cell nowrap">{new Date(u.createdAt).toLocaleDateString()}</td>
-                  <td><button onClick={() => setDeleteId(u._id)} className="btn btn-danger btn-sm">Delete</button></td>
+                  <td className="font-semibold truncate" style={{ maxWidth: 170 }} title={u.name}>{u.name}</td>
+                  <td className="text-xs truncate" style={{ maxWidth: 240 }} title={u.email}>{u.email}</td>
+                  <td className="hidden min-[1400px]:table-cell nowrap"><span className="font-mono text-xs">{u.candidateId || "—"}</span></td>
+                  <td className="hidden min-[1400px]:table-cell nowrap"><span className="font-mono text-xs">{u.sharedCode}</span></td>
+                  <td className="nowrap"><span className="text-xs">{u.batch || "—"}</span></td>
+                  <td className="nowrap"><span className={`badge ${u.isVerified ? "badge-active" : "badge-inactive"}`}>{u.isVerified ? "Verified" : "Unverified"}</span></td>
+                  <td className="nowrap"><span className={`badge ${u.hasCompletedAssessment ? "badge-good" : "badge-pending"}`}>{u.hasCompletedAssessment ? "Completed" : "Pending"}</span></td>
+                  <td className="text-xs hidden min-[1400px]:table-cell nowrap">{new Date(u.createdAt).toLocaleDateString()}</td>
+                  <td className="nowrap"><button onClick={() => setDeleteId(u._id)} className="btn btn-danger btn-sm">Delete</button></td>
                 </tr>
               ))}
               {rows.length === 0 && (
@@ -266,10 +270,11 @@ export default function UsersPage() {
           </table>
           </div>
 
-          {/* Mobile: one stacked card per user — Status, Assessment and the
-              Delete action are all visible without the sideways scroll a wide
-              table forces on a phone. */}
-          <div className="md:hidden space-y-2.5">
+          {/* Below lg (mobile + narrow tablets, where the sidebar leaves too
+              little width for a readable table): one stacked card per user, so
+              Status, Assessment and the Delete action are all visible without a
+              sideways scroll. */}
+          <div className="xl:hidden space-y-2.5">
             {rows.map((u) => (
               <div key={u._id} className="rounded-xl border p-3" style={{ borderColor: "var(--tbt-border)" }}>
                 <div className="flex items-start justify-between gap-2">

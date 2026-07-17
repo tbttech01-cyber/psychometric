@@ -35,7 +35,7 @@ console.log("== Desktop (1440) ==");
   const { ctx, page } = await open(1440, 1000, false);
   ok("desktop: no page horizontal overflow", await noPageScroll(page));
   ok("desktop: data table is visible", await page.locator("table.data-table").isVisible());
-  ok("desktop: mobile card list is hidden", !(await page.locator(".md\\:hidden .badge").first().isVisible().catch(() => false)));
+  ok("desktop: mobile card list is hidden", !(await page.locator("div.rounded-xl.border.p-3").first().isVisible().catch(() => false)));
   ok("desktop: stat cards render (4)", (await page.locator(".card").filter({ hasText: /Total Users|Verified|Pending|Completed/ }).count()) >= 4);
   ok("desktop: no console errors", (page.__errs || []).length === 0, (page.__errs || []).join(" | "));
   await ctx.close();
@@ -52,9 +52,9 @@ console.log("== Mobile (390) ==");
   const ts = await scrollWidthOf(page, ".table-scroll");
   ok("mobile: table-scroll not overflowing (hidden)", ts <= 1, `overflow ${ts}px`);
   // stacked cards present, each with the key info + Delete visible
-  const cardCount = await page.locator("div.md\\:hidden > div.rounded-xl").count();
+  const cardCount = await page.locator("div.rounded-xl.border.p-3").count();
   ok("mobile: stacked user cards render", cardCount > 0, `${cardCount} cards`);
-  const firstCard = page.locator("div.md\\:hidden > div.rounded-xl").first();
+  const firstCard = page.locator("div.rounded-xl.border.p-3").first();
   ok("mobile: card shows a status badge", await firstCard.locator(".badge").first().isVisible());
   ok("mobile: card shows Verified/Unverified + Completed/Pending", (await firstCard.locator(".badge").count()) >= 2);
   const del = firstCard.locator('button:has-text("Delete")');
@@ -62,6 +62,22 @@ console.log("== Mobile (390) ==");
   const box = await del.boundingBox();
   ok("mobile: Delete button within viewport", !!box && box.x >= 0 && box.x + box.width <= 390 + 1, box ? `x=${Math.round(box.x)} w=${Math.round(box.width)}` : "no box");
   ok("mobile: card shows Access Code + Batch + ID + Registered meta", /Code:|Batch:|ID:|Registered:/.test(await firstCard.textContent() || ""));
+  await ctx.close();
+}
+
+// ---------- LAPTOP 1366 (the reported clipping bug) ----------
+console.log("== Laptop (1366) ==");
+for (const W of [1280, 1366, 1440]) {
+  const { ctx, page } = await open(W, 768, false);
+  ok(`laptop ${W}: no page horizontal overflow`, await noPageScroll(page));
+  const tsOverflow = await scrollWidthOf(page, ".table-scroll");
+  ok(`laptop ${W}: table not clipped inside its card (table-scroll overflow ~0)`, tsOverflow <= 1, `overflow ${tsOverflow}px`);
+  // Actions header not truncated to "ACT..." and Delete button fully within viewport
+  const actionsFull = await page.locator("th", { hasText: "Actions" }).first().evaluate((el) => { const r = el.getBoundingClientRect(); return r.right <= window.innerWidth + 1 && r.left >= 0; }).catch(() => false);
+  ok(`laptop ${W}: Actions header fully visible (not "ACT")`, actionsFull);
+  const del = page.locator("table.data-table tbody button:has-text('Delete')").first();
+  const box = await del.boundingBox().catch(() => null);
+  ok(`laptop ${W}: Delete button fully within viewport (not clipped)`, !!box && box.x >= 0 && box.x + box.width <= W + 1 && box.width >= 40, box ? `right=${Math.round(box.x + box.width)}/${W}` : "no box");
   await ctx.close();
 }
 
