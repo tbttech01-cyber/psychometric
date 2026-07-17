@@ -7,6 +7,7 @@ const Question = require('../backend/models/Question');
 const SharedUserID = require('../backend/models/SharedUserID');
 const QuestionSet = require('../backend/models/QuestionSet');
 const AssessmentSession = require('../backend/models/AssessmentSession');
+const Notification = require('../backend/models/Notification');
 
 beforeAll(connect);
 afterAll(disconnect);
@@ -505,5 +506,69 @@ describe('Retest request → admin approval → attempt #2 (history preserved)',
     expect(start.status).toBe(403);
     const reReq = await request(app).post('/api/v1/assessment/retest/request').set('Authorization', `Bearer ${userToken}`);
     expect(reReq.status).toBe(200);
+  });
+});
+
+describe('Admin notifications from real workflow events', () => {
+  let adminToken;
+  beforeAll(async () => {
+    const login = await request(app).post('/api/v1/admin/login').send({ email: process.env.ADMIN_EMAIL, password: process.env.ADMIN_PASSWORD });
+    adminToken = login.body.token;
+  });
+
+  it('requires admin auth', async () => {
+    const res = await request(app).get('/api/v1/admin/notifications');
+    expect(res.status).toBe(401);
+  });
+
+  it('submitting a result created an ASSESSMENT_SUBMITTED notification (with display metadata + entity ref)', async () => {
+    const res = await request(app).get('/api/v1/admin/notifications').set('Authorization', `Bearer ${adminToken}`);
+    expect(res.status).toBe(200);
+    const sub = res.body.data.find((n) => n.type === 'ASSESSMENT_SUBMITTED');
+    expect(sub).toBeTruthy();
+    expect(sub.title).toBe('Assessment submitted');
+    expect(sub.entityType).toBe('RESULT');
+    expect(sub.entityId).toBeTruthy();
+    expect(typeof sub.metadata.score).toBe('number');
+    expect(sub.metadata.userName).toBeTruthy();
+    expect(sub.message).toMatch(/score of \d+%/);
+  });
+
+  it('requesting a retest created a RETEST_REQUEST_CREATED notification', async () => {
+    const res = await request(app).get('/api/v1/admin/notifications').set('Authorization', `Bearer ${adminToken}`);
+    const rr = res.body.data.find((n) => n.type === 'RETEST_REQUEST_CREATED');
+    expect(rr).toBeTruthy();
+    expect(rr.title).toBe('New retest request');
+    expect(rr.entityType).toBe('RETEST_REQUEST');
+    expect(rr.entityId).toBeTruthy();
+    expect(rr.metadata.status).toBe('pending');
+  });
+
+  it('unread-count endpoint reflects unread notifications', async () => {
+    const res = await request(app).get('/api/v1/admin/notifications/unread-count').set('Authorization', `Bearer ${adminToken}`);
+    expect(res.status).toBe(200);
+    expect(res.body.unreadCount).toBeGreaterThan(0);
+  });
+
+  it('is idempotent — re-notifying the same event creates no duplicate', async () => {
+    const { notify } = require('../backend/utils/notifier');
+    const existing = await Notification.findOne({ type: 'ASSESSMENT_SUBMITTED' });
+    const before = await Notification.countDocuments();
+    await notify({ type: 'ASSESSMENT_SUBMITTED', title: 'dup', message: 'dup', entityType: 'RESULT', entityId: existing.entityId });
+    const after = await Notification.countDocuments();
+    expect(after).toBe(before);
+  });
+
+  it('marks one notification read, then marks all read', async () => {
+    const list = await request(app).get('/api/v1/admin/notifications?unread=true').set('Authorization', `Bearer ${adminToken}`);
+    const first = list.body.data[0];
+    const mark = await request(app).post(`/api/v1/admin/notifications/${first._id}/read`).set('Authorization', `Bearer ${adminToken}`);
+    expect(mark.status).toBe(200);
+    expect(mark.body.data.isRead).toBe(true);
+
+    const all = await request(app).post('/api/v1/admin/notifications/read-all').set('Authorization', `Bearer ${adminToken}`);
+    expect(all.status).toBe(200);
+    const count = await request(app).get('/api/v1/admin/notifications/unread-count').set('Authorization', `Bearer ${adminToken}`);
+    expect(count.body.unreadCount).toBe(0);
   });
 });

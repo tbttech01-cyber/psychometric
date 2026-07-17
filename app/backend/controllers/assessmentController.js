@@ -14,6 +14,7 @@ const QuestionSet = require('../models/QuestionSet');
 const RetestRequest = require('../models/RetestRequest');
 const { calculateResult, computeQuestionMaxes } = require('../utils/scoreCalculator');
 const { evaluateAnswer } = require('../utils/evaluationEngine');
+const { notify } = require('../utils/notifier');
 
 // RANKING questions store their options in the admin-authored *correct*
 // order (see adminCRUDController.js's deriveAnswerKeyFields) — sending them
@@ -403,6 +404,26 @@ exports.submitAssessment = async (req, res, next) => {
 
     await User.findByIdAndUpdate(userId, { hasCompletedAssessment: true });
 
+    // Notify the admin only AFTER the result is safely persisted. Idempotent on
+    // (type, entityId=resultId) and best-effort — never blocks the response.
+    const topBusiness = Array.isArray(resultDoc.recommendedBusiness) ? resultDoc.recommendedBusiness[0] : undefined;
+    await notify({
+      type: 'ASSESSMENT_SUBMITTED',
+      title: 'Assessment submitted',
+      message: `${req.user.name || 'A candidate'} completed the assessment with a score of ${Math.round(resultDoc.percentage)}%.`,
+      entityType: 'RESULT',
+      entityId: resultDoc._id,
+      userId,
+      metadata: {
+        userName: req.user.name,
+        userEmail: req.user.email,
+        score: Math.round(resultDoc.percentage),
+        accessCode: req.user.sharedCode,
+        recommendedBusiness: topBusiness,
+        level: resultDoc.level,
+      },
+    });
+
     res.json({ success: true, resultId: resultDoc._id });
   } catch (err) { next(err); }
 };
@@ -469,7 +490,7 @@ exports.requestRetest = async (req, res, next) => {
     let questionSetId;
     try { const shared = await SharedUserID.findById(req.user.sharedUserID).select('questionSetId'); questionSetId = shared && shared.questionSetId; } catch { /* optional */ }
 
-    await RetestRequest.create({
+    const retestDoc = await RetestRequest.create({
       userId: req.user._id,
       userName: req.user.name,
       userEmail: req.user.email,
@@ -485,6 +506,26 @@ exports.requestRetest = async (req, res, next) => {
       userAgent: req.headers['user-agent'],
       status: 'pending',
     });
+
+    // Notify the admin only AFTER the request is saved. Idempotent on
+    // (type, entityId=retestId) and best-effort — never blocks the response.
+    await notify({
+      type: 'RETEST_REQUEST_CREATED',
+      title: 'New retest request',
+      message: `${req.user.name || 'A candidate'} requested permission to retake the assessment.`,
+      entityType: 'RETEST_REQUEST',
+      entityId: retestDoc._id,
+      userId: req.user._id,
+      metadata: {
+        userName: req.user.name,
+        userEmail: req.user.email,
+        accessCode: req.user.sharedCode,
+        status: 'pending',
+        attemptNumber: attemptCount + 1,
+        recommendedBusiness: undefined,
+      },
+    });
+
     res.json({ success: true, message: 'Retest request sent to the administrator for approval.' });
   } catch (err) { next(err); }
 };

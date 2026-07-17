@@ -109,3 +109,11 @@ body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; back
 /* Avatar */
 .avatar-circle { width: 40px; height: 40px; border-radius: 999px; background: var(--tbt-primary); color: white; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 0.875rem; flex-shrink: 0; }
 .icon-btn { width: 38px; height: 38px; border-radius: 999px; display: flex; align-items: center; justify-content: center; color: var(--tbt-muted); background: #F3F4F6; flex-shrink: 0; border: none; cursor: pointer; }
+
+/* Notification dropdown — item read/unread background, hover, and loading skeleton */
+.notif-item { background: #fff; transition: background 0.12s ease; }
+.notif-item.unread { background: var(--tbt-primary-light); }
+.notif-item:hover { background: var(--tbt-bg); }
+.notif-item.unread:hover { background: #FCE7E7; }
+.skeleton-pulse { animation: skPulse 1.2s ease-in-out infinite; }
+@keyframes skPulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.45; } }
