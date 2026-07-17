@@ -207,12 +207,12 @@ export default function ResultsPage() {
             <colgroup>
               <col style={{ width: 36 }} />
               <col style={{ width: "13%" }} />
-              <col style={{ width: "20%" }} />
+              <col style={{ width: "16%" }} />
               <col style={{ width: 78 }} />
               <col style={{ width: 64 }} />
               <col style={{ width: 80 }} />
               <col style={{ width: 52 }} />
-              <col style={{ width: 128 }} />
+              <col style={{ width: 172 }} />
               <col style={{ width: "16%" }} />
               <col style={{ width: 92 }} />
               <col style={{ width: 138 }} />
@@ -236,7 +236,7 @@ export default function ResultsPage() {
                   <td className="nowrap">#{r.attemptNumber ?? 1}</td>
                   <td className="font-bold nowrap">{r.totalMarks}/{r.maxScore}</td>
                   <td className="nowrap">{r.percentage}%</td>
-                  <td><span className={levelBadgeClass(r.level)}>{r.level}</span></td>
+                  <td><span className={levelBadgeClass(r.level)} style={{ whiteSpace: "normal" }}>{r.level}</span></td>
                   <td className="truncate text-xs" title={cat.title} style={empty ? { color: "var(--tbt-muted)", fontStyle: "italic" } : undefined}>{cat.text}</td>
                   <td className="nowrap text-xs">{new Date(r.createdAt).toLocaleDateString()}</td>
                   <td>
