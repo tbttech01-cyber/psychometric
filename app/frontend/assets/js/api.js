@@ -16,9 +16,8 @@ const _req = async (method, path, body, token) => {
     // own 401s (e.g. bad credentials) surface to the caller as normal.
     if (token && res.status === 401 && typeof window !== 'undefined') {
       api.clearSession();
-      const p = window.location.pathname;
-      // Login is served at "/" (clean route); also tolerate the raw .html path.
-      if (p !== '/' && !p.endsWith('/login.html'))
+      // Login is served at "/"; don't bounce if we're already there.
+      if (window.location.pathname !== '/')
         window.location.replace('/');
     }
     return { ok: res.ok, status: res.status, data };
