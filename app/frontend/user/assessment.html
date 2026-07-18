@@ -308,6 +308,14 @@
     function refreshVoices() { if (TTS_OK) { try { voicesCache = window.speechSynthesis.getVoices() || []; } catch { voicesCache = []; } } }
     if (TTS_OK) { refreshVoices(); try { window.speechSynthesis.onvoiceschanged = refreshVoices; } catch { /* ignore */ } }
 
+    // Does this device actually have a Tamil voice? Used to decide whether a
+    // Tanglish explanation should be transliterated to Tamil script (only worth
+    // it if a Tamil voice can read it) or read as-is in romanized form.
+    function hasTamilVoice() {
+      const list = (voicesCache && voicesCache.length) ? voicesCache : (TTS_OK ? (window.speechSynthesis.getVoices() || []) : []);
+      return list.some((v) => (v.lang || '').toLowerCase().startsWith('ta'));
+    }
+
     // Gentle, human-ish prosody: a touch slower for clarity, natural pitch — so
     // the read sounds calm and clear rather than fast and robotic.
     const TTS_RATE = 0.9, TTS_PITCH = 1.0, TTS_VOLUME = 1;
@@ -469,11 +477,13 @@
       hideAudioError(qid);
       // Spoken explanation takes over the Play button when the admin set one:
       // it's read aloud (browser voice) instead of the question's own audio.
-      // A Tanglish explanation is transliterated to Tamil script first, so a
-      // Tamil voice reads it (pickSpeech detects the Tamil script) rather than
-      // an English voice mispronouncing the romanized text.
+      // A Tanglish explanation is transliterated to Tamil script so a Tamil
+      // voice reads it — BUT only when the device actually has a Tamil voice.
+      // With no Tamil voice, an English voice can't speak Tamil script (it goes
+      // silent), so we instead read the ORIGINAL romanized text aloud: audible,
+      // even if English-accented. Never leaves the candidate with no audio.
       let explanation = (explanationTexts[qid] || '').trim();
-      if (explanation && explanationTanglish[qid]) explanation = tanglishToTamil(explanation);
+      if (explanation && explanationTanglish[qid] && hasTamilVoice()) explanation = tanglishToTamil(explanation);
       if (explanation) { startTts(qid, explanation); return; }                 // 0) spoken explanation
       if (audioUrls[qid]) { startAudio(qid, audioUrls[qid]); return; }         // 1) uploaded
       if (neuralReady[qid]) {                                                  // 2) cached neural
