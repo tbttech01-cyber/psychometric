@@ -152,6 +152,7 @@ exports.getQuestions = async (req, res, next) => {
             // Admin-authored spoken explanation, played on demand by the "Explain"
             // button. Safe to send: it's help text, not scoring/answer data.
             explanationAudioText: q.explanationAudioText || '',
+            explanationIsTanglish: !!q.explanationIsTanglish,
             hasAudio: audio.hasAudio, audioUrl: audio.audioUrl,
             neuralAudio: audioHashByQid[q._id.toString()] === textHash(q.text),
             options: q.questionType === 'RANKING'

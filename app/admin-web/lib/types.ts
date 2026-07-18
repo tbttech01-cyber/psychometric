@@ -66,6 +66,7 @@ export type Question = {
   imageUrl?: string;
   instructionText?: string;
   explanationAudioText?: string;
+  explanationIsTanglish?: boolean;
   isReverseScored?: boolean;
   correctOptionId?: string | null;
   correctOptionIds?: string[];

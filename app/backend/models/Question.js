@@ -33,6 +33,11 @@ const questionSchema = new mongoose.Schema({
   // (browser voice) via a separate "Explain" button during the assessment.
   // Distinct from `explanation` below (which is a reports-only field).
   explanationAudioText: { type: String, maxlength: 1000, default: '' },
+  // When true, the spoken explanation is Tamil written in English letters
+  // (Tanglish). The candidate app transliterates it to Tamil script and reads
+  // it with a Tamil voice, instead of an English voice reading the romanized
+  // text. Off by default so plain-English explanations are unaffected.
+  explanationIsTanglish: { type: Boolean, default: false },
 
   // Type-specific fields. Only LIKERT_SCALE/NUMERICAL_ABILITY rules are
   // enforced in Phase 1 — the rest exist now so later phases (SITUATIONAL,

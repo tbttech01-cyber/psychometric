@@ -84,6 +84,7 @@
     let audioUrls = {};       // qid -> uploaded audio data URI (priority source)
     let questionTexts = {};   // qid -> plain question text (text-to-speech source)
     let explanationTexts = {}; // qid -> admin-authored spoken explanation (spoken by Play when set)
+    let explanationTanglish = {}; // qid -> true when the explanation is Tanglish (romanized Tamil)
     let currentAudio = null;  // live HTMLAudioElement (uploaded-audio mode)
     let currentUtterance = null; // live SpeechSynthesisUtterance (tts mode)
     let activeQid = null;     // question whose audio/speech is currently live
@@ -131,12 +132,13 @@
       // Index both audio sources for every question: the uploaded clip (if any)
       // takes priority, and every question also exposes its text for the
       // text-to-speech fallback so EVERY question gets a working audio button.
-      audioUrls = {}; questionTexts = {}; explanationTexts = {}; neuralReady = {};
+      audioUrls = {}; questionTexts = {}; explanationTexts = {}; explanationTanglish = {}; neuralReady = {};
       sections.forEach((s) => s.questions.forEach((q) => {
         if (q.hasAudio && q.audioUrl) audioUrls[q._id] = q.audioUrl;
         if (q.neuralAudio) neuralReady[q._id] = true;
         questionTexts[q._id] = q.text || '';
         explanationTexts[q._id] = q.explanationAudioText || '';
+        explanationTanglish[q._id] = !!q.explanationIsTanglish;
       }));
       restoreAutosave();
       renderUnits = buildRenderUnits(sections);
@@ -326,6 +328,30 @@
     }
     function bestVoice(list) { return list.length ? list.slice().sort((a, b) => scoreVoice(b) - scoreVoice(a))[0] : null; }
 
+    // Tanglish (Tamil written in English letters) -> Tamil script, so a Tamil
+    // voice can read it instead of an English voice mispronouncing romanized
+    // Tamil. Rule-based longest-match: consonant+vowel -> consonant letter +
+    // matra; a bare consonant gets pulli (்); a standalone vowel uses its
+    // independent letter; anything already Tamil / punctuation passes through.
+    // Romanization is ambiguous, so the output is approximate by design.
+    const TL_VOWELS = [['au','ஔ','ௌ'],['ai','ஐ','ை'],['aa','ஆ','ா'],['ee','ஏ','ே'],['ii','ஈ','ீ'],['oo','ஓ','ோ'],['uu','ஊ','ூ'],['a','அ',''],['i','இ','ி'],['u','உ','ு'],['e','எ','ெ'],['o','ஒ','ொ']];
+    const TL_CONS = [['ng','ங'],['nj','ஞ'],['ch','ச'],['sh','ஷ'],['zh','ழ'],['th','த'],['dh','த'],['kh','க'],['gh','க'],['ph','ப'],['bh','ப'],['k','க'],['g','க'],['c','ச'],['j','ஜ'],['t','ட'],['d','ட'],['n','ந'],['p','ப'],['b','ப'],['m','ம'],['y','ய'],['r','ர'],['l','ல'],['v','வ'],['w','வ'],['s','ஸ'],['h','ஹ'],['f','ஃப'],['x','க்ஸ'],['q','க']];
+    function tanglishToTamil(input) {
+      const src = String(input || ''), s = src.toLowerCase();
+      const isTa = (ch) => ch >= '஀' && ch <= '௿';
+      const matchAt = (arr, pos) => { for (const e of arr) if (s.startsWith(e[0], pos)) return e; return null; };
+      let out = '', i = 0;
+      while (i < s.length) {
+        if (isTa(src[i])) { out += src[i]; i++; continue; }
+        const c = matchAt(TL_CONS, i);
+        if (c) { i += c[0].length; const v = matchAt(TL_VOWELS, i); if (v) { out += c[1] + v[2]; i += v[0].length; } else out += c[1] + '்'; continue; }
+        const v = matchAt(TL_VOWELS, i);
+        if (v) { out += v[1]; i += v[0].length; continue; }
+        out += src[i]; i++;
+      }
+      return out;
+    }
+
     // Tamil text lives in the U+0B80–U+0BFF block; anything else is treated as
     // English. Choose the best-sounding matching voice, falling back to the best
     // English voice (then any) with lang aligned so speech still plays.
@@ -443,7 +469,11 @@
       hideAudioError(qid);
       // Spoken explanation takes over the Play button when the admin set one:
       // it's read aloud (browser voice) instead of the question's own audio.
-      const explanation = (explanationTexts[qid] || '').trim();
+      // A Tanglish explanation is transliterated to Tamil script first, so a
+      // Tamil voice reads it (pickSpeech detects the Tamil script) rather than
+      // an English voice mispronouncing the romanized text.
+      let explanation = (explanationTexts[qid] || '').trim();
+      if (explanation && explanationTanglish[qid]) explanation = tanglishToTamil(explanation);
       if (explanation) { startTts(qid, explanation); return; }                 // 0) spoken explanation
       if (audioUrls[qid]) { startAudio(qid, audioUrls[qid]); return; }         // 1) uploaded
       if (neuralReady[qid]) {                                                  // 2) cached neural

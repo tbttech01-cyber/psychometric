@@ -92,6 +92,7 @@ function QuestionsPageInner() {
   const [qImageUrl, setQImageUrl] = useState("");
   const [qInstructionText, setQInstructionText] = useState("");
   const [qExplanationAudioText, setQExplanationAudioText] = useState("");
+  const [qExplanationIsTanglish, setQExplanationIsTanglish] = useState(false);
   const [qScoringMode, setQScoringMode] = useState<"exact" | "partial" | "">("");
   const [options, setOptions] = useState<AnswerOption[]>(defaultOptionsFor("LIKERT_SCALE"));
   const [deleteTarget, setDeleteTarget] = useState<Question | null>(null);
@@ -187,6 +188,7 @@ function QuestionsPageInner() {
     setQImageUrl("");
     setQInstructionText("");
     setQExplanationAudioText("");
+    setQExplanationIsTanglish(false);
     setQScoringMode("");
     setOptions(defaultOptionsFor("LIKERT_SCALE"));
   }
@@ -226,6 +228,7 @@ function QuestionsPageInner() {
     setQImageUrl(q.imageUrl || "");
     setQInstructionText(q.instructionText || "");
     setQExplanationAudioText(q.explanationAudioText || "");
+    setQExplanationIsTanglish(!!q.explanationIsTanglish);
     setQScoringMode(q.scoringMode || "");
     setOptions(q.options && q.options.length ? q.options : defaultOptionsFor(q.questionType || "LIKERT_SCALE"));
     setShowForm(true);
@@ -250,6 +253,7 @@ function QuestionsPageInner() {
       imageUrl: qImageUrl.trim() || undefined,
       instructionText: qInstructionText.trim() || undefined,
       explanationAudioText: qExplanationAudioText.trim() || undefined,
+      explanationIsTanglish: qExplanationIsTanglish,
       scoringMode: qQuestionType === "MULTI_SELECT" ? (qScoringMode || undefined) : undefined,
       options: options.map((o, i) => ({ ...o, order: i + 1 })),
     };
@@ -392,7 +396,11 @@ function QuestionsPageInner() {
 
               <label className="block text-xs font-semibold mb-1 text-center" style={{ color: "var(--tbt-muted)" }}>🔊 Spoken explanation (optional) — read aloud when the candidate taps &quot;Play Question&quot; (replaces reading the question text)</label>
               <textarea placeholder="e.g. This question checks how you handle a customer complaint. Read each option and pick the one closest to how you'd respond." value={qExplanationAudioText} onChange={(e) => setQExplanationAudioText(e.target.value)} maxLength={1000}
-                rows={2} className="border rounded-xl px-3.5 py-2.5 w-full focus:outline-none mb-3" style={{ borderColor: "var(--tbt-border)" }} />
+                rows={2} className="border rounded-xl px-3.5 py-2.5 w-full focus:outline-none mb-2" style={{ borderColor: "var(--tbt-border)" }} />
+              <label className="flex items-start gap-2 mb-3 text-xs cursor-pointer" style={{ color: "var(--tbt-muted)" }}>
+                <input type="checkbox" checked={qExplanationIsTanglish} onChange={(e) => setQExplanationIsTanglish(e.target.checked)} className="mt-0.5 shrink-0" />
+                <span>🔤 This explanation is <strong>Tanglish</strong> (Tamil typed in English letters) — read it in a Tamil voice. Leave unchecked for plain English. Pronunciation is approximate, and the candidate&apos;s device needs a Tamil voice.</span>
+              </label>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
                 <input placeholder={qQuestionType === "IMAGE_BASED" ? "Image URL (required)" : "Image URL (optional)"} value={qImageUrl}
