@@ -399,7 +399,7 @@ function QuestionsPageInner() {
                 rows={2} className="border rounded-xl px-3.5 py-2.5 w-full focus:outline-none mb-2" style={{ borderColor: "var(--tbt-border)" }} />
               <label className="flex items-start gap-2 mb-3 text-xs cursor-pointer" style={{ color: "var(--tbt-muted)" }}>
                 <input type="checkbox" checked={qExplanationIsTanglish} onChange={(e) => setQExplanationIsTanglish(e.target.checked)} className="mt-0.5 shrink-0" />
-                <span>🔤 This explanation is <strong>Tanglish</strong> (Tamil typed in English letters) — read it in a Tamil voice. Leave unchecked for plain English. Pronunciation is approximate, and the candidate&apos;s device needs a Tamil voice.</span>
+                <span>🔤 <strong>Force Tamil voice</strong> — the language is detected automatically, so you usually don&apos;t need this. Tick it only if a Tanglish (Tamil-in-English-letters) explanation is mistakenly read as English. Generate its audio on the Voice page.</span>
               </label>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
