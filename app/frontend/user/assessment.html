@@ -96,6 +96,8 @@
     // questions have it, and per-question object URLs once fetched.
     let neuralReady = {};      // qid -> true when the server has fresh cached audio
     let neuralAudioUrls = {};  // qid -> objectURL | 'none' | undefined (unfetched)
+    let neuralExpReady = {};   // qid -> true when server has fresh EXPLANATION audio
+    let neuralExpUrls = {};    // qid -> objectURL | 'none' | undefined (unfetched)
     let playToken = 0;         // invalidates in-flight audio fetches on nav / new play
     const NEURAL_BASE = (window.TBT_API_BASE || '') + '/api/v1';
 
@@ -132,10 +134,11 @@
       // Index both audio sources for every question: the uploaded clip (if any)
       // takes priority, and every question also exposes its text for the
       // text-to-speech fallback so EVERY question gets a working audio button.
-      audioUrls = {}; questionTexts = {}; explanationTexts = {}; explanationTanglish = {}; neuralReady = {};
+      audioUrls = {}; questionTexts = {}; explanationTexts = {}; explanationTanglish = {}; neuralReady = {}; neuralExpReady = {};
       sections.forEach((s) => s.questions.forEach((q) => {
         if (q.hasAudio && q.audioUrl) audioUrls[q._id] = q.audioUrl;
         if (q.neuralAudio) neuralReady[q._id] = true;
+        if (q.neuralExplanationAudio) neuralExpReady[q._id] = true;
         questionTexts[q._id] = q.text || '';
         explanationTexts[q._id] = q.explanationAudioText || '';
         explanationTanglish[q._id] = !!q.explanationIsTanglish;
@@ -465,6 +468,17 @@
       } catch { return (neuralAudioUrls[qid] = 'none'); }
     }
 
+    // Same, for a question's cached neural EXPLANATION mp3 (Tamil/Tanglish).
+    async function fetchExplanationAudio(qid) {
+      if (neuralExpUrls[qid] !== undefined) return neuralExpUrls[qid];
+      try {
+        const res = await fetch(`${NEURAL_BASE}/assessment/questions/${qid}/explanation-audio`, { headers: { Authorization: `Bearer ${token}` } });
+        if (!res.ok) return (neuralExpUrls[qid] = 'none');
+        const url = URL.createObjectURL(await res.blob());
+        return (neuralExpUrls[qid] = url);
+      } catch { return (neuralExpUrls[qid] = 'none'); }
+    }
+
     function setLoading(qid) { const l = document.getElementById(`audio-label-${qid}`); if (l) l.textContent = 'Loading…'; }
 
     // Begin playback for a question from the start, after stopping anything
@@ -477,14 +491,25 @@
       hideAudioError(qid);
       // Spoken explanation takes over the Play button when the admin set one:
       // it's read aloud (browser voice) instead of the question's own audio.
-      // A Tanglish explanation is transliterated to Tamil script so a Tamil
-      // voice reads it — BUT only when the device actually has a Tamil voice.
-      // With no Tamil voice, an English voice can't speak Tamil script (it goes
-      // silent), so we instead read the ORIGINAL romanized text aloud: audible,
-      // even if English-accented. Never leaves the candidate with no audio.
-      let explanation = (explanationTexts[qid] || '').trim();
-      if (explanation && explanationTanglish[qid] && hasTamilVoice()) explanation = tanglishToTamil(explanation);
-      if (explanation) { startTts(qid, explanation); return; }                 // 0) spoken explanation
+      // Spoken explanation takes over the Play button when the admin set one.
+      const explanationRaw = (explanationTexts[qid] || '').trim();
+      if (explanationRaw) {
+        // 0a) Server-generated neural audio (studio-quality Tamil, works on
+        //     ANY device — no Tamil voice needed). Preferred when available.
+        if (neuralExpReady[qid]) {
+          let url = neuralExpUrls[qid];
+          if (url === undefined) { setLoading(qid); url = await fetchExplanationAudio(qid); if (myToken !== playToken) return; }
+          if (url && url !== 'none') { startAudio(qid, url); return; }
+        }
+        // 0b) Browser-voice fallback. A Tanglish explanation is transliterated
+        //     to Tamil ONLY when the device has a Tamil voice; otherwise the
+        //     original romanized text is read aloud (audible, English-accented)
+        //     so the candidate is never left with silence.
+        let explanation = explanationRaw;
+        if (explanationTanglish[qid] && hasTamilVoice()) explanation = tanglishToTamil(explanation);
+        startTts(qid, explanation);
+        return;
+      }
       if (audioUrls[qid]) { startAudio(qid, audioUrls[qid]); return; }         // 1) uploaded
       if (neuralReady[qid]) {                                                  // 2) cached neural
         let url = neuralAudioUrls[qid];
@@ -751,6 +776,7 @@
       // Warm cached neural audio for this section's questions so Play is instant.
       (unit.kind === 'batch' ? unit.questions : [unit.question]).forEach((q) => {
         if (q && neuralReady[q._id] && neuralAudioUrls[q._id] === undefined) fetchNeural(q._id);
+        if (q && neuralExpReady[q._id] && neuralExpUrls[q._id] === undefined) fetchExplanationAudio(q._id);
       });
       // Time-to-answer is measured from the first time a question's section
       // is actually shown, not from page load — a batch section shows all

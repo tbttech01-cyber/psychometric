@@ -2,7 +2,9 @@ const crypto = require('crypto');
 const Question = require('../models/Question');
 const AnswerOption = require('../models/AnswerOption');
 const QuestionAudio = require('../models/QuestionAudio');
+const ExplanationAudio = require('../models/ExplanationAudio');
 const { getTtsConfig } = require('../utils/ttsSettings');
+const { explanationSpeechText } = require('../utils/tanglish');
 const AssessmentSession = require('../models/AssessmentSession');
 const UserAnswer = require('../models/UserAnswer');
 const Result = require('../models/Result');
@@ -125,9 +127,12 @@ exports.getQuestions = async (req, res, next) => {
     // Honour the admin on/off toggle: when disabled, expose no neural audio.
     const ttsEnabled = (await getTtsConfig()).enabled;
     const audioHashByQid = {};
+    const exHashByQid = {};
     if (ttsEnabled) {
       (await QuestionAudio.find({ questionId: { $in: questionIds } }).select('questionId textHash'))
         .forEach((r) => { audioHashByQid[r.questionId.toString()] = r.textHash; });
+      (await ExplanationAudio.find({ questionId: { $in: questionIds } }).select('questionId textHash'))
+        .forEach((r) => { exHashByQid[r.questionId.toString()] = r.textHash; });
     }
 
     // Group by category for the candidate UI (unchanged contract). Questions
@@ -153,6 +158,10 @@ exports.getQuestions = async (req, res, next) => {
             // button. Safe to send: it's help text, not scoring/answer data.
             explanationAudioText: q.explanationAudioText || '',
             explanationIsTanglish: !!q.explanationIsTanglish,
+            // Server-generated neural audio for the spoken explanation is fresh
+            // (matches the current explanation text) -> the candidate plays it
+            // instead of relying on a Tamil browser voice being installed.
+            neuralExplanationAudio: exHashByQid[q._id.toString()] === textHash(explanationSpeechText(q)),
             hasAudio: audio.hasAudio, audioUrl: audio.audioUrl,
             neuralAudio: audioHashByQid[q._id.toString()] === textHash(q.text),
             options: q.questionType === 'RANKING'
@@ -556,6 +565,20 @@ exports.getQuestionAudio = async (req, res, next) => {
   try {
     const cached = await QuestionAudio.findOne({ questionId: req.params.id }).select('audio contentType textHash');
     if (!cached || !cached.audio) return res.status(404).json({ success: false, message: 'No generated audio for this question.' });
+    res.set('Content-Type', cached.contentType || 'audio/mpeg');
+    res.set('Cache-Control', 'private, max-age=86400');
+    res.set('ETag', `"${cached.textHash}"`);
+    return res.send(cached.audio);
+  } catch (err) { next(err); }
+};
+
+// Cached neural audio for a question's SPOKEN EXPLANATION (see
+// ExplanationAudio / adminTtsController.generateExplanation). 404 when none
+// exists — the candidate then falls back to browser speech.
+exports.getExplanationAudio = async (req, res, next) => {
+  try {
+    const cached = await ExplanationAudio.findOne({ questionId: req.params.id }).select('audio contentType textHash');
+    if (!cached || !cached.audio) return res.status(404).json({ success: false, message: 'No generated explanation audio for this question.' });
     res.set('Content-Type', cached.contentType || 'audio/mpeg');
     res.set('Cache-Control', 'private, max-age=86400');
     res.set('ETag', `"${cached.textHash}"`);

@@ -6,6 +6,7 @@ const userAuth = require('../middleware/userAuth');
 
 router.get('/questions', userAuth, ctrl.getQuestions);
 router.get('/questions/:id/audio', userAuth, ctrl.getQuestionAudio);
+router.get('/questions/:id/explanation-audio', userAuth, ctrl.getExplanationAudio);
 router.post('/start', userAuth, ctrl.startSession);
 
 router.post('/submit',
