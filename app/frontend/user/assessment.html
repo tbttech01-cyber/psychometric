@@ -64,11 +64,11 @@
     .side-cur .ic{ width:18px; text-align:center; }
     .side-cur .t{ font-weight:800; font-size:13.5px; line-height:1.15; }
     .side-cur .s{ font-size:11.5px; opacity:.9; margin-top:1px; }
-    .dim{ width:100%; text-align:left; display:flex; align-items:center; gap:10px; padding:6px 9px; border-radius:9px; cursor:pointer; background:transparent; border:none; transition:background .15s; }
+    .dim{ width:100%; text-align:left; display:flex; align-items:center; gap:9px; padding:4px 8px; border-radius:8px; cursor:pointer; background:transparent; border:none; transition:background .15s; }
     .dim:hover{ background:#F6F7F9; }
     .dim.active{ background:var(--r-light); }
     .dim:disabled{ cursor:default; }
-    .dim-n{ width:22px; height:22px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:11.5px; font-weight:700; background:#F0F1F4; color:var(--muted); flex-shrink:0; }
+    .dim-n{ width:21px; height:21px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:700; background:#F0F1F4; color:var(--muted); flex-shrink:0; }
     .dim.active .dim-n{ background:var(--r); color:#fff; }
     .dim.done .dim-n{ background:var(--ink); color:#fff; }
     .dim-name{ font-size:13.5px; color:#374151; font-weight:500; }
@@ -1123,10 +1123,6 @@
             <button type="button" class="dim" id="dim-${ci}" onclick="showSection(${c.first})">
               <span class="dim-n">${ci + 1}</span><span class="dim-name">${c.name}</span>
             </button>`).join('')}
-        </div>
-        <div class="side-tip">
-          <div class="th"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7c.6.5 1 1.3 1 2.1V17h6v-.2c0-.8.4-1.6 1-2.1A7 7 0 0 0 12 2z"></path></svg> Tip</div>
-          <p>Answer honestly. There are no right or wrong answers.</p>
         </div>`;
       updateSidebar();
     }
