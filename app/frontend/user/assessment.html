@@ -175,11 +175,12 @@
       body{ height:100vh; overflow:hidden; display:flex; flex-direction:column; }
       .a-head{ position:static; flex-shrink:0; }
       .a-body{ flex:1; min-height:0; overflow:hidden; padding:12px 26px; grid-template-rows:minmax(0,1fr); }
-      /* Fits fully at normal desktop heights; on very short screens it scrolls
-         internally with a HIDDEN scrollbar so nothing is ever cut off, without
-         showing a visible bar. */
-      .a-side{ display:block !important; position:static; top:auto; height:100%; overflow-y:auto; align-self:stretch; scrollbar-width:none; -ms-overflow-style:none; }
-      .a-side::-webkit-scrollbar{ width:0; height:0; display:none; }
+      /* Fits fully at normal desktop heights; if the screen is short it scrolls
+         internally (thin visible scrollbar) so every section stays reachable. */
+      .a-side{ display:block !important; position:static; top:auto; height:100%; overflow-y:auto; align-self:stretch; scrollbar-width:thin; scrollbar-color:#CBD0D8 transparent; }
+      .a-side::-webkit-scrollbar{ width:7px; }
+      .a-side::-webkit-scrollbar-thumb{ background:#CBD0D8; border-radius:999px; }
+      .a-side::-webkit-scrollbar-track{ background:transparent; }
       .a-main{ height:100%; overflow-y:auto; padding-right:2px; }
       .a-main::-webkit-scrollbar{ width:8px; }
       .a-main::-webkit-scrollbar-thumb{ background:#E2E5EA; border-radius:999px; }
