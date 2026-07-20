@@ -57,7 +57,7 @@
     /* Compact, non-scrolling panel — sized to fit the viewport with NO internal
        scrollbar (see the desktop app-shell block below, which pins it and hides
        overflow). Spacing/sizes are tightened so all sections stay visible. */
-    .a-side{ position:sticky; top:104px; background:#fff; border:1px solid var(--line); border-radius:16px; padding:13px 13px 11px; box-shadow:0 1px 3px rgba(16,24,40,.05); }
+    .a-side{ position:sticky; top:104px; background:#fff; border:1px solid var(--line); border-radius:16px; padding:12px 20px; box-shadow:0 1px 3px rgba(16,24,40,.05); }
     .side-h{ font-size:14px; font-weight:800; color:var(--ink); }
     .side-prog{ height:6px; background:#EEF0F3; border-radius:999px; overflow:hidden; margin:8px 0 5px; }
     .side-prog>i{ display:block; height:100%; width:0; background:var(--r); border-radius:999px; transition:width .4s ease; }
@@ -175,12 +175,8 @@
       body{ height:100vh; overflow:hidden; display:flex; flex-direction:column; }
       .a-head{ position:static; flex-shrink:0; }
       .a-body{ flex:1; min-height:0; overflow:hidden; padding:12px 26px; grid-template-rows:minmax(0,1fr); }
-      /* Fits fully at normal desktop heights; if the screen is short it scrolls
-         internally (thin visible scrollbar) so every section stays reachable. */
-      .a-side{ display:block !important; position:static; top:auto; height:100%; overflow-y:auto; align-self:stretch; scrollbar-width:thin; scrollbar-color:#CBD0D8 transparent; }
-      .a-side::-webkit-scrollbar{ width:7px; }
-      .a-side::-webkit-scrollbar-thumb{ background:#CBD0D8; border-radius:999px; }
-      .a-side::-webkit-scrollbar-track{ background:transparent; }
+      /* Sidebar does NOT scroll — sized to fit the viewport, no scrollbar. */
+      .a-side{ display:block !important; position:static; top:auto; height:100%; overflow:hidden; align-self:stretch; }
       .a-main{ height:100%; overflow-y:auto; padding-right:2px; }
       .a-main::-webkit-scrollbar{ width:8px; }
       .a-main::-webkit-scrollbar-thumb{ background:#E2E5EA; border-radius:999px; }
