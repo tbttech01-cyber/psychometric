@@ -17,6 +17,9 @@
     .q-section{ display:none; }
     .q-section.active{ display:block; }
     .visually-hidden{ position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); }
+    /* Never clip important text — wrap long words/labels instead of hiding them. */
+    .qc-text, .qc-cat, .qc-range, .qc-instr, .dim-name, .side-cur .t, .side-cur .s, .opt label{ white-space:normal; overflow-wrap:anywhere; word-break:normal; min-width:0; }
+    .dim-name, .side-cur > div{ min-width:0; }
 
     /* subtle dotted decoration, masked to the corners like the reference */
     .assess-dots{ position:fixed; inset:0; z-index:0; pointer-events:none;
@@ -172,7 +175,11 @@
       body{ height:100vh; overflow:hidden; display:flex; flex-direction:column; }
       .a-head{ position:static; flex-shrink:0; }
       .a-body{ flex:1; min-height:0; overflow:hidden; padding:12px 26px; grid-template-rows:minmax(0,1fr); }
-      .a-side{ display:block !important; position:static; top:auto; height:100%; overflow:hidden; align-self:stretch; }
+      /* Fits fully at normal desktop heights; on very short screens it scrolls
+         internally with a HIDDEN scrollbar so nothing is ever cut off, without
+         showing a visible bar. */
+      .a-side{ display:block !important; position:static; top:auto; height:100%; overflow-y:auto; align-self:stretch; scrollbar-width:none; -ms-overflow-style:none; }
+      .a-side::-webkit-scrollbar{ width:0; height:0; display:none; }
       .a-main{ height:100%; overflow-y:auto; padding-right:2px; }
       .a-main::-webkit-scrollbar{ width:8px; }
       .a-main::-webkit-scrollbar-thumb{ background:#E2E5EA; border-radius:999px; }
@@ -442,7 +449,11 @@
     // forced interaction, same as a real-world ranking exercise). Delegates
     // to isAnswered(), defined further down (function declarations hoist).
     function hasAnswer(unit) {
-      return unit.kind === 'batch' || isAnswered(unit.question);
+      // A batch (one or more Likert questions on a page) counts as answered only
+      // when EVERY question on it is answered — so Next/Save & Continue can't be
+      // used to skip a question without answering it.
+      if (unit.kind === 'batch') return unit.questions.every(isAnswered);
+      return isAnswered(unit.question);
     }
 
     // Shared question-card header: red number circle + section/dimension name +
@@ -1076,11 +1087,16 @@
     function updateProgress() {
       const all = allQuestionsFlat();
       const answered = all.filter(isAnswered).length;
-      const pct = all.length ? (answered / all.length) * 100 : 0;
+      // Header count = the CURRENT question's position, so it updates every time
+      // the question changes (navigation), not only when an answer is recorded.
+      const cu = renderUnits[currentSection];
+      const curQ = cu ? (cu.kind === 'batch' ? cu.questions[0] : cu.question) : null;
+      const pos = curQ ? all.indexOf(curQ) + 1 : 0;
       const pt = document.getElementById('progress-text');
-      if (pt) pt.innerHTML = `<b>${answered}</b><span class="m"> / ${all.length}</span>`;
+      if (pt) pt.innerHTML = `<b>${pos}</b><span class="m"> / ${all.length}</span>`;
+      // Progress bar = how many are actually answered (completion).
       const pb = document.getElementById('progress-bar');
-      if (pb) pb.style.width = `${pct}%`;
+      if (pb) pb.style.width = `${all.length ? (answered / all.length) * 100 : 0}%`;
       updateSidebar();
     }
 
@@ -1186,7 +1202,11 @@
     document.getElementById('btn-prev').addEventListener('click', () => { if (currentSection > 0) showSection(currentSection - 1); });
     document.getElementById('btn-next').addEventListener('click', () => {
       const unit = renderUnits[currentSection];
-      if (unit.kind !== 'batch' && !hasAnswer(unit) && !timedOut[unit.question._id]) {
+      // Require an answer before moving on. Timed single questions may pass once
+      // they've timed out (their inputs are locked); everything else must be
+      // answered — including Likert pages, which previously slipped through.
+      const timedOutHere = unit.kind !== 'batch' && !!timedOut[unit.question._id];
+      if (!hasAnswer(unit) && !timedOutHere) {
         showToast('Please select an answer before continuing.', 'error');
         return;
       }
