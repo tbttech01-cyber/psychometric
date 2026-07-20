@@ -577,11 +577,15 @@ exports.getQuestionAudio = async (req, res, next) => {
 // exists — the candidate then falls back to browser speech.
 exports.getExplanationAudio = async (req, res, next) => {
   try {
-    const cached = await ExplanationAudio.findOne({ questionId: req.params.id }).select('audio contentType textHash');
+    const cached = await ExplanationAudio.findOne({ questionId: req.params.id }).select('audio contentType textHash voice');
     if (!cached || !cached.audio) return res.status(404).json({ success: false, message: 'No generated explanation audio for this question.' });
     res.set('Content-Type', cached.contentType || 'audio/mpeg');
-    res.set('Cache-Control', 'private, max-age=86400');
-    res.set('ETag', `"${cached.textHash}"`);
+    // Don't cache: the admin can change the explanation voice and regenerate the
+    // clip with the SAME text, so a text-based cache would keep serving the old
+    // voice. Always fetch fresh so a voice change takes effect on reload. (The
+    // candidate app still object-URL-caches it in-memory for the session.)
+    res.set('Cache-Control', 'no-store');
+    res.set('ETag', `"${cached.textHash}-${cached.voice}"`);
     return res.send(cached.audio);
   } catch (err) { next(err); }
 };

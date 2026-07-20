@@ -132,6 +132,31 @@ export default function VoicePage() {
     showToast(cancelBulk.current ? `Stopped after ${done}.` : `Generated ${done} explanation clip(s).`, "success");
   }
 
+  // Save the explanation voice/speed AND apply it: regenerate EVERY explanation
+  // clip (not just the missing ones) so the new voice actually takes effect on
+  // the candidate side — "save = change" with no separate regenerate step.
+  async function saveExplanationVoiceAndApply() {
+    if (!config) return;
+    setSaving(true);
+    const { ok, data } = await api.put<{ config: Config; message?: string }>("/admin/tts/settings", config, token);
+    setSaving(false);
+    if (!ok) return showToast(data?.message || "Failed to save.", "error");
+    setConfig(data.config);
+    const targets = rows.filter((r) => r.hasExplanation);
+    if (!targets.length) return showToast("Voice saved. No explanations to apply it to yet.", "success");
+    cancelBulk.current = false;
+    setBulk({ done: 0, total: targets.length });
+    let done = 0;
+    for (const r of targets) {
+      if (cancelBulk.current) break;
+      await generateExplanation(r._id); // always regenerates with the new voice
+      done += 1;
+      setBulk({ done, total: targets.length });
+    }
+    setBulk(null);
+    showToast(cancelBulk.current ? `Saved; applied to ${done}.` : `Voice saved & applied to ${done} explanation(s).`, "success");
+  }
+
   async function previewExplanation(id: string) {
     try {
       if (previewAudio.current) { previewAudio.current.pause(); previewAudio.current = null; }
@@ -295,10 +320,10 @@ export default function VoicePage() {
                     {SPEEDS.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
                   </select>
                 </div>
-                <button onClick={saveSettings} disabled={saving} className="btn btn-primary">{saving ? "Saving…" : "Save voice"}</button>
+                <button onClick={saveExplanationVoiceAndApply} disabled={saving || !!bulk} className="btn btn-primary">{saving ? "Saving…" : "Save & apply"}</button>
               </div>
               <p className="text-xs mt-2" style={{ color: "var(--tbt-muted)" }}>
-                After changing the voice or speed, click <strong>Regenerate</strong> below (or <strong>Generate all</strong>) to apply it to the audio.
+                <strong>Save &amp; apply</strong> saves the voice/speed <em>and</em> regenerates every explanation clip with it, so the change takes effect immediately — no separate regenerate step.
               </p>
             </div>
 
