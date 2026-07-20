@@ -381,7 +381,7 @@
     // category used to render as a single (arbitrarily long) page; they're now
     // paginated in forward order so the candidate answers a fixed handful, hits
     // Next, and continues from the next one (page 1 = Q1–5, page 2 = Q6–10, …).
-    const LIKERT_PAGE_SIZE = 5;
+    const LIKERT_PAGE_SIZE = 1;
     function buildRenderUnits(sections) {
       const units = [];
       const isLikert = (q) => q.questionType === 'LIKERT_SCALE' || !q.questionType;
@@ -425,13 +425,18 @@
 
     // Shared question-card header: red number circle + section/dimension name +
     // question range + a Mark-for-Review bookmark. `ui` is the render-unit index.
-    function cardHeader(unit, ui, startNum, endNum, total) {
-      const range = startNum === endNum ? `Question ${startNum} of ${total}` : `Questions ${startNum}–${endNum} of ${total}`;
+    function cardHeader(unit, ui, num, total) {
+      // Range shown is the whole SECTION/dimension the current question belongs
+      // to (e.g. Communication = "Questions 1–4 of 57"); the circle shows the
+      // current question number.
+      const cat = (sideCats || []).find((c) => c.units.includes(ui));
+      const s = cat ? catStart(cat) : num, e = cat ? catEnd(cat) : num;
+      const range = s === e ? `Question ${s} of ${total}` : `Questions ${s}–${e} of ${total}`;
       const on = markedSections.has(ui);
       return `
         <div class="qc-head">
           <div class="qc-head-l">
-            <div class="qc-num">${startNum}</div>
+            <div class="qc-num">${num}</div>
             <div>
               <div class="qc-cat">${unit.typeName || 'Question'}</div>
               <div class="qc-range">${range}</div>
@@ -461,13 +466,13 @@
     }
 
     function renderLikertBatch(unit, totalQuestions, questionOffset, ui) {
-      const start = questionOffset + 1, end = questionOffset + unit.questions.length;
+      const multi = unit.questions.length > 1;
       return `
         <div class="qcard">
-          ${cardHeader(unit, ui, start, end, totalQuestions)}
+          ${cardHeader(unit, ui, questionOffset + 1, totalQuestions)}
           ${unit.questions.map((q, qi) => `
-            <div class="qc-item">
-              <p class="qc-text"><span class="qc-qnum">${questionOffset + qi + 1}</span>${q.text}</p>
+            <div class="${multi ? 'qc-item' : ''}">
+              <p class="qc-text">${multi ? `<span class="qc-qnum">${questionOffset + qi + 1}</span>` : ''}${q.text}</p>
               ${renderAudio(q)}
               <div id="options-${q._id}">${optionRadio(q, false)}</div>
             </div>
@@ -811,7 +816,7 @@
         : '';
       return `
         <div class="qcard">
-          ${cardHeader(unit, ui, globalIndex, globalIndex, totalQuestions)}
+          ${cardHeader(unit, ui, globalIndex, totalQuestions)}
           ${timerHtml}
           ${q.instructionText ? `<p class="qc-instr">${q.instructionText}</p>` : ''}
           ${q.imageUrl ? `<img src="${q.imageUrl}" alt="Assessment question image" class="qc-img" />` : ''}
@@ -825,7 +830,7 @@
       const q = unit.question;
       return `
         <div class="qcard">
-          ${cardHeader(unit, ui, globalIndex, globalIndex, totalQuestions)}
+          ${cardHeader(unit, ui, globalIndex, totalQuestions)}
           ${q.instructionText ? `<p class="qc-instr">${q.instructionText}</p>` : ''}
           ${q.imageUrl ? `<img src="${q.imageUrl}" alt="Assessment question image" class="qc-img" />` : ''}
           <p class="qc-text">${q.text}</p>
@@ -841,7 +846,7 @@
       const optionById = Object.fromEntries(q.options.map(o => [o._id, o]));
       return `
         <div class="qcard">
-          ${cardHeader(unit, ui, globalIndex, globalIndex, totalQuestions)}
+          ${cardHeader(unit, ui, globalIndex, totalQuestions)}
           ${q.instructionText ? `<p class="qc-instr">${q.instructionText}</p>` : ''}
           <p class="qc-text">${q.text}</p>
           <p class="qc-hint">Use the arrows to arrange in your preferred order (top = first).</p>
@@ -871,6 +876,7 @@
       const container = document.getElementById('question-container');
       const flat = allQuestionsFlat();
       const totalQuestions = flat.length;
+      buildSideModel();   // sideCats/unitStart/unitEnd — cardHeader needs the section ranges
       let questionOffset = 0;
       renderUnits.forEach((unit, ui) => {
         const sec = document.createElement('div');
