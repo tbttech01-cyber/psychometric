@@ -7,53 +7,249 @@
   <link rel="stylesheet" href="/assets/css/tailwind.css" />
   <link rel="stylesheet" href="/assets/css/custom.css" />
   <style>
-    .q-section { display: none; }
-    .q-section.active { display: block; }
-    /* Per-question audio control — wraps on narrow screens so the button and
-       any error message stack cleanly on mobile. */
-    .audio-player { display: flex; align-items: center; flex-wrap: wrap; gap: 0.5rem 0.75rem; }
-    .audio-btn { min-width: 10.5rem; }     /* stable width across Play/Pause/Resume/Replay labels */
-    .audio-icon { display: inline-flex; }
-    .audio-stop { background: transparent; border: 2px solid var(--tbt-border); color: var(--tbt-muted); }
-    .audio-stop:hover { border-color: var(--tbt-danger); color: var(--tbt-danger); }
-    .audio-error { flex-basis: 100%; }     /* error drops to its own line */
+    /* ============ Candidate Assessment — redesign (TBT red/black/white) ======
+       Rebuilt to match the reference: sticky header, left overview sidebar,
+       centred question card, fixed bottom action bar. All existing assessment
+       logic (IDs progress-text/progress-bar/timer-display/btn-prev/btn-next/
+       btn-submit/etc.) is preserved and re-wired to this layout. */
+    :root{ --r:#CB1417; --r-dark:#970F12; --r-light:#FEF2F2; --r-soft:#FDE8E8; --ink:#111827; --ink2:#1F2937; --muted:#6B7280; --line:#EDEFF2; --line2:#E7E9EE; }
+    body{ background:#F6F7F9; }
+    .q-section{ display:none; }
+    .q-section.active{ display:block; }
+    .visually-hidden{ position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); }
+
+    /* subtle dotted decoration, masked to the corners like the reference */
+    .assess-dots{ position:fixed; inset:0; z-index:0; pointer-events:none;
+      background-image:radial-gradient(circle, rgba(203,20,23,.10) 1.1px, transparent 1.2px);
+      background-size:24px 24px;
+      -webkit-mask-image:radial-gradient(1100px 700px at 100% 0%, #000 0%, transparent 60%), radial-gradient(900px 500px at 0% 100%, #000 0%, transparent 60%);
+      mask-image:radial-gradient(1100px 700px at 100% 0%, #000 0%, transparent 60%), radial-gradient(900px 500px at 0% 100%, #000 0%, transparent 60%);
+      opacity:.6; }
+
+    /* ---- Header ---- */
+    .a-head{ position:sticky; top:0; z-index:50; background:#fff; border-bottom:1px solid var(--line); }
+    .a-head-in{ max-width:1520px; margin:0 auto; padding:12px 26px; display:flex; align-items:center; justify-content:space-between; gap:22px; }
+    .brand{ display:flex; align-items:center; gap:13px; min-width:0; }
+    .brand img{ width:46px; height:46px; object-fit:contain; }
+    .brand-t{ font-size:21px; font-weight:800; color:var(--ink); line-height:1.15; letter-spacing:-.01em; }
+    .brand-t .r{ color:var(--r); }
+    .brand-s{ font-size:12px; color:var(--muted); margin-top:1px; }
+    .brand-accent{ height:3px; width:30px; background:var(--r); border-radius:2px; margin-top:5px; }
+    .h-mid{ display:flex; align-items:center; gap:16px; flex:1; justify-content:center; }
+    .h-count{ text-align:center; white-space:nowrap; }
+    .h-count b{ font-size:18px; font-weight:800; color:var(--ink); }
+    .h-count .m{ color:#9CA3AF; font-weight:800; }
+    .h-count span{ display:block; font-size:11.5px; color:var(--muted); margin-top:1px; }
+    .h-bar{ width:min(300px,30vw); height:8px; background:#EEF0F3; border-radius:999px; overflow:hidden; }
+    .h-bar>i{ display:block; height:100%; width:0; background:var(--r); border-radius:999px; transition:width .4s ease; }
+    .h-timer{ display:flex; align-items:center; gap:9px; padding-left:20px; border-left:1px solid var(--line); white-space:nowrap; }
+    .h-timer .tv{ font-size:19px; font-weight:800; color:var(--r); font-variant-numeric:tabular-nums; }
+    .h-timer .tl{ font-size:11.5px; color:var(--muted); }
+
+    /* ---- Body layout ---- */
+    .a-body{ position:relative; z-index:1; max-width:1520px; margin:0 auto; padding:24px 26px 130px; display:grid; grid-template-columns:320px minmax(0,1fr); gap:24px; align-items:start; }
+
+    /* ---- Sidebar ---- */
+    .a-side{ position:sticky; top:104px; background:#fff; border:1px solid var(--line); border-radius:18px; padding:20px; box-shadow:0 1px 3px rgba(16,24,40,.05); }
+    .side-h{ font-size:15px; font-weight:800; color:var(--ink); }
+    .side-prog{ height:6px; background:#EEF0F3; border-radius:999px; overflow:hidden; margin:11px 0 7px; }
+    .side-prog>i{ display:block; height:100%; width:0; background:var(--r); border-radius:999px; transition:width .4s ease; }
+    .side-sub{ font-size:12.5px; color:var(--muted); }
+    .side-div{ height:1px; background:var(--line); margin:16px 0; }
+    .side-cap{ font-size:12.5px; font-weight:800; color:var(--ink); margin-bottom:11px; }
+    .side-cur{ display:flex; align-items:center; gap:11px; background:var(--r); color:#fff; border-radius:13px; padding:12px 14px; margin-bottom:14px; box-shadow:0 6px 16px rgba(203,20,23,.22); }
+    .side-cur .ic{ width:20px; text-align:center; }
+    .side-cur .t{ font-weight:800; font-size:14px; line-height:1.2; }
+    .side-cur .s{ font-size:12px; opacity:.9; margin-top:1px; }
+    .dim{ width:100%; text-align:left; display:flex; align-items:center; gap:12px; padding:9px 10px; border-radius:11px; cursor:pointer; background:transparent; border:none; transition:background .15s; }
+    .dim:hover{ background:#F6F7F9; }
+    .dim.active{ background:var(--r-light); }
+    .dim:disabled{ cursor:default; }
+    .dim-n{ width:26px; height:26px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:12.5px; font-weight:700; background:#F0F1F4; color:var(--muted); flex-shrink:0; }
+    .dim.active .dim-n{ background:var(--r); color:#fff; }
+    .dim.done .dim-n{ background:var(--ink); color:#fff; }
+    .dim-name{ font-size:14px; color:#374151; font-weight:500; }
+    .dim.active .dim-name{ color:var(--r); font-weight:700; }
+    .side-tip{ margin-top:16px; background:var(--r-light); border:1px solid #FBD5D5; border-radius:13px; padding:12px 14px; }
+    .side-tip .th{ display:flex; align-items:center; gap:6px; color:var(--r); font-weight:800; font-size:13px; }
+    .side-tip p{ font-size:12.5px; color:var(--muted); margin-top:6px; line-height:1.45; }
+
+    /* mobile overview toggle (hidden on desktop) */
+    .side-toggle{ display:none; }
+
+    /* ---- Question card ---- */
+    .a-main{ min-width:0; }
+    .qcard{ background:#fff; border:1px solid var(--line); border-radius:20px; padding:28px 30px; box-shadow:0 2px 12px rgba(16,24,40,.06); }
+    .qc-head{ display:flex; align-items:flex-start; justify-content:space-between; gap:14px; margin-bottom:16px; }
+    .qc-head-l{ display:flex; align-items:center; gap:14px; min-width:0; }
+    .qc-num{ width:44px; height:44px; border-radius:50%; background:var(--r); color:#fff; display:flex; align-items:center; justify-content:center; font-weight:800; font-size:17px; flex-shrink:0; box-shadow:0 6px 14px rgba(203,20,23,.25); }
+    .qc-cat{ font-size:18px; font-weight:800; color:var(--ink); line-height:1.2; }
+    .qc-range{ font-size:13px; color:var(--muted); margin-top:1px; }
+    .bm{ border:none; background:transparent; cursor:pointer; color:#CBD5E1; padding:4px; flex-shrink:0; transition:color .15s, transform .1s; }
+    .bm:hover{ color:#F3B4B5; }
+    .bm.on{ color:var(--r); }
+    .bm.on:hover{ color:var(--r-dark); }
+    .bm svg{ fill:none; } .bm.on svg{ fill:currentColor; }
+    .fbtn-review.on svg{ fill:currentColor; }
+    .qc-instr{ font-size:13px; font-style:italic; color:var(--muted); margin-bottom:8px; }
+    .qc-img{ max-width:100%; border-radius:12px; margin-bottom:16px; }
+    .qc-text{ font-size:19px; font-weight:700; color:var(--ink2); line-height:1.5; margin-bottom:18px; }
+    .qc-hint{ font-size:12.5px; color:var(--muted); margin:-10px 0 14px; }
+    .qc-qnum{ display:inline-flex; align-items:center; justify-content:center; width:26px; height:26px; border-radius:50%; background:var(--r); color:#fff; font-size:12.5px; font-weight:700; margin-right:10px; flex-shrink:0; }
+    .qc-item{ margin-bottom:22px; padding-bottom:22px; border-bottom:1px solid var(--line); }
+    .qc-item:last-child{ margin-bottom:0; padding-bottom:0; border-bottom:none; }
+
+    /* audio controls */
+    .a-audio{ display:flex; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:20px; }
+    .abtn{ display:inline-flex; align-items:center; justify-content:center; gap:9px; padding:11px 18px; border-radius:11px; font-size:14px; font-weight:700; cursor:pointer; background:#fff; transition:all .15s; }
+    .abtn-play{ border:1.5px solid var(--r); color:var(--r); min-width:11rem; }
+    .abtn-play:hover{ background:var(--r-light); }
+    .abtn-stop{ border:1.5px solid var(--line2); color:#4B5563; }
+    .abtn-stop:hover{ border-color:#CBD5E1; }
+    .abtn:disabled{ opacity:.5; cursor:not-allowed; }
+    .audio-icon{ display:inline-flex; }
+    .a-error{ flex-basis:100%; font-size:12px; color:var(--r); }
+
+    /* answer options */
+    .opt{ display:block; margin-bottom:12px; }
+    .opt:last-child{ margin-bottom:0; }
+    .opt input{ position:absolute; opacity:0; width:1px; height:1px; }
+    .opt label{ display:flex; align-items:center; gap:14px; padding:17px 22px; border:1.5px solid var(--line2); border-radius:14px; cursor:pointer; background:#fff; color:#374151; font-size:15.5px; transition:border-color .15s, background .15s, color .15s; }
+    .opt label:hover{ border-color:#F3B4B5; background:#FEFBFB; }
+    .opt-ind{ width:22px; height:22px; border:2px solid #CBD5E1; flex-shrink:0; position:relative; transition:border-color .15s; border-radius:50%; }
+    .opt-ind.sq{ border-radius:6px; }
+    .opt input:checked + label{ border-color:var(--r); background:var(--r-light); color:var(--ink); font-weight:600; }
+    .opt input:checked + label .opt-ind{ border-color:var(--r); }
+    .opt input:checked + label .opt-ind::after{ content:''; position:absolute; inset:4px; border-radius:50%; background:var(--r); }
+    .opt-ind.sq::after{ border-radius:2px; }
+    .opt input:focus-visible + label{ outline:2px solid var(--r); outline-offset:2px; }
+    .opt input:disabled + label{ opacity:.55; cursor:not-allowed; }
+
+    /* ranking */
+    .rk{ display:flex; align-items:center; gap:12px; padding:14px 18px; border:1.5px solid var(--line2); border-radius:12px; margin-bottom:12px; }
+    .rk-n{ width:26px; height:26px; border-radius:50%; background:var(--r); color:#fff; display:flex; align-items:center; justify-content:center; font-size:12.5px; font-weight:700; flex-shrink:0; }
+    .rk-btn{ width:1.9rem; height:1.6rem; display:flex; align-items:center; justify-content:center; border:1px solid var(--line2); border-radius:7px; background:#fff; cursor:pointer; font-size:.7rem; }
+    .rk-btn:disabled{ opacity:.3; cursor:not-allowed; }
+    .rk-btn:not(:disabled):hover{ border-color:var(--r); color:var(--r); }
+
+    /* ---- Bottom action bar ---- */
+    .a-foot{ position:fixed; left:0; right:0; bottom:0; z-index:45; background:#fff; border-top:1px solid var(--line); box-shadow:0 -3px 14px rgba(16,24,40,.05); }
+    .a-foot-in{ max-width:1520px; margin:0 auto; padding:15px 26px; display:flex; align-items:center; justify-content:space-between; gap:14px; }
+    .fbtn{ display:inline-flex; align-items:center; justify-content:center; gap:10px; padding:13px 22px; border-radius:12px; font-size:15px; font-weight:700; cursor:pointer; border:1.5px solid transparent; transition:all .15s; }
+    .fbtn-prev{ background:#fff; border-color:var(--line2); color:#374151; }
+    .fbtn-prev:hover:not(:disabled){ border-color:#CBD5E1; background:#FAFBFC; }
+    .fbtn-prev:disabled{ opacity:.4; cursor:not-allowed; }
+    .fbtn-review{ background:var(--r-light); color:var(--r); }
+    .fbtn-review:hover{ background:var(--r-soft); }
+    .fbtn-review.on{ background:var(--r); color:#fff; }
+    .fbtn-next{ background:var(--r); color:#fff; min-width:230px; }
+    .fbtn-next:hover:not(:disabled){ background:var(--r-dark); }
+    .fbtn-next:disabled{ opacity:.65; cursor:not-allowed; }
+    .foot-unanswered{ font-size:12.5px; color:var(--r); text-align:center; margin-top:-6px; padding:0 26px 8px; }
+
+    /* ---- Responsive ---- */
+    @media (max-width:1024px){
+      .a-body{ grid-template-columns:1fr; padding:16px 16px 130px; gap:16px; }
+      .a-side{ position:static; top:auto; }
+      .side-toggle{ display:flex; align-items:center; justify-content:space-between; width:100%; background:#fff; border:1px solid var(--line); border-radius:14px; padding:13px 16px; font-weight:800; color:var(--ink); font-size:14px; cursor:pointer; }
+      .side-toggle .chev{ transition:transform .2s; color:var(--muted); }
+      .side-toggle.open .chev{ transform:rotate(180deg); }
+      .a-side.collapsed{ display:none; }
+    }
+    @media (min-width:1025px){ .side-toggle{ display:none !important; } .a-side{ display:block !important; } }
+    @media (max-width:760px){
+      .a-head-in{ padding:9px 14px; gap:12px; flex-wrap:wrap; }
+      .brand img{ width:38px; height:38px; }
+      .brand-t{ font-size:17px; } .brand-s{ display:none; } .brand-accent{ display:none; }
+      .h-mid{ order:3; width:100%; justify-content:space-between; gap:10px; }
+      .h-count b{ font-size:15px; } .h-count span{ font-size:10.5px; }
+      .h-bar{ width:auto; flex:1; }
+      .h-timer{ padding-left:12px; }
+      .h-timer .tv{ font-size:17px; } .h-timer .tl{ display:none; }
+      .qcard{ padding:20px 16px; border-radius:16px; }
+      .qc-text{ font-size:17px; }
+      .qc-num{ width:38px; height:38px; font-size:15px; } .qc-cat{ font-size:16px; }
+      .opt label{ padding:15px 16px; font-size:15px; gap:12px; }
+      .a-foot-in{ padding:10px 12px; gap:8px; }
+      .fbtn{ padding:12px 12px; font-size:13.5px; gap:6px; flex:1; }
+      .fbtn-next{ min-width:0; }
+      .fbtn-prev .lbl-full{ display:none; }
+    }
+    @media (max-width:380px){
+      .fbtn{ padding:11px 8px; font-size:12.5px; }
+      .fbtn-review .lbl-full{ display:none; }
+    }
   </style>
 </head>
-<body class="min-h-screen" style="background:var(--tbt-bg)">
+<body class="min-h-screen">
   <div id="toast-container"></div>
+  <div class="assess-dots" aria-hidden="true"></div>
 
   <!-- Header -->
-  <header class="sticky top-0 z-50 bg-white border-b shadow-sm" style="border-color:var(--tbt-border)">
-    <div class="max-w-3xl mx-auto px-4 py-3 flex items-center justify-between">
-      <span class="font-bold text-lg" style="color:var(--tbt-primary)">Tamil Business Tribe</span>
-      <div class="flex items-center gap-4">
-        <span id="progress-text" class="text-sm font-medium" style="color:var(--tbt-muted)"></span>
-        <div class="flex items-center gap-1 font-bold text-lg" id="timer-display" style="color:var(--tbt-danger)">30:00</div>
+  <header class="a-head">
+    <div class="a-head-in">
+      <div class="brand">
+        <img src="/assets/tbt-logo.png" alt="Tamil Business Tribe" />
+        <div>
+          <div class="brand-t">Tamil <span class="r">Business</span> Tribe</div>
+          <div class="brand-s">Discover Your Business DNA</div>
+          <div class="brand-accent"></div>
+        </div>
+      </div>
+      <div class="h-mid">
+        <div class="h-count">
+          <span id="progress-text"><b>0</b><span class="m"> / 0</span></span>
+          <span>Questions Completed</span>
+        </div>
+        <div class="h-bar"><i id="progress-bar" style="width:0%"></i></div>
+      </div>
+      <div class="h-timer">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#374151" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3 2"></path></svg>
+        <div><div class="tv" id="timer-display" role="timer" aria-live="off">30:00</div><div class="tl">Time Remaining</div></div>
       </div>
     </div>
-    <div class="progress-bar-track mx-0"><div id="progress-bar" class="progress-bar-fill" style="width:0%"></div></div>
   </header>
 
-  <main class="max-w-3xl mx-auto px-4 py-8">
-    <div id="loading" class="text-center py-20" role="status" aria-live="polite">
-      <div class="spinner mx-auto mb-4"></div>
-      <p style="color:var(--tbt-muted)">Loading questions...</p>
-    </div>
-    <div id="question-container" class="hidden"></div>
+  <div class="a-body">
+    <!-- Mobile overview toggle (hidden on desktop) -->
+    <button type="button" id="side-toggle" class="side-toggle" onclick="toggleSidebar()" aria-expanded="false" aria-controls="a-side">
+      <span>Assessment Progress</span><span class="chev" aria-hidden="true">▾</span>
+    </button>
 
-    <!-- Navigation -->
-    <div id="nav-section" class="hidden flex justify-between items-center mt-8">
-      <button id="btn-prev" class="btn btn-outline">← Previous</button>
-      <div class="flex gap-1 flex-wrap justify-center" id="section-dots"></div>
-      <button id="btn-next" class="btn btn-primary">Next →</button>
-    </div>
+    <!-- Overview sidebar (populated by renderSidebar) -->
+    <aside class="a-side collapsed" id="a-side" aria-label="Assessment overview"></aside>
 
-    <!-- Submit -->
-    <div id="submit-section" class="hidden mt-8 text-center">
-      <p id="unanswered-msg" class="text-sm mb-3" style="color:var(--tbt-muted)"></p>
-      <button id="btn-submit" class="btn btn-accent text-lg px-10 py-3">Submit Assessment</button>
+    <!-- Main question area -->
+    <main class="a-main">
+      <div id="loading" class="text-center py-20" role="status" aria-live="polite">
+        <div class="spinner mx-auto mb-4"></div>
+        <p style="color:var(--muted)">Loading questions...</p>
+      </div>
+      <div id="question-container"></div>
+    </main>
+  </div>
+
+  <!-- Fixed bottom action bar -->
+  <div class="a-foot" id="a-foot" style="display:none">
+    <p id="unanswered-msg" class="foot-unanswered" role="alert"></p>
+    <div class="a-foot-in">
+      <button id="btn-prev" class="fbtn fbtn-prev" type="button">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"></path></svg>
+        <span class="lbl-full">Previous</span>
+      </button>
+      <button id="btn-review" class="fbtn fbtn-review" type="button" aria-pressed="false">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path></svg>
+        <span><span class="lbl-full">Mark for </span>Review</span>
+      </button>
+      <div>
+        <button id="btn-next" class="fbtn fbtn-next" type="button">
+          <span>Save &amp; Continue</span>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"></path></svg>
+        </button>
+        <button id="btn-submit" class="fbtn fbtn-next" type="button" style="display:none">Submit Assessment</button>
+      </div>
     </div>
-  </main>
+  </div>
 
   <script src="/assets/js/env.js"></script>
   <script src="/assets/js/api.js"></script>
@@ -75,6 +271,8 @@
     }
 
     let sections = [], renderUnits = [], answers = {}, timedOut = {}, timeSpent = {}, questionStartTimes = {}, currentSection = 0, timer, questionTimer = null;
+    let markedSections = new Set();   // render-unit indices flagged "Mark for Review"
+    let sideCats = [], unitStart = [], unitEnd = [];  // sidebar section model (built in renderSidebar)
     // Every question shows a single "Play Question" button. What it speaks:
     // if the admin authored a Spoken explanation for the question, THAT is read
     // aloud (browser voice); otherwise it plays the question's uploaded clip /
@@ -114,11 +312,12 @@
         if (saved.answers) answers = saved.answers;
         if (saved.timedOut) timedOut = saved.timedOut;
         if (saved.timeSpent) timeSpent = saved.timeSpent;
+        if (Array.isArray(saved.marked)) markedSections = new Set(saved.marked);
       } catch { /* corrupt/old autosave payload — ignore and start fresh */ }
     }
 
     function saveAutosave() {
-      localStorage.setItem(autosaveKey(), JSON.stringify({ answers, timedOut, timeSpent }));
+      localStorage.setItem(autosaveKey(), JSON.stringify({ answers, timedOut, timeSpent, marked: [...markedSections] }));
     }
 
     async function loadQuestions() {
@@ -149,8 +348,7 @@
       renderUnits = buildRenderUnits(sections);
       renderQuestions();
       document.getElementById('loading').classList.add('hidden');
-      document.getElementById('question-container').classList.remove('hidden');
-      document.getElementById('nav-section').classList.remove('hidden');
+      document.getElementById('a-foot').style.display = '';
 
       // remainingSeconds (server-recalculated, so it accounts for time
       // already elapsed) is a plain number of seconds; AssessmentTimer's
@@ -160,8 +358,9 @@
         ({ minutes, seconds }) => {
           const t = document.getElementById('timer-display');
           t.textContent = `${String(minutes).padStart(2,'0')}:${String(seconds).padStart(2,'0')}`;
-          if (minutes < 5) t.style.color = 'var(--tbt-danger)';
-          else t.style.color = 'var(--tbt-primary)';
+          // Warning states: >5m primary red, ≤5m amber, ≤1m bright danger red.
+          const total = minutes * 60 + seconds;
+          t.style.color = total <= 60 ? '#DC2626' : total <= 300 ? '#F59E0B' : 'var(--r)';
         },
         () => submitAssessment(true)
       );
@@ -224,31 +423,53 @@
       return unit.kind === 'batch' || isAnswered(unit.question);
     }
 
-    function renderLikertBatch(unit, totalQuestions, questionOffset) {
+    // Shared question-card header: red number circle + section/dimension name +
+    // question range + a Mark-for-Review bookmark. `ui` is the render-unit index.
+    function cardHeader(unit, ui, startNum, endNum, total) {
+      const range = startNum === endNum ? `Question ${startNum} of ${total}` : `Questions ${startNum}–${endNum} of ${total}`;
+      const on = markedSections.has(ui);
       return `
-        <div class="card mb-6">
-          <div class="flex items-center gap-3 mb-4">
-            <span class="text-2xl">${unit.typeIcon}</span>
+        <div class="qc-head">
+          <div class="qc-head-l">
+            <div class="qc-num">${startNum}</div>
             <div>
-              <h3 class="font-bold text-lg" style="color:var(--tbt-primary)">${unit.typeName}</h3>
-              <p class="text-xs" style="color:var(--tbt-muted)">Questions ${questionOffset + 1}–${questionOffset + unit.questions.length} of ${totalQuestions}</p>
+              <div class="qc-cat">${unit.typeName || 'Question'}</div>
+              <div class="qc-range">${range}</div>
             </div>
           </div>
+          <button type="button" class="bm ${on ? 'on' : ''}" id="bm-${ui}" onclick="toggleReview(${ui})" aria-label="Mark this section for review" aria-pressed="${on}">
+            <svg width="24" height="24" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path></svg>
+          </button>
+        </div>`;
+    }
+
+    function optionRadio(q, isCheckbox) {
+      const selected = isCheckbox ? new Set(answers[q._id] || []) : null;
+      const shape = isCheckbox ? 'sq' : '';
+      const disabled = timedOut[q._id] ? 'disabled' : '';
+      return q.options.map((opt) => {
+        const checked = isCheckbox ? selected.has(opt._id) : answers[q._id] === opt._id;
+        const handler = isCheckbox
+          ? `onchange="toggleMultiSelect('${q._id}','${opt._id}', this.checked)"`
+          : `onchange="recordAnswer('${q._id}','${opt._id}')"`;
+        return `
+          <div class="opt">
+            <input type="${isCheckbox ? 'checkbox' : 'radio'}" name="q_${q._id}" id="opt_${opt._id}" value="${opt._id}" ${handler} ${checked ? 'checked' : ''} ${disabled} />
+            <label for="opt_${opt._id}"><span class="opt-ind ${shape}"></span><span>${opt.optionText}</span></label>
+          </div>`;
+      }).join('');
+    }
+
+    function renderLikertBatch(unit, totalQuestions, questionOffset, ui) {
+      const start = questionOffset + 1, end = questionOffset + unit.questions.length;
+      return `
+        <div class="qcard">
+          ${cardHeader(unit, ui, start, end, totalQuestions)}
           ${unit.questions.map((q, qi) => `
-            <div class="mb-5 pb-5 ${qi < unit.questions.length-1 ? 'border-b' : ''}" style="border-color:var(--tbt-border)">
-              <p class="font-semibold mb-3 text-sm leading-relaxed">
-                <span class="inline-block w-6 h-6 rounded-full text-center text-xs leading-6 font-bold text-white mr-2" style="background:var(--tbt-primary)">${questionOffset+qi+1}</span>
-                ${q.text}
-              </p>
+            <div class="qc-item">
+              <p class="qc-text"><span class="qc-qnum">${questionOffset + qi + 1}</span>${q.text}</p>
               ${renderAudio(q)}
-              <div class="space-y-2">
-                ${q.options.map(opt => `
-                  <div class="likert-option">
-                    <input type="radio" name="q_${q._id}" id="opt_${opt._id}" value="${opt._id}" onchange="recordAnswer('${q._id}','${opt._id}')" ${answers[q._id]===opt._id?'checked':''} />
-                    <label for="opt_${opt._id}">${opt.optionText}</label>
-                  </div>
-                `).join('')}
-              </div>
+              <div id="options-${q._id}">${optionRadio(q, false)}</div>
             </div>
           `).join('')}
         </div>`;
@@ -269,17 +490,17 @@
     // flag: uploaded audio plays when present, otherwise the text is spoken.
     function renderAudio(q) {
       return `
-        <div class="audio-player mb-4" id="audio-wrap-${q._id}">
-          <button type="button" class="btn btn-outline btn-sm audio-btn" id="audio-btn-${q._id}"
+        <div class="a-audio" id="audio-wrap-${q._id}">
+          <button type="button" class="abtn abtn-play" id="audio-btn-${q._id}"
             onclick="togglePlayback('${q._id}')" aria-label="Play question audio">
             <span class="audio-icon" id="audio-icon-${q._id}">${AUDIO_ICONS.play}</span>
             <span id="audio-label-${q._id}">Play Question</span>
           </button>
-          <button type="button" class="btn btn-sm audio-stop hidden" id="audio-stop-${q._id}"
+          <button type="button" class="abtn abtn-stop" id="audio-stop-${q._id}"
             onclick="stopPlayback('${q._id}')" aria-label="Stop audio">
             <span class="audio-icon">${AUDIO_ICONS.stop}</span><span>Stop</span>
           </button>
-          <span class="audio-error text-xs hidden" id="audio-error-${q._id}" role="alert" style="color:var(--tbt-danger)"></span>
+          <span class="a-error hidden" id="audio-error-${q._id}" role="alert"></span>
         </div>`;
     }
 
@@ -297,14 +518,14 @@
     function setAudioState(qid, state) {
       const label = document.getElementById(`audio-label-${qid}`);
       const btn = document.getElementById(`audio-btn-${qid}`);
-      const stop = document.getElementById(`audio-stop-${qid}`);
       if (!label) return;
       const map = { play: ['Play Question', 'play'], pause: ['Pause', 'pause'], resume: ['Resume', 'play'], replay: ['Replay', 'replay'] };
       const [text, icon] = map[state] || map.play;
       label.textContent = text;
       setAudioIcon(qid, icon);
+      // Stop stays visible at all times (matches the reference); it simply
+      // resets when nothing is playing.
       if (btn) btn.setAttribute('aria-label', `${text} — question audio`);
-      if (stop) stop.classList.toggle('hidden', !(state === 'pause' || state === 'resume'));
     }
 
     function showAudioError(qid, msg) {
@@ -583,82 +804,56 @@
       setAudioState(qid, 'play');
     }
 
-    function questionHeader(unit, globalIndex, totalQuestions, timerHtml) {
-      return `
-        <div class="flex justify-between items-center mb-3">
-          <span class="text-xs font-semibold" style="color:var(--tbt-muted)">
-            <span class="mr-2">${unit.typeIcon || ''} ${unit.typeName || ''}</span>
-            &middot; Question ${globalIndex}/${totalQuestions}
-          </span>
-          ${timerHtml || ''}
-        </div>`;
-    }
-
-    function renderMcqSingle(unit, globalIndex, totalQuestions) {
+    function renderMcqSingle(unit, ui, globalIndex, totalQuestions) {
       const q = unit.question;
       const timerHtml = q.timeLimitSeconds
-        ? `<span id="q-timer-${q._id}" class="text-sm font-bold" style="color:var(--tbt-danger)"></span>`
+        ? `<div class="qc-hint" style="text-align:right;color:var(--r);font-weight:700"><span id="q-timer-${q._id}">--:--</span> left</div>`
         : '';
       return `
-        <div class="card mb-6">
-          ${questionHeader(unit, globalIndex, totalQuestions, timerHtml)}
-          ${q.instructionText ? `<p class="text-xs italic mb-2" style="color:var(--tbt-muted)">${q.instructionText}</p>` : ''}
-          ${q.imageUrl ? `<img src="${q.imageUrl}" alt="Assessment question image" class="max-w-full rounded-lg mb-4" />` : ''}
-          <p class="font-semibold mb-4 text-base leading-relaxed">${q.text}</p>
+        <div class="qcard">
+          ${cardHeader(unit, ui, globalIndex, globalIndex, totalQuestions)}
+          ${timerHtml}
+          ${q.instructionText ? `<p class="qc-instr">${q.instructionText}</p>` : ''}
+          ${q.imageUrl ? `<img src="${q.imageUrl}" alt="Assessment question image" class="qc-img" />` : ''}
+          <p class="qc-text">${q.text}</p>
           ${renderAudio(q)}
-          <div class="space-y-2" id="options-${q._id}">
-            ${q.options.map(opt => `
-              <div class="likert-option">
-                <input type="radio" name="q_${q._id}" id="opt_${opt._id}" value="${opt._id}" onchange="recordAnswer('${q._id}','${opt._id}')" ${answers[q._id]===opt._id?'checked':''} ${timedOut[q._id]?'disabled':''} />
-                <label for="opt_${opt._id}">${opt.optionText}</label>
-              </div>
-            `).join('')}
-          </div>
+          <div id="options-${q._id}">${optionRadio(q, false)}</div>
         </div>`;
     }
 
-    function renderMultiSelect(unit, globalIndex, totalQuestions) {
+    function renderMultiSelect(unit, ui, globalIndex, totalQuestions) {
       const q = unit.question;
-      const selected = new Set(answers[q._id] || []);
       return `
-        <div class="card mb-6">
-          ${questionHeader(unit, globalIndex, totalQuestions)}
-          ${q.instructionText ? `<p class="text-xs italic mb-2" style="color:var(--tbt-muted)">${q.instructionText}</p>` : ''}
-          ${q.imageUrl ? `<img src="${q.imageUrl}" alt="Assessment question image" class="max-w-full rounded-lg mb-4" />` : ''}
-          <p class="font-semibold mb-1 text-base leading-relaxed">${q.text}</p>
-          <p class="text-xs mb-3" style="color:var(--tbt-muted)">Select all that apply.</p>
+        <div class="qcard">
+          ${cardHeader(unit, ui, globalIndex, globalIndex, totalQuestions)}
+          ${q.instructionText ? `<p class="qc-instr">${q.instructionText}</p>` : ''}
+          ${q.imageUrl ? `<img src="${q.imageUrl}" alt="Assessment question image" class="qc-img" />` : ''}
+          <p class="qc-text">${q.text}</p>
+          <p class="qc-hint">Select all that apply.</p>
           ${renderAudio(q)}
-          <div class="space-y-2" id="options-${q._id}">
-            ${q.options.map(opt => `
-              <div class="likert-option">
-                <input type="checkbox" name="q_${q._id}" id="opt_${opt._id}" value="${opt._id}"
-                  onchange="toggleMultiSelect('${q._id}','${opt._id}', this.checked)" ${selected.has(opt._id) ? 'checked' : ''} />
-                <label for="opt_${opt._id}">${opt.optionText}</label>
-              </div>
-            `).join('')}
-          </div>
+          <div id="options-${q._id}">${optionRadio(q, true)}</div>
         </div>`;
     }
 
-    function renderRanking(unit, globalIndex, totalQuestions) {
+    function renderRanking(unit, ui, globalIndex, totalQuestions) {
       const q = unit.question;
       const order = answers[q._id] || q.options.map(o => o._id);
       const optionById = Object.fromEntries(q.options.map(o => [o._id, o]));
       return `
-        <div class="card mb-6">
-          ${questionHeader(unit, globalIndex, totalQuestions)}
-          ${q.instructionText ? `<p class="text-xs italic mb-2" style="color:var(--tbt-muted)">${q.instructionText}</p>` : ''}
-          <p class="font-semibold mb-1 text-base leading-relaxed">${q.text}</p>
-          <p class="text-xs mb-3" style="color:var(--tbt-muted)">Use the arrows to arrange in your preferred order (top = first).</p>
+        <div class="qcard">
+          ${cardHeader(unit, ui, globalIndex, globalIndex, totalQuestions)}
+          ${q.instructionText ? `<p class="qc-instr">${q.instructionText}</p>` : ''}
+          <p class="qc-text">${q.text}</p>
+          <p class="qc-hint">Use the arrows to arrange in your preferred order (top = first).</p>
           ${renderAudio(q)}
-          <div class="space-y-2" id="options-${q._id}">
+          <div id="options-${q._id}">
             ${order.map((optId, i) => `
-              <div class="rank-item">
-                <span class="inline-flex items-center justify-center w-6 h-6 rounded-full text-xs font-bold text-white shrink-0" style="background:var(--tbt-primary)">${i + 1}</span>
-                <span class="flex-1 text-sm">${optionById[optId].optionText}</span>
+              <div class="rk">
+                <span class="rk-n">${i + 1}</span>
+                <span style="flex:1;font-size:15px">${optionById[optId].optionText}</span>
                 <div class="flex flex-col gap-1 shrink-0">
-                  <button type="button" aria-label="Move up" class="rank-btn" onclick="moveRankingItem('${q._id}', ${i}, -1)" ${i === 0 ? 'disabled' : ''}>▲</button>
-                  <button type="button" aria-label="Move down" class="rank-btn" onclick="moveRankingItem('${q._id}', ${i}, 1)" ${i === order.length - 1 ? 'disabled' : ''}>▼</button>
+                  <button type="button" aria-label="Move up" class="rk-btn" onclick="moveRankingItem('${q._id}', ${i}, -1)" ${i === 0 ? 'disabled' : ''}>▲</button>
+                  <button type="button" aria-label="Move down" class="rk-btn" onclick="moveRankingItem('${q._id}', ${i}, 1)" ${i === order.length - 1 ? 'disabled' : ''}>▼</button>
                 </div>
               </div>
             `).join('')}
@@ -666,41 +861,32 @@
         </div>`;
     }
 
-    function renderUnitHTML(unit, globalIndex, totalQuestions) {
-      if (unit.kind === 'multiselect') return renderMultiSelect(unit, globalIndex, totalQuestions);
-      if (unit.kind === 'ranking') return renderRanking(unit, globalIndex, totalQuestions);
-      return renderMcqSingle(unit, globalIndex, totalQuestions);
+    function renderUnitHTML(unit, ui, globalIndex, totalQuestions) {
+      if (unit.kind === 'multiselect') return renderMultiSelect(unit, ui, globalIndex, totalQuestions);
+      if (unit.kind === 'ranking') return renderRanking(unit, ui, globalIndex, totalQuestions);
+      return renderMcqSingle(unit, ui, globalIndex, totalQuestions);
     }
 
     function renderQuestions() {
       const container = document.getElementById('question-container');
-      const dots = document.getElementById('section-dots');
-      const totalQuestions = allQuestionsFlat().length;
       const flat = allQuestionsFlat();
+      const totalQuestions = flat.length;
       let questionOffset = 0;
       renderUnits.forEach((unit, ui) => {
         const sec = document.createElement('div');
         sec.className = 'q-section';
         sec.id = `section-${ui}`;
         if (unit.kind === 'batch') {
-          sec.innerHTML = renderLikertBatch(unit, totalQuestions, questionOffset);
+          sec.innerHTML = renderLikertBatch(unit, totalQuestions, questionOffset, ui);
           questionOffset += unit.questions.length;
         } else {
           const globalIndex = flat.indexOf(unit.question) + 1;
-          sec.innerHTML = renderUnitHTML(unit, globalIndex, totalQuestions);
+          sec.innerHTML = renderUnitHTML(unit, ui, globalIndex, totalQuestions);
           questionOffset += 1;
         }
         container.appendChild(sec);
-
-        const dot = document.createElement('button');
-        dot.type = 'button';
-        dot.className = 'w-3 h-3 rounded-full transition-all';
-        dot.style.background = 'var(--tbt-border)';
-        dot.id = `dot-${ui}`;
-        dot.setAttribute('aria-label', `Go to section ${ui + 1}`);
-        dot.onclick = () => showSection(ui);
-        dots.appendChild(dot);
       });
+      renderSidebar();
     }
 
     // Elapsed time since this question's section was first shown (see
@@ -747,7 +933,7 @@
       if (unit && unit.kind === 'ranking' && unit.question._id === qId) {
         const flat = allQuestionsFlat();
         document.getElementById(`section-${currentSection}`).innerHTML =
-          renderRanking(unit, flat.indexOf(unit.question) + 1, flat.length);
+          renderRanking(unit, currentSection, flat.indexOf(unit.question) + 1, flat.length);
         // The re-render recreated this question's audio button — restore its
         // label/icon to match any clip still playing.
         syncAudioButton(qId);
@@ -792,11 +978,7 @@
     }
 
     function showSection(idx) {
-      document.querySelectorAll('.q-section').forEach((s,i) => {
-        s.classList.toggle('active', i === idx);
-        const dot = document.getElementById(`dot-${i}`);
-        dot.style.background = i === idx ? 'var(--tbt-primary)' : 'var(--tbt-border)';
-      });
+      document.querySelectorAll('.q-section').forEach((s,i) => s.classList.toggle('active', i === idx));
       currentSection = idx;
       stopQuestionTimer();
       // Leaving a section stops its audio/speech — moving to the next/previous
@@ -823,14 +1005,18 @@
       if (unit.kind === 'single' && unit.question.timeLimitSeconds && !answers[unit.question._id] && !timedOut[unit.question._id]) {
         startQuestionTimer(unit.question);
       }
-      document.getElementById('btn-prev').style.display = idx === 0 ? 'none' : '';
-      document.getElementById('btn-next').style.display = idx === renderUnits.length-1 ? 'none' : '';
-      document.getElementById('submit-section').classList.toggle('hidden', idx !== renderUnits.length-1);
-      updateProgress();
+      updateFooter();
+      updateProgress();   // also refreshes the sidebar highlight
       // Moving to a section always shows it from its first question — otherwise
       // a long previous page leaves the candidate scrolled to the bottom and the
       // new page's question 1 starts off-screen.
       scrollToTop();
+      // On mobile, collapse the overview drawer after jumping to a section.
+      const side = document.getElementById('a-side');
+      if (side && window.matchMedia('(max-width:1024px)').matches) {
+        side.classList.add('collapsed');
+        const tg = document.getElementById('side-toggle'); if (tg) { tg.classList.remove('open'); tg.setAttribute('aria-expanded', 'false'); }
+      }
       // Move keyboard/screen-reader focus to the newly shown section so assistive
       // tech isn't left on the now-hidden previous control. preventScroll keeps
       // scrollToTop's reset intact.
@@ -862,11 +1048,114 @@
     function updateProgress() {
       const all = allQuestionsFlat();
       const answered = all.filter(isAnswered).length;
-      document.getElementById('progress-text').textContent = `${answered} / ${all.length}`;
-      document.getElementById('progress-bar').style.width = `${(answered / all.length) * 100}%`;
+      const pct = all.length ? (answered / all.length) * 100 : 0;
+      const pt = document.getElementById('progress-text');
+      if (pt) pt.innerHTML = `<b>${answered}</b><span class="m"> / ${all.length}</span>`;
+      const pb = document.getElementById('progress-bar');
+      if (pb) pb.style.width = `${pct}%`;
+      updateSidebar();
     }
 
-    document.getElementById('btn-prev').addEventListener('click', () => showSection(currentSection - 1));
+    // ---- Sidebar (assessment overview) ----------------------------------
+    // Categories = distinct section names across render-units, in order. A
+    // category can span several render-unit "pages" (e.g. paginated Likert).
+    function buildSideModel() {
+      unitStart = []; unitEnd = [];
+      let off = 0;
+      renderUnits.forEach((u, ui) => {
+        const n = u.kind === 'batch' ? u.questions.length : 1;
+        unitStart[ui] = off + 1; unitEnd[ui] = off + n; off += n;
+      });
+      sideCats = []; const seen = new Map();
+      renderUnits.forEach((u, ui) => {
+        const name = u.typeName || 'Questions';
+        if (!seen.has(name)) { seen.set(name, sideCats.length); sideCats.push({ name, icon: u.typeIcon || '📋', first: ui, units: [] }); }
+        sideCats[seen.get(name)].units.push(ui);
+      });
+    }
+    const catStart = (c) => Math.min(...c.units.map((ui) => unitStart[ui]));
+    const catEnd = (c) => Math.max(...c.units.map((ui) => unitEnd[ui]));
+    const catQuestions = (c) => c.units.flatMap((ui) => renderUnits[ui].kind === 'batch' ? renderUnits[ui].questions : [renderUnits[ui].question]);
+
+    function renderSidebar() {
+      buildSideModel();
+      const total = allQuestionsFlat().length;
+      const answered = allQuestionsFlat().filter(isAnswered).length;
+      const c0 = sideCats[0];
+      document.getElementById('a-side').innerHTML = `
+        <div class="side-h">Assessment Progress</div>
+        <div class="side-prog"><i id="side-bar" style="width:${total ? (answered/total*100) : 0}%"></i></div>
+        <div class="side-sub" id="side-count">${answered} of ${total} Questions</div>
+        <div class="side-div"></div>
+        <div class="side-cap">Current Section</div>
+        <div class="side-cur" id="side-cur">
+          <span class="ic" id="side-cur-ic">${c0 ? c0.icon : '📋'}</span>
+          <div><div class="t" id="side-cur-name">${c0 ? c0.name : ''}</div><div class="s" id="side-cur-range">${c0 ? `Questions ${catStart(c0)}–${catEnd(c0)}` : ''}</div></div>
+        </div>
+        <div class="side-cap">Assessment Sections</div>
+        <div id="side-dims">
+          ${sideCats.map((c, ci) => `
+            <button type="button" class="dim" id="dim-${ci}" onclick="showSection(${c.first})">
+              <span class="dim-n">${ci + 1}</span><span class="dim-name">${c.name}</span>
+            </button>`).join('')}
+        </div>
+        <div class="side-tip">
+          <div class="th"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7c.6.5 1 1.3 1 2.1V17h6v-.2c0-.8.4-1.6 1-2.1A7 7 0 0 0 12 2z"></path></svg> Tip</div>
+          <p>Answer honestly. There are no right or wrong answers.</p>
+        </div>`;
+      updateSidebar();
+    }
+
+    function updateSidebar() {
+      if (!sideCats.length) return;
+      const total = allQuestionsFlat().length;
+      const answered = allQuestionsFlat().filter(isAnswered).length;
+      const sb = document.getElementById('side-bar'); if (sb) sb.style.width = `${total ? (answered/total*100) : 0}%`;
+      const sc = document.getElementById('side-count'); if (sc) sc.textContent = `${answered} of ${total} Questions`;
+      const curName = renderUnits[currentSection] ? (renderUnits[currentSection].typeName || 'Questions') : '';
+      sideCats.forEach((c, ci) => {
+        const el = document.getElementById(`dim-${ci}`); if (!el) return;
+        const active = c.name === curName;
+        const done = catQuestions(c).every(isAnswered);
+        el.classList.toggle('active', active);
+        el.classList.toggle('done', done && !active);
+        if (active) {
+          const n = document.getElementById('side-cur-name'); if (n) n.textContent = c.name;
+          const r = document.getElementById('side-cur-range'); if (r) r.textContent = `Questions ${catStart(c)}–${catEnd(c)}`;
+          const i = document.getElementById('side-cur-ic'); if (i) i.textContent = c.icon || '📋';
+        }
+      });
+    }
+
+    // ---- Bottom action bar + Mark for Review ----------------------------
+    function updateFooter() {
+      const last = currentSection === renderUnits.length - 1;
+      const prev = document.getElementById('btn-prev'); if (prev) prev.disabled = currentSection === 0;
+      const next = document.getElementById('btn-next'); if (next) next.style.display = last ? 'none' : '';
+      const submit = document.getElementById('btn-submit'); if (submit) submit.style.display = last ? '' : 'none';
+      const review = document.getElementById('btn-review');
+      if (review) { const on = markedSections.has(currentSection); review.classList.toggle('on', on); review.setAttribute('aria-pressed', on); }
+      const msg = document.getElementById('unanswered-msg'); if (msg && !last) msg.textContent = '';
+    }
+
+    function toggleReview(ui) {
+      if (markedSections.has(ui)) markedSections.delete(ui); else markedSections.add(ui);
+      saveAutosave();
+      const on = markedSections.has(ui);
+      const bm = document.getElementById(`bm-${ui}`);
+      if (bm) { bm.classList.toggle('on', on); bm.setAttribute('aria-pressed', on); }
+      updateFooter();
+    }
+
+    function toggleSidebar() {
+      const side = document.getElementById('a-side');
+      const btn = document.getElementById('side-toggle');
+      const nowCollapsed = side.classList.toggle('collapsed');
+      btn.classList.toggle('open', !nowCollapsed);
+      btn.setAttribute('aria-expanded', String(!nowCollapsed));
+    }
+
+    document.getElementById('btn-prev').addEventListener('click', () => { if (currentSection > 0) showSection(currentSection - 1); });
     document.getElementById('btn-next').addEventListener('click', () => {
       const unit = renderUnits[currentSection];
       if (unit.kind !== 'batch' && !hasAnswer(unit) && !timedOut[unit.question._id]) {
@@ -875,7 +1164,7 @@
       }
       showSection(currentSection + 1);
     });
-
+    document.getElementById('btn-review').addEventListener('click', () => toggleReview(currentSection));
     document.getElementById('btn-submit').addEventListener('click', () => submitAssessment(false));
 
     // Builds one payload entry per active question, in the shape the
