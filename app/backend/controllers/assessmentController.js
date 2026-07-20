@@ -152,6 +152,10 @@ exports.getQuestions = async (req, res, next) => {
           const audio = publicAudio(q);
           return {
             _id: q._id, text: q.text, order: q.order,
+            // Saved language, normalized (never inferred from text/voice). The
+            // candidate app uses it to pick the spoken-audio voice; the visible
+            // text is always rendered exactly as stored.
+            language: q.language === 'ta' ? 'ta' : 'en',
             questionType: q.questionType, dimension: q.dimension, difficulty: q.difficulty,
             timeLimitSeconds: q.timeLimitSeconds, imageUrl: q.imageUrl, instructionText: q.instructionText,
             // Admin-authored spoken explanation, played on demand by the "Explain"

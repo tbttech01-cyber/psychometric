@@ -71,10 +71,17 @@ function voiceForConfig(text, config = {}) {
   return isTamil(text) ? (config.voiceTa || TA_VOICE) : (config.voiceEn || EN_VOICE);
 }
 
+// Pick the configured voice from an EXPLICIT language ('en' | 'ta') — used when
+// a question carries a saved language, so the voice never has to be guessed
+// from the text.
+function voiceForLang(lang, config = {}) {
+  return lang === 'ta' ? (config.voiceTa || TA_VOICE) : (config.voiceEn || EN_VOICE);
+}
+
 // Voice for the SPOKEN EXPLANATION audio: a dedicated Tamil voice (admin-set)
 // for Tamil/Tanglish explanations, the English voice for English ones.
 function voiceForExplanation(text, config = {}) {
   return isTamil(text) ? (config.voiceExplanation || config.voiceTa || TA_VOICE) : (config.voiceEn || EN_VOICE);
 }
 
-module.exports = { voiceFor, voiceForConfig, voiceForExplanation, textHash, synthesize, buildProsody, isTamil, VOICES, EN_VOICE, TA_VOICE };
+module.exports = { voiceFor, voiceForConfig, voiceForLang, voiceForExplanation, textHash, synthesize, buildProsody, isTamil, VOICES, EN_VOICE, TA_VOICE };

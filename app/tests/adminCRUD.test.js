@@ -4,6 +4,8 @@ const { connect, disconnect } = require('./dbConnect');
 const Admin = require('../backend/models/Admin');
 const User = require('../backend/models/User');
 const SharedUserID = require('../backend/models/SharedUserID');
+const Question = require('../backend/models/Question');
+const QuestionType = require('../backend/models/QuestionType');
 const jwt = require('jsonwebtoken');
 
 beforeAll(connect);
@@ -210,6 +212,58 @@ describe('Admin CRUD: user verification toggle', () => {
       .patch(`/api/v1/admin/users/${userId}/verification`)
       .send({ isVerified: true });
     expect(res.status).toBe(401);
+  });
+});
+
+describe('Admin CRUD: question language (en/ta)', () => {
+  let typeId; const created = [];
+  const LIKERT = [1, 2, 3, 4, 5].map((n) => ({ optionText: `Opt ${n}`, score: n, order: n }));
+  const base = (over = {}) => ({
+    typeId, text: 'Language test question', order: 900000 + Math.floor(Math.random() * 90000),
+    questionType: 'LIKERT_SCALE', dimension: 'Communication', marks: 5, options: LIKERT, ...over,
+  });
+
+  beforeAll(async () => { typeId = (await QuestionType.findOne())._id.toString(); });
+  afterAll(async () => { if (created.length) await Question.deleteMany({ _id: { $in: created } }); });
+
+  it('defaults to English when no language is provided', async () => {
+    const res = await request(app).post('/api/v1/admin/questions').set(auth()).send(base());
+    expect(res.status).toBe(201);
+    expect(res.body.data.language).toBe('en');
+    created.push(res.body.data._id);
+  });
+
+  it('saves ta when Tamil is chosen', async () => {
+    const res = await request(app).post('/api/v1/admin/questions').set(auth()).send(base({ language: 'ta' }));
+    expect(res.status).toBe(201);
+    expect(res.body.data.language).toBe('ta');
+    created.push(res.body.data._id);
+  });
+
+  it('rejects an invalid language value', async () => {
+    const res = await request(app).post('/api/v1/admin/questions').set(auth()).send(base({ language: 'fr' }));
+    expect(res.status).toBe(400);
+  });
+
+  it('updates en -> ta and ta -> en and persists it', async () => {
+    const c = await request(app).post('/api/v1/admin/questions').set(auth()).send(base({ language: 'en' }));
+    const id = c.body.data._id; created.push(id);
+    const up1 = await request(app).put(`/api/v1/admin/questions/${id}`).set(auth()).send(base({ language: 'ta' }));
+    expect(up1.status).toBe(200);
+    expect((await Question.findById(id)).language).toBe('ta');
+    const up2 = await request(app).put(`/api/v1/admin/questions/${id}`).set(auth()).send(base({ language: 'en' }));
+    expect(up2.status).toBe(200);
+    expect((await Question.findById(id)).language).toBe('en');
+  });
+
+  it('an existing question with no stored language reads as en', async () => {
+    const doc = await Question.collection.insertOne({
+      typeId: (await QuestionType.findOne())._id, text: 'legacy no-language q', order: 999123,
+      questionType: 'LIKERT_SCALE', dimension: 'Communication', marks: 5, isActive: true,
+    });
+    created.push(doc.insertedId);
+    const fresh = await Question.findById(doc.insertedId);
+    expect(fresh.language === 'ta' ? 'ta' : 'en').toBe('en');
   });
 });
 

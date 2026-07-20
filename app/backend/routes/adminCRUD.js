@@ -63,6 +63,7 @@ const questionValidators = [
   body('text').notEmpty().withMessage('Question text is required.'),
   body('order').isInt({ min: 1 }).withMessage('Display order must be a positive number.'),
   body('questionType').isIn(QUESTION_TYPES).withMessage('A valid question type is required.'),
+  body('language').optional({ checkFalsy: true }).isIn(['en', 'ta']).withMessage('Language must be English (en) or Tamil (ta).'),
   body('dimension').isIn(DIMENSIONS).withMessage('A valid dimension is required.'),
   body('marks').isFloat({ gt: 0 }).withMessage('Marks must be a positive number.'),
   body('options').isArray({ min: 1 }).withMessage('At least one answer option is required.'),

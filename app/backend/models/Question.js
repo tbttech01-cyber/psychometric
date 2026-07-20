@@ -19,6 +19,10 @@ const questionSchema = new mongoose.Schema({
   isActive: { type: Boolean, default: true },
 
   questionType:     { type: String, enum: QUESTION_TYPES, default: 'LIKERT_SCALE', required: true },
+  // The question's language — the single source of truth for how it's spoken
+  // (English voice for 'en', Tamil voice for 'ta'). Defaults to English; it is
+  // NOT inferred from the text, the explanation field, or the TTS voice config.
+  language:         { type: String, enum: ['en', 'ta'], default: 'en' },
   dimension:        { type: String, enum: DIMENSIONS, required: true },
   subDimension:     { type: String, maxlength: 100, default: '' },
   difficulty:       { type: String, enum: ['easy', 'medium', 'hard'], default: 'medium' },

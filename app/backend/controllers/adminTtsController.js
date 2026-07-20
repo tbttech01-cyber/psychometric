@@ -1,7 +1,7 @@
 const Question = require('../models/Question');
 const QuestionAudio = require('../models/QuestionAudio');
 const ExplanationAudio = require('../models/ExplanationAudio');
-const { synthesize, textHash, voiceForConfig, voiceForExplanation, buildProsody, VOICES } = require('../utils/edgeTts');
+const { synthesize, textHash, voiceForConfig, voiceForLang, voiceForExplanation, buildProsody, VOICES } = require('../utils/edgeTts');
 const { explanationSpeechText } = require('../utils/tanglish');
 const { getTtsConfig, setTtsConfig } = require('../utils/ttsSettings');
 
@@ -64,10 +64,11 @@ exports.listStatus = async (req, res, next) => {
 // POST generate/regenerate one question's audio with the current settings.
 exports.generateOne = async (req, res, next) => {
   try {
-    const q = await Question.findById(req.params.id).select('_id text');
+    const q = await Question.findById(req.params.id).select('_id text language');
     if (!q) return res.status(404).json({ success: false, message: 'Question not found.' });
     const config = await getTtsConfig();
-    const voice = voiceForConfig(q.text, config);
+    // Voice follows the question's saved language, not a guess from the text.
+    const voice = voiceForLang(q.language === 'ta' ? 'ta' : 'en', config);
     const audio = await synthesize(q.text, voice, buildProsody(config));
     const hash = textHash(q.text);
     await QuestionAudio.findOneAndUpdate(

@@ -67,6 +67,7 @@ export type Question = {
   instructionText?: string;
   explanationAudioText?: string;
   explanationIsTanglish?: boolean;
+  language?: "en" | "ta";
   isReverseScored?: boolean;
   correctOptionId?: string | null;
   correctOptionIds?: string[];

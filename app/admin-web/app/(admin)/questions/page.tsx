@@ -80,6 +80,7 @@ function QuestionsPageInner() {
   const [qText, setQText] = useState("");
   const [qActive, setQActive] = useState(true);
   const [qQuestionType, setQQuestionType] = useState<QuestionTypeKind>("LIKERT_SCALE");
+  const [qLanguage, setQLanguage] = useState<"en" | "ta">("en");
   const [qDimension, setQDimension] = useState<Dimension | "">("");
   const [qSubDimension, setQSubDimension] = useState("");
   const [qDifficulty, setQDifficulty] = useState<Difficulty>("medium");
@@ -176,6 +177,7 @@ function QuestionsPageInner() {
     setQText("");
     setQActive(true);
     setQQuestionType("LIKERT_SCALE");
+    setQLanguage("en");
     setQDimension("");
     setQSubDimension("");
     setQDifficulty("medium");
@@ -216,6 +218,7 @@ function QuestionsPageInner() {
     setQText(q.text);
     setQActive(q.isActive);
     setQQuestionType(q.questionType || "LIKERT_SCALE");
+    setQLanguage(q.language === "ta" ? "ta" : "en");
     setQDimension(q.dimension || "");
     setQSubDimension(q.subDimension || "");
     setQDifficulty(q.difficulty || "medium");
@@ -243,7 +246,7 @@ function QuestionsPageInner() {
 
     const payload = {
       typeId: qType, order: qOrder, text: qText, isActive: qActive,
-      questionType: qQuestionType, dimension: qDimension, subDimension: qSubDimension.trim() || undefined,
+      questionType: qQuestionType, language: qLanguage, dimension: qDimension, subDimension: qSubDimension.trim() || undefined,
       difficulty: qDifficulty, marks: qMarks,
       timeLimitSeconds: SINGLE_CORRECT_TYPES.includes(qQuestionType) ? (qTimeLimitSeconds || undefined) : undefined,
       explanation: SINGLE_CORRECT_TYPES.includes(qQuestionType) ? (qExplanation || undefined) : undefined,
@@ -347,15 +350,27 @@ function QuestionsPageInner() {
                 <div className="grid lg:grid-cols-2 gap-4">
                   <div className="card">
 
-              <label className="block text-xs font-semibold mb-1 text-center" style={{ color: "var(--tbt-muted)" }}>Question Type</label>
-              <select value={qQuestionType} onChange={(e) => onQuestionTypeChange(e.target.value as QuestionTypeKind)}
-                className="border rounded-xl px-3.5 py-2.5 focus:outline-none w-full mb-3" style={{ borderColor: "var(--tbt-border)" }}>
-                {QUESTION_TYPES.map((t) => (
-                  <option key={t} value={t} disabled={!ENABLED_TYPES.includes(t)}>
-                    {QUESTION_TYPE_LABELS[t]}{ENABLED_TYPES.includes(t) ? "" : " (coming soon)"}
-                  </option>
-                ))}
-              </select>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
+                <div>
+                  <label className="block text-xs font-semibold mb-1 text-center" style={{ color: "var(--tbt-muted)" }}>Question Type</label>
+                  <select value={qQuestionType} onChange={(e) => onQuestionTypeChange(e.target.value as QuestionTypeKind)}
+                    className="border rounded-xl px-3.5 py-2.5 focus:outline-none w-full" style={{ borderColor: "var(--tbt-border)" }}>
+                    {QUESTION_TYPES.map((t) => (
+                      <option key={t} value={t} disabled={!ENABLED_TYPES.includes(t)}>
+                        {QUESTION_TYPE_LABELS[t]}{ENABLED_TYPES.includes(t) ? "" : " (coming soon)"}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold mb-1 text-center" style={{ color: "var(--tbt-muted)" }}>Question Language <span style={{ color: "var(--tbt-primary)" }}>*</span></label>
+                  <select value={qLanguage} onChange={(e) => setQLanguage(e.target.value as "en" | "ta")}
+                    className="border rounded-xl px-3.5 py-2.5 focus:outline-none w-full" style={{ borderColor: "var(--tbt-border)" }}>
+                    <option value="en">English</option>
+                    <option value="ta">Tamil</option>
+                  </select>
+                </div>
+              </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
                 <select value={qType} onChange={(e) => setQType(e.target.value)}

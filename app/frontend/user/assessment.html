@@ -85,6 +85,7 @@
     let questionTexts = {};   // qid -> plain question text (text-to-speech source)
     let explanationTexts = {}; // qid -> admin-authored spoken explanation (spoken by Play when set)
     let explanationTanglish = {}; // qid -> true when the explanation is Tanglish (romanized Tamil)
+    let questionLang = {};    // qid -> 'en' | 'ta' (the question's saved language)
     let currentAudio = null;  // live HTMLAudioElement (uploaded-audio mode)
     let currentUtterance = null; // live SpeechSynthesisUtterance (tts mode)
     let activeQid = null;     // question whose audio/speech is currently live
@@ -134,7 +135,7 @@
       // Index both audio sources for every question: the uploaded clip (if any)
       // takes priority, and every question also exposes its text for the
       // text-to-speech fallback so EVERY question gets a working audio button.
-      audioUrls = {}; questionTexts = {}; explanationTexts = {}; explanationTanglish = {}; neuralReady = {}; neuralExpReady = {};
+      audioUrls = {}; questionTexts = {}; explanationTexts = {}; explanationTanglish = {}; questionLang = {}; neuralReady = {}; neuralExpReady = {};
       sections.forEach((s) => s.questions.forEach((q) => {
         if (q.hasAudio && q.audioUrl) audioUrls[q._id] = q.audioUrl;
         if (q.neuralAudio) neuralReady[q._id] = true;
@@ -142,6 +143,7 @@
         questionTexts[q._id] = q.text || '';
         explanationTexts[q._id] = q.explanationAudioText || '';
         explanationTanglish[q._id] = !!q.explanationIsTanglish;
+        questionLang[q._id] = q.language === 'ta' ? 'ta' : 'en';
       }));
       restoreAutosave();
       renderUnits = buildRenderUnits(sections);
@@ -391,11 +393,11 @@
       return ta > en && ta >= words.length * 0.35;
     }
 
-    // Tamil text lives in the U+0B80–U+0BFF block; anything else is treated as
-    // English. Choose the best-sounding matching voice, falling back to the best
-    // English voice (then any) with lang aligned so speech still plays.
-    function pickSpeech(text) {
-      const isTamil = /[஀-௿]/.test(text || '');
+    // Choose a voice for `text`. When `forceLang` ('en'|'ta') is given — e.g.
+    // from the question's saved language — it wins; otherwise fall back to
+    // detecting Tamil script (U+0B80–U+0BFF) in the text. English otherwise.
+    function pickSpeech(text, forceLang) {
+      const isTamil = forceLang ? forceLang === 'ta' : /[஀-௿]/.test(text || '');
       const want = isTamil ? 'ta' : 'en';
       let lang = isTamil ? 'ta-IN' : 'en-US';
       const list = (voicesCache && voicesCache.length) ? voicesCache : (TTS_OK ? (window.speechSynthesis.getVoices() || []) : []);
@@ -448,13 +450,13 @@
 
     // Text-to-speech playback of the question text (the fallback for questions
     // with no uploaded clip). Uses window.speechSynthesis / SpeechSynthesisUtterance.
-    function startTts(qid, text) {
+    function startTts(qid, text, forceLang) {
       text = (text || '').trim();
       if (!TTS_OK) { setAudioState(qid, 'play'); showAudioError(qid, 'Audio is not supported in this browser.'); return; }
       if (!text) { showAudioError(qid, 'No text to read.'); return; }
       const ss = window.speechSynthesis;
       const u = new SpeechSynthesisUtterance(text);
-      const { lang, voice } = pickSpeech(text);
+      const { lang, voice } = pickSpeech(text, forceLang);
       u.lang = lang; if (voice) u.voice = voice;
       u.rate = TTS_RATE; u.pitch = TTS_PITCH; u.volume = TTS_VOLUME;
       currentUtterance = u; activeQid = qid; activeMode = 'tts'; activeState = 'playing';
@@ -517,11 +519,13 @@
       stopAllPlayback();
       const myToken = ++playToken;
       hideAudioError(qid);
-      // Spoken explanation takes over the Play button when the admin set one:
-      // it's read aloud (browser voice) instead of the question's own audio.
-      // Spoken explanation takes over the Play button when the admin set one.
+      const lang = questionLang[qid] === 'ta' ? 'ta' : 'en';
+      // A spoken explanation is a TAMIL-content helper, so it's only used for
+      // questions whose saved language is Tamil. An English question (the
+      // default, including the first question) always reads its own English
+      // text — a Tamil explanation/voice never makes it "become Tamil".
       const explanationRaw = (explanationTexts[qid] || '').trim();
-      if (explanationRaw) {
+      if (explanationRaw && lang === 'ta') {
         // 0a) Server-generated neural audio (studio-quality Tamil, works on
         //     ANY device — no Tamil voice needed). Preferred when available.
         if (neuralExpReady[qid]) {
@@ -529,14 +533,12 @@
           if (url === undefined) { setLoading(qid); url = await fetchExplanationAudio(qid); if (myToken !== playToken) return; }
           if (url && url !== 'none') { startAudio(qid, url); return; }
         }
-        // 0b) Browser-voice fallback. Tanglish (flagged OR auto-detected) is
-        //     transliterated to Tamil ONLY when the device has a Tamil voice;
-        //     otherwise the original romanized text is read aloud (audible,
-        //     English-accented) so the candidate is never left with silence.
+        // 0b) Browser-voice fallback: transliterate Tanglish -> Tamil when the
+        //     device has a Tamil voice, else read the romanized text aloud.
         let explanation = explanationRaw;
         const isTanglish = explanationTanglish[qid] || detectTanglish(explanationRaw);
         if (isTanglish && hasTamilVoice()) explanation = tanglishToTamil(explanation);
-        startTts(qid, explanation);
+        startTts(qid, explanation, 'ta');
         return;
       }
       if (audioUrls[qid]) { startAudio(qid, audioUrls[qid]); return; }         // 1) uploaded
@@ -545,7 +547,7 @@
         if (url === undefined) { setLoading(qid); url = await fetchNeural(qid); if (myToken !== playToken) return; }
         if (url && url !== 'none') { startAudio(qid, url); return; }
       }
-      startTts(qid, questionTexts[qid]);                                       // 3) browser speech (question text)
+      startTts(qid, questionTexts[qid], lang);                                 // 3) browser speech, in the question's language
     }
 
     function pausePlayback(qid) {
