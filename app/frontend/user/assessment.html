@@ -28,7 +28,7 @@
 
     /* ---- Header ---- */
     .a-head{ position:sticky; top:0; z-index:50; background:#fff; border-bottom:1px solid var(--line); }
-    .a-head-in{ max-width:1520px; margin:0 auto; padding:12px 26px; display:flex; align-items:center; justify-content:space-between; gap:22px; }
+    .a-head-in{ max-width:1520px; margin:0 auto; padding:9px 26px; display:flex; align-items:center; justify-content:space-between; gap:22px; }
     .brand{ display:flex; align-items:center; gap:13px; min-width:0; }
     .brand img{ width:46px; height:46px; object-fit:contain; }
     .brand-t{ font-size:21px; font-weight:800; color:var(--ink); line-height:1.15; letter-spacing:-.01em; }
@@ -137,15 +137,16 @@
 
     /* ---- Bottom action bar ---- */
     .a-foot{ position:fixed; left:0; right:0; bottom:0; z-index:45; background:#fff; border-top:1px solid var(--line); box-shadow:0 -3px 14px rgba(16,24,40,.05); }
-    .a-foot-in{ max-width:1520px; margin:0 auto; padding:15px 26px; display:flex; align-items:center; justify-content:space-between; gap:14px; }
-    .fbtn{ display:inline-flex; align-items:center; justify-content:center; gap:10px; padding:13px 22px; border-radius:12px; font-size:15px; font-weight:700; cursor:pointer; border:1.5px solid transparent; transition:all .15s; }
+    .a-foot-in{ max-width:1520px; margin:0 auto; padding:9px 26px; display:flex; align-items:center; justify-content:space-between; gap:12px; }
+    .fbtn{ display:inline-flex; align-items:center; justify-content:center; gap:7px; height:38px; min-height:38px; padding:0 16px; border-radius:7px; font-size:13px; font-weight:600; cursor:pointer; border:1.5px solid transparent; transition:all .15s; }
+    .fbtn svg{ width:16px; height:16px; }
     .fbtn-prev{ background:#fff; border-color:var(--line2); color:#374151; }
     .fbtn-prev:hover:not(:disabled){ border-color:#CBD5E1; background:#FAFBFC; }
     .fbtn-prev:disabled{ opacity:.4; cursor:not-allowed; }
     .fbtn-review{ background:var(--r-light); color:var(--r); }
     .fbtn-review:hover{ background:var(--r-soft); }
     .fbtn-review.on{ background:var(--r); color:#fff; }
-    .fbtn-next{ background:var(--r); color:#fff; min-width:230px; }
+    .fbtn-next{ background:var(--r); color:#fff; min-width:180px; }
     .fbtn-next:hover:not(:disabled){ background:var(--r-dark); }
     .fbtn-next:disabled{ opacity:.65; cursor:not-allowed; }
     .foot-unanswered{ font-size:12.5px; color:var(--r); text-align:center; margin-top:-6px; padding:0 26px 8px; }
@@ -168,7 +169,7 @@
       html, body{ height:100%; }
       body{ height:100vh; overflow:hidden; display:flex; flex-direction:column; }
       .a-head{ position:static; flex-shrink:0; }
-      .a-body{ flex:1; min-height:0; overflow:hidden; padding:18px 26px; grid-template-rows:minmax(0,1fr); }
+      .a-body{ flex:1; min-height:0; overflow:hidden; padding:14px 26px; grid-template-rows:minmax(0,1fr); }
       .a-side{ display:block !important; position:static; top:auto; height:100%; overflow:hidden; align-self:stretch; }
       .a-main{ height:100%; overflow-y:auto; padding-right:2px; }
       .a-main::-webkit-scrollbar{ width:8px; }
@@ -189,8 +190,8 @@
       .qc-text{ font-size:17px; }
       .qc-num{ width:38px; height:38px; font-size:15px; } .qc-cat{ font-size:16px; }
       .opt label{ padding:15px 16px; font-size:15px; gap:12px; }
-      .a-foot-in{ padding:10px 12px; gap:8px; }
-      .fbtn{ padding:12px 12px; font-size:13.5px; gap:6px; flex:1; }
+      .a-foot-in{ padding:8px 12px; gap:8px; }
+      .fbtn{ padding:0 10px; font-size:12.5px; gap:5px; flex:1; }
       .fbtn-next{ min-width:0; }
       .fbtn-prev .lbl-full{ display:none; }
     }
