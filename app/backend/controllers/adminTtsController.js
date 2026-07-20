@@ -1,7 +1,7 @@
 const Question = require('../models/Question');
 const QuestionAudio = require('../models/QuestionAudio');
 const ExplanationAudio = require('../models/ExplanationAudio');
-const { synthesize, textHash, voiceForConfig, buildProsody, VOICES } = require('../utils/edgeTts');
+const { synthesize, textHash, voiceForConfig, voiceForExplanation, buildProsody, VOICES } = require('../utils/edgeTts');
 const { explanationSpeechText } = require('../utils/tanglish');
 const { getTtsConfig, setTtsConfig } = require('../utils/ttsSettings');
 
@@ -18,13 +18,15 @@ exports.getSettings = async (req, res, next) => {
 // PUT settings (voice, speed, pitch, on/off). Only provided fields change.
 exports.updateSettings = async (req, res, next) => {
   try {
-    const { enabled, voiceEn, voiceTa, ratePct, pitchHz } = req.body;
+    const { enabled, voiceEn, voiceTa, ratePct, pitchHz, voiceExplanation, explanationRatePct } = req.body;
     const clamp = (n, lo, hi) => Math.max(lo, Math.min(hi, Number(n)));
     const patch = {};
     if (enabled !== undefined) patch.enabled = !!enabled;
     if (voiceEn) patch.voiceEn = String(voiceEn);
     if (voiceTa) patch.voiceTa = String(voiceTa);
+    if (voiceExplanation) patch.voiceExplanation = String(voiceExplanation);
     if (ratePct !== undefined && !Number.isNaN(Number(ratePct))) patch.ratePct = clamp(ratePct, -50, 50);
+    if (explanationRatePct !== undefined && !Number.isNaN(Number(explanationRatePct))) patch.explanationRatePct = clamp(explanationRatePct, -50, 50);
     if (pitchHz !== undefined && !Number.isNaN(Number(pitchHz))) patch.pitchHz = clamp(pitchHz, -50, 50);
     const config = await setTtsConfig(patch);
     res.json({ success: true, config });
@@ -110,8 +112,8 @@ exports.generateExplanation = async (req, res, next) => {
     const speech = explanationSpeechText(q);
     if (!speech) return res.status(400).json({ success: false, message: 'This question has no spoken explanation to generate.' });
     const config = await getTtsConfig();
-    const voice = voiceForConfig(speech, config);
-    const audio = await synthesize(speech, voice, buildProsody(config));
+    const voice = voiceForExplanation(speech, config);
+    const audio = await synthesize(speech, voice, buildProsody({ ratePct: config.explanationRatePct ?? config.ratePct, pitchHz: config.pitchHz }));
     await ExplanationAudio.findOneAndUpdate(
       { questionId: q._id },
       { questionId: q._id, textHash: textHash(speech), voice, lang: voice.slice(0, 5), contentType: 'audio/mpeg', audio },

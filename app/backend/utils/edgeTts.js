@@ -71,4 +71,10 @@ function voiceForConfig(text, config = {}) {
   return isTamil(text) ? (config.voiceTa || TA_VOICE) : (config.voiceEn || EN_VOICE);
 }
 
-module.exports = { voiceFor, voiceForConfig, textHash, synthesize, buildProsody, isTamil, VOICES, EN_VOICE, TA_VOICE };
+// Voice for the SPOKEN EXPLANATION audio: a dedicated Tamil voice (admin-set)
+// for Tamil/Tanglish explanations, the English voice for English ones.
+function voiceForExplanation(text, config = {}) {
+  return isTamil(text) ? (config.voiceExplanation || config.voiceTa || TA_VOICE) : (config.voiceEn || EN_VOICE);
+}
+
+module.exports = { voiceFor, voiceForConfig, voiceForExplanation, textHash, synthesize, buildProsody, isTamil, VOICES, EN_VOICE, TA_VOICE };

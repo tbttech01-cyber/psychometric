@@ -10,6 +10,10 @@ const DEFAULTS = {
   voiceTa: 'ta-IN-PallaviNeural',   // voice for Tamil questions
   ratePct: -6,                      // speaking speed, percent (negative = slower)
   pitchHz: 0,                       // pitch offset, Hz
+  // Dedicated voice + speed for the SPOKEN EXPLANATION audio (the Tanglish/Tamil
+  // "Play" clip), so admins can control it independently of the question voice.
+  voiceExplanation: 'ta-IN-PallaviNeural', // Tamil voice used for explanation audio
+  explanationRatePct: -6,           // explanation speaking speed, percent
 };
 
 async function getTtsConfig() {

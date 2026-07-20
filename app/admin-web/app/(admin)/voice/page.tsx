@@ -7,7 +7,7 @@ import PageHeader from "@/components/PageHeader";
 
 type Voice = { id: string; label: string };
 type Voices = { en: Voice[]; ta: Voice[] };
-type Config = { enabled: boolean; voiceEn: string; voiceTa: string; ratePct: number; pitchHz: number };
+type Config = { enabled: boolean; voiceEn: string; voiceTa: string; ratePct: number; pitchHz: number; voiceExplanation: string; explanationRatePct: number };
 type AudioStatus = "none" | "ready" | "stale";
 type Row = {
   _id: string; order: number; text: string; status: AudioStatus; voice: string | null;
@@ -276,6 +276,31 @@ export default function VoicePage() {
               Generates Tamil neural audio for each question&apos;s spoken explanation (Tanglish is converted to Tamil first).
               This plays on <strong>every</strong> candidate device — no Tamil voice needs to be installed.
             </p>
+
+            {/* Dedicated voice + speed for the Tanglish/Tamil explanation audio */}
+            <div className="rounded-xl p-3 mb-3" style={{ background: "#F9FAFB", border: "1px solid var(--tbt-border)" }}>
+              <p className="text-xs font-semibold mb-2" style={{ color: "var(--tbt-text)" }}>Explanation voice (Tanglish / Tamil)</p>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
+                <div>
+                  <label className="block text-xs font-semibold mb-1">Voice</label>
+                  <select value={config.voiceExplanation} onChange={(e) => setConfig({ ...config, voiceExplanation: e.target.value })}
+                    className="border-2 rounded-lg px-3 py-2 w-full" style={{ borderColor: "var(--tbt-border)" }}>
+                    {voices.ta.map((v) => <option key={v.id} value={v.id}>{v.label}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold mb-1">Speed</label>
+                  <select value={config.explanationRatePct} onChange={(e) => setConfig({ ...config, explanationRatePct: Number(e.target.value) })}
+                    className="border-2 rounded-lg px-3 py-2 w-full" style={{ borderColor: "var(--tbt-border)" }}>
+                    {SPEEDS.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
+                  </select>
+                </div>
+                <button onClick={saveSettings} disabled={saving} className="btn btn-primary">{saving ? "Saving…" : "Save voice"}</button>
+              </div>
+              <p className="text-xs mt-2" style={{ color: "var(--tbt-muted)" }}>
+                After changing the voice or speed, click <strong>Regenerate</strong> below (or <strong>Generate all</strong>) to apply it to the audio.
+              </p>
+            </div>
 
             <div className="overflow-x-auto">
               <table className="data-table">
