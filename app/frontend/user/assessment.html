@@ -50,7 +50,13 @@
     .a-body{ position:relative; z-index:1; max-width:1520px; margin:0 auto; padding:24px 26px 130px; display:grid; grid-template-columns:320px minmax(0,1fr); gap:24px; align-items:start; }
 
     /* ---- Sidebar ---- */
-    .a-side{ position:sticky; top:104px; background:#fff; border:1px solid var(--line); border-radius:18px; padding:20px; box-shadow:0 1px 3px rgba(16,24,40,.05); }
+    /* Fixed in place: the panel sticks under the header and never scrolls away
+       with the page. If its content is taller than the viewport it scrolls
+       INSIDE itself (thin, subtle scrollbar) so the whole panel stays put. */
+    .a-side{ position:sticky; top:104px; max-height:calc(100vh - 124px); overflow-y:auto; overscroll-behavior:contain; background:#fff; border:1px solid var(--line); border-radius:18px; padding:20px; box-shadow:0 1px 3px rgba(16,24,40,.05); }
+    .a-side::-webkit-scrollbar{ width:6px; }
+    .a-side::-webkit-scrollbar-thumb{ background:#E2E5EA; border-radius:999px; }
+    .a-side{ scrollbar-width:thin; scrollbar-color:#E2E5EA transparent; }
     .side-h{ font-size:15px; font-weight:800; color:var(--ink); }
     .side-prog{ height:6px; background:#EEF0F3; border-radius:999px; overflow:hidden; margin:11px 0 7px; }
     .side-prog>i{ display:block; height:100%; width:0; background:var(--r); border-radius:999px; transition:width .4s ease; }
@@ -150,7 +156,7 @@
     /* ---- Responsive ---- */
     @media (max-width:1024px){
       .a-body{ grid-template-columns:1fr; padding:16px 16px 130px; gap:16px; }
-      .a-side{ position:static; top:auto; }
+      .a-side{ position:static; top:auto; max-height:none; overflow:visible; }
       .side-toggle{ display:flex; align-items:center; justify-content:space-between; width:100%; background:#fff; border:1px solid var(--line); border-radius:14px; padding:13px 16px; font-weight:800; color:var(--ink); font-size:14px; cursor:pointer; }
       .side-toggle .chev{ transition:transform .2s; color:var(--muted); }
       .side-toggle.open .chev{ transform:rotate(180deg); }
