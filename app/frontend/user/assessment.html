@@ -183,19 +183,27 @@
     const LIKERT_PAGE_SIZE = 5;
     function buildRenderUnits(sections) {
       const units = [];
+      const isLikert = (q) => q.questionType === 'LIKERT_SCALE' || !q.questionType;
       sections.forEach((section) => {
-        const batch = section.questions.filter((q) => q.questionType === 'LIKERT_SCALE' || !q.questionType);
-        const others = section.questions.filter((q) => q.questionType && q.questionType !== 'LIKERT_SCALE');
-        // Chunk the likert batch into fixed-size pages, preserving the set's
-        // order. questionOffset in renderQuestions accumulates each unit's
-        // length, so the "Questions X–Y of Z" counter stays correct per page.
-        for (let i = 0; i < batch.length; i += LIKERT_PAGE_SIZE) {
-          units.push({ kind: 'batch', typeName: section.typeName, typeIcon: section.typeIcon, questions: batch.slice(i, i + LIKERT_PAGE_SIZE) });
+        // Walk the section's questions IN THE SET'S ORDER: batch consecutive
+        // Likert items into fixed-size pages, emit each other type inline where
+        // it sits. This keeps the admin-chosen order (so the first question is
+        // exactly what's first in the set); a pure-Likert section batches the
+        // same 5-per-page as before.
+        const qs = section.questions;
+        let i = 0;
+        while (i < qs.length) {
+          if (isLikert(qs[i])) {
+            const batch = [];
+            while (i < qs.length && isLikert(qs[i]) && batch.length < LIKERT_PAGE_SIZE) { batch.push(qs[i]); i++; }
+            units.push({ kind: 'batch', typeName: section.typeName, typeIcon: section.typeIcon, questions: batch });
+          } else {
+            const q = qs[i];
+            const kind = q.questionType === 'MULTI_SELECT' ? 'multiselect' : q.questionType === 'RANKING' ? 'ranking' : 'single';
+            units.push({ kind, typeName: section.typeName, typeIcon: section.typeIcon, question: q });
+            i++;
+          }
         }
-        others.forEach((q) => {
-          const kind = q.questionType === 'MULTI_SELECT' ? 'multiselect' : q.questionType === 'RANKING' ? 'ranking' : 'single';
-          units.push({ kind, typeName: section.typeName, typeIcon: section.typeIcon, question: q });
-        });
       });
       return units;
     }

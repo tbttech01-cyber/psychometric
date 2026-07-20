@@ -81,7 +81,7 @@ export default function QuestionPicker({
       {/* Selected, ordered */}
       <div>
         <p className="text-sm font-semibold mb-2" style={{ color: "var(--tbt-text)" }}>
-          Selected ({value.length}) — order is how they group by category for candidates
+          Selected ({value.length}) — this is the order candidates see; the top one is the first question
         </p>
         <div className="border rounded-xl divide-y max-h-80 overflow-y-auto" style={{ borderColor: "var(--tbt-border)" }}>
           {value.length === 0 && <p className="p-3 text-sm" style={{ color: "var(--tbt-muted)" }}>No questions selected yet.</p>}

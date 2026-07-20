@@ -171,6 +171,17 @@ exports.getQuestions = async (req, res, next) => {
         }),
     })).filter(type => type.questions.length > 0);
 
+    // Order the category sections by where they FIRST appear in the set's own
+    // order (not by QuestionType.order), so the admin controls the sequence —
+    // including the first question — by reordering the set. The category that
+    // owns the first question in the set leads the assessment.
+    const posOf = new Map(orderedIds.map((id, i) => [id.toString(), i]));
+    const firstPos = (sec) => Math.min(...sec.questions.map((q) => {
+      const p = posOf.get(q._id.toString());
+      return p === undefined ? Number.MAX_SAFE_INTEGER : p;
+    }));
+    result.sort((a, b) => firstPos(a) - firstPos(b));
+
     res.json({ success: true, data: result, remainingSeconds });
   } catch (err) { next(err); }
 };
