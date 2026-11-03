@@ -29,7 +29,7 @@
     .a-head{ position:sticky; top:0; z-index:50; background:#fff; border-bottom:1px solid var(--line); box-shadow:0 1px 3px rgba(0,0,0,.03); }
     .a-head-in{ max-width:1200px; margin:0 auto; height:64px; padding:0 24px; display:flex; align-items:center; justify-content:space-between; gap:20px; }
     .brand{ display:flex; align-items:center; gap:11px; min-width:0; }
-    .brand img{ width:36px; height:36px; object-fit:contain; filter: brightness(0); }
+    .brand img{ height:40px; width:auto; max-width:100%; object-fit:contain; filter: brightness(0); }
     .brand-t{ font-size:18px; font-weight:800; color:var(--ink); line-height:1.1; letter-spacing:-.02em; }
     .brand-t .r{ color:var(--r); }
     .brand-s{ font-size:11px; font-weight:500; color:var(--muted); margin-top:1px; }
@@ -166,7 +166,7 @@
     }
     @media (max-width:760px){
       .a-head-in{ padding:10px 16px; gap:10px; flex-wrap:wrap; height:auto; }
-      .brand img{ width:34px; height:34px; }
+      .brand img{ height:32px; width:auto; }
       .brand-t{ font-size:16.5px; } .brand-s{ display:none; } .brand-accent{ display:none; }
       .h-mid{ order:3; width:100%; justify-content:space-between; gap:10px; }
       .h-count b{ font-size:14.5px; } .h-count span{ font-size:10.5px; }
@@ -197,11 +197,6 @@
     <div class="a-head-in">
       <div class="brand">
         <img src="/assets/tbt-logo.png" alt="Tamil Business Tribe" />
-        <div>
-          <div class="brand-t">Tamil <span class="r">Business</span> Tribe</div>
-          <div class="brand-s">Discover Your Business DNA</div>
-          <div class="brand-accent"></div>
-        </div>
       </div>
       <div class="h-mid">
         <div class="h-count">
