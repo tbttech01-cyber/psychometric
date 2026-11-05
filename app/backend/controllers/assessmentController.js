@@ -94,6 +94,11 @@ exports.getQuestions = async (req, res, next) => {
     if (session) {
       orderedIds = session.questionIds.map(id => id.toString());
       remainingSeconds = Math.max(0, Math.ceil((session.expiresAt - new Date()) / 1000));
+    } else if (req.query.sessionId) {
+      // The assessment page asks for a specific attempt that is no longer in
+      // progress (already submitted, e.g. auto-submitted in another tab).
+      // Don't hand it a fresh full-length question list — send it to results.
+      return res.status(409).json({ success: false, code: 'SESSION_ENDED', message: 'This assessment has already been submitted.' });
     } else {
       // No attempt under way yet: the candidate must have completed the
       // post-login Access Code step. Enforced here (not just client-side) so
@@ -207,18 +212,16 @@ exports.startSession = async (req, res, next) => {
         return res.status(403).json({ success: false, message: 'You have already completed this assessment.' });
     }
 
-    // Resuming a still-live in-progress attempt takes priority over starting
-    // fresh — UNLESS an approved retest is being started, in which case any
-    // lingering in-progress attempt is abandoned so the retest opens cleanly at
-    // question 1. An attempt already expired past the submit grace window is
-    // always retired here — otherwise it stays 'in-progress' forever, and every
-    // future start would 409 while submit rejects it as expired, permanently
-    // stranding the candidate.
+    // An existing in-progress attempt is always resumed (409 + its ORIGINAL
+    // sessionId/expiresAt) — never replaced — so a refresh, a new tab or another
+    // browser can't reset the timer. That includes an attempt whose time has
+    // already run out: the candidate is sent back to it, the page sees zero time
+    // left and auto-submits, and submitAssessment finalizes it from the answers
+    // saved before the deadline. The only exception is an approved retest,
+    // which abandons any lingering attempt so the retest opens at question 1.
     const inProgress = await AssessmentSession.findOne({ userId, status: 'in-progress' });
     if (inProgress) {
-      const GRACE_MS = 60 * 1000;
-      const dead = Date.now() > inProgress.expiresAt.getTime() + GRACE_MS;
-      if (!dead && !approvedRetest)
+      if (!approvedRetest)
         return res.status(409).json({ success: false, sessionId: inProgress._id, expiresAt: inProgress.expiresAt, message: 'Assessment already in progress.' });
       inProgress.status = 'expired';
       await inProgress.save();
@@ -266,27 +269,76 @@ exports.startSession = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
-exports.submitAssessment = async (req, res, next) => {
+// Keep only the fields an answer entry may carry, so a draft can't be used to
+// stash arbitrary data on the session. Shape/option validity is checked at
+// submit time by the same logic as a normal submission.
+const ANSWER_STATUSES = ['answered', 'timeout', 'skipped'];
+const idStr = (v) => (typeof v === 'string' && v.length <= 64 ? v : undefined);
+const idArr = (v) => (Array.isArray(v) ? v.map(idStr).filter(Boolean).slice(0, 100) : undefined);
+function sanitizeDraft(answers) {
+  return answers
+    .filter((a) => a && idStr(a.questionId))
+    .map((a) => {
+      const e = { questionId: a.questionId };
+      if (idStr(a.answerOptionId)) e.answerOptionId = a.answerOptionId;
+      if (idArr(a.answerOptionIds)) e.answerOptionIds = idArr(a.answerOptionIds);
+      if (idArr(a.orderedOptionIds)) e.orderedOptionIds = idArr(a.orderedOptionIds);
+      if (ANSWER_STATUSES.includes(a.status)) e.status = a.status;
+      if (Number.isFinite(a.timeTakenSeconds)) e.timeTakenSeconds = a.timeTakenSeconds;
+      return e;
+    });
+}
+
+// Saves the candidate's current answers on the server while time remains.
+// The deadline is enforced in the update's own filter (expiresAt > now), so a
+// delayed request that arrives after time is up — or races a submit — can
+// never write.
+exports.saveProgress = async (req, res, next) => {
   try {
     const { sessionId, answers } = req.body;
+    const now = new Date();
+    const saved = await AssessmentSession.findOneAndUpdate(
+      { _id: sessionId, userId: req.user._id, status: 'in-progress', expiresAt: { $gt: now } },
+      { draftAnswers: sanitizeDraft(answers), draftSavedAt: now },
+      { new: true, projection: { _id: 1 } }
+    );
+    if (saved) return res.json({ success: true, savedAt: now });
+
+    const session = await AssessmentSession.findById(sessionId).select('userId status');
+    if (!session || session.userId.toString() !== req.user._id.toString())
+      return res.status(403).json({ success: false, message: 'Session not found or not yours.' });
+    if (session.status !== 'in-progress')
+      return res.status(409).json({ success: false, code: 'SESSION_ENDED', message: 'This assessment has already been submitted.' });
+    return res.status(409).json({ success: false, code: 'TIME_EXPIRED', message: 'Your assessment time has expired. Answers can no longer be changed.' });
+  } catch (err) { next(err); }
+};
+
+exports.submitAssessment = async (req, res, next) => {
+  try {
+    const { sessionId } = req.body;
+    let { answers } = req.body;
     const userId = req.user._id;
 
     const session = await AssessmentSession.findById(sessionId);
     if (!session || session.userId.toString() !== userId.toString())
       return res.status(403).json({ success: false, message: 'Session not found or not yours.' });
     if (session.status !== 'in-progress')
-      return res.status(400).json({ success: false, message: 'Session already submitted or expired.' });
+      return res.status(400).json({ success: false, ...(session.status === 'submitted' && { code: 'ALREADY_SUBMITTED' }), message: 'Session already submitted or expired.' });
 
     // Timing is server-authoritative — the client cannot send an `autoSubmitted`
-    // flag to waive the expiry cutoff or the all-answered rule. A submit past
-    // the grace window is rejected outright; a submit after expiry but within
-    // grace (e.g. the client's own timeout auto-submit) counts as auto-submitted
-    // and may be partial. GRACE absorbs network/clock skew on that auto-submit.
+    // flag to waive the expiry cutoff or the all-answered rule. Before the
+    // deadline the request's answers are used as-is. After it, the submission
+    // is auto-submitted (may be partial) and scored from the answers the
+    // server saved BEFORE the deadline (PUT /progress), never the request
+    // body — so nothing changed after time ran out can count, however late the
+    // submit arrives. The only exception: a client that never saved progress
+    // (a page loaded before this feature shipped) may still submit its body
+    // within GRACE of the deadline, exactly as before.
     const GRACE_MS = 60 * 1000;
     const now = Date.now();
-    if (now > session.expiresAt.getTime() + GRACE_MS)
-      return res.status(400).json({ success: false, message: 'Assessment time has expired.' });
     const autoSubmitted = now > session.expiresAt.getTime();
+    if (autoSubmitted && (session.draftSavedAt || now > session.expiresAt.getTime() + GRACE_MS))
+      answers = session.draftAnswers || [];
 
     // The questions this attempt is scored against are the session's frozen
     // snapshot (set at startSession), NOT the live set or all active questions
@@ -333,6 +385,21 @@ exports.submitAssessment = async (req, res, next) => {
       return a.answerOptionId ? [a.answerOptionId] : [];
     }
 
+    // Never reached (auto-submit cutoff) or explicitly timed out/skipped by the
+    // candidate — recorded with score 0 so it never inflates category/dimension
+    // totals, but still an explicit, auditable row.
+    const unansweredDoc = (q, a) => ({
+      sessionId, userId, questionId: q._id,
+      score: 0, maxScore: q.marks, isCorrect: null,
+      dimension: q.dimension, dimensionScores: {},
+      questionOrder: q.order, answeredAt: new Date(),
+      timeTakenSeconds: a?.timeTakenSeconds,
+      status: a?.status === 'timeout' ? 'timeout' : 'skipped',
+    });
+
+    // On a manual submit an invalid answer is rejected so the candidate can fix
+    // it. On an auto-submit (time is up, nothing can be fixed) it is recorded as
+    // unanswered instead, so an expired attempt always finalizes.
     const userAnswerDocs = [];
     for (const q of setQuestions) {
       const a = answerByQuestionId.get(q._id.toString());
@@ -340,23 +407,15 @@ exports.submitAssessment = async (req, res, next) => {
       const refIds = referencedOptionIds(a, q.questionType);
 
       if (!refIds.length) {
-        // Never reached (auto-submit cutoff) or explicitly timed out/skipped
-        // by the candidate — recorded with score 0 so it never inflates
-        // category/dimension totals, but still an explicit, auditable row.
-        userAnswerDocs.push({
-          sessionId, userId, questionId: q._id,
-          score: 0, maxScore: q.marks, isCorrect: null,
-          dimension: q.dimension, dimensionScores: {},
-          questionOrder: q.order, answeredAt: new Date(),
-          timeTakenSeconds: a?.timeTakenSeconds,
-          status: a?.status === 'timeout' ? 'timeout' : 'skipped',
-        });
+        userAnswerDocs.push(unansweredDoc(q, a));
         continue;
       }
 
       const validIds = new Set(questionOptions.map((o) => o._id.toString()));
-      if (!refIds.every((id) => validIds.has(id.toString())))
+      if (!refIds.every((id) => validIds.has(id.toString()))) {
+        if (autoSubmitted) { userAnswerDocs.push(unansweredDoc(q, a)); continue; }
         return res.status(400).json({ success: false, message: 'Invalid answer option for question.' });
+      }
 
       const userAnswerValue = q.questionType === 'MULTI_SELECT' ? a.answerOptionIds
         : q.questionType === 'RANKING' ? a.orderedOptionIds
@@ -366,6 +425,7 @@ exports.submitAssessment = async (req, res, next) => {
       try {
         evalResult = evaluateAnswer(q, questionOptions, userAnswerValue);
       } catch (evalErr) {
+        if (autoSubmitted) { userAnswerDocs.push(unansweredDoc(q, a)); continue; }
         return res.status(400).json({ success: false, message: evalErr.message });
       }
 
@@ -393,7 +453,7 @@ exports.submitAssessment = async (req, res, next) => {
       { new: true }
     );
     if (!claimed)
-      return res.status(409).json({ success: false, message: 'Submission already in progress or completed.' });
+      return res.status(409).json({ success: false, code: 'ALREADY_SUBMITTED', message: 'Submission already in progress or completed.' });
 
     await UserAnswer.insertMany(userAnswerDocs);
 

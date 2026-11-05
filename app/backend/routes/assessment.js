@@ -8,6 +8,12 @@ router.get('/questions', userAuth, ctrl.getQuestions);
 router.get('/questions/:id/audio', userAuth, ctrl.getQuestionAudio);
 router.get('/questions/:id/explanation-audio', userAuth, ctrl.getExplanationAudio);
 router.post('/start', userAuth, ctrl.startSession);
+router.put('/progress',
+  userAuth,
+  [body('sessionId').notEmpty(), body('answers').isArray({ max: 1000 })],
+  validate,
+  ctrl.saveProgress
+);
 
 router.post('/submit',
   userAuth,

@@ -24,7 +24,14 @@ const assessmentSessionSchema = new mongoose.Schema({
   questionSetId:   { type: mongoose.Schema.Types.ObjectId, ref: 'QuestionSet', default: null },
   questionIds:     { type: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Question' }], default: [] },
   durationMinutes: { type: Number },
-}, { timestamps: { createdAt: true, updatedAt: false } });
+
+  // Server-side copy of the candidate's in-progress answers, saved by
+  // PUT /assessment/progress and only accepted BEFORE expiresAt. Once the
+  // deadline passes, submitAssessment scores THIS (not the request body), so
+  // answers changed after time ran out can never count.
+  draftAnswers: { type: [mongoose.Schema.Types.Mixed], default: undefined },
+  draftSavedAt: { type: Date },
+},{ timestamps: { createdAt: true, updatedAt: false } });
 
 assessmentSessionSchema.index({ userId: 1, status: 1 });
 

@@ -319,11 +319,76 @@
     }
 
     function saveAutosave() {
+      if (expired) return; // nothing may change once time is up
       localStorage.setItem(autosaveKey(), JSON.stringify({ answers, timedOut, timeSpent, marked: [...markedSections] }));
+      pushProgress();
+    }
+
+    // ---- Server-side progress + expiry lock -----------------------------
+    // Answers are also saved on the server (PUT /assessment/progress), which
+    // only accepts them before the deadline. Once time is up the server scores
+    // ITS saved copy, so the browser timer is never the only safeguard. Saves
+    // run one at a time (latest state wins, in order) so an older request can
+    // never overwrite a newer one.
+    let expired = false, submitting = false;
+    let progressInFlight = null, progressDirty = false;
+    function pushProgress() {
+      if (expired || !sessionId) return;
+      if (progressInFlight) { progressDirty = true; return; }
+      const all = allQuestionsFlat();
+      if (!all.length) return;
+      progressInFlight = api.put('/assessment/progress', { sessionId, answers: buildAnswerPayload(all) }, token)
+        .then(({ data }) => {
+          if (data && data.code === 'SESSION_ENDED') goToResult();
+          else if (data && data.code === 'TIME_EXPIRED') onTimeExpired();
+        })
+        .finally(() => {
+          progressInFlight = null;
+          if (progressDirty && !expired) { progressDirty = false; pushProgress(); }
+        });
+    }
+
+    function goToResult() {
+      localStorage.removeItem('tbt_session_id'); localStorage.removeItem('tbt_session_expires'); localStorage.removeItem(autosaveKey());
+      const user = api.getUser(); if (user) { user.hasCompletedAssessment = true; api.setUser(user); }
+      // replace() so the browser Back button cannot return to the just-submitted
+      // assessment (the session is gone; this keeps the workflow one-directional).
+      window.location.replace('/result');
+    }
+
+    // Full-screen notice shown once time is up; it also blocks every click on
+    // the page underneath.
+    function showExpiryNotice(html) {
+      let el = document.getElementById('expiry-overlay');
+      if (!el) {
+        el = document.createElement('div');
+        el.id = 'expiry-overlay';
+        el.setAttribute('role', 'alertdialog');
+        el.setAttribute('aria-live', 'assertive');
+        el.style.cssText = 'position:fixed;inset:0;z-index:1000;background:rgba(17,24,39,.55);display:flex;align-items:center;justify-content:center;padding:16px';
+        document.body.appendChild(el);
+      }
+      el.innerHTML = `<div style="background:#fff;border-radius:16px;max-width:440px;width:100%;padding:24px;text-align:center;box-shadow:0 10px 30px rgba(0,0,0,.2)">${html}</div>`;
+    }
+
+    // Timer hit 00:00 (or the server says time is up): stop everything, lock
+    // every control, and auto-submit exactly once.
+    function onTimeExpired() {
+      if (expired) return;
+      expired = true;
+      if (timer) timer.stop();
+      stopQuestionTimer();
+      stopAllPlayback();
+      document.querySelectorAll('.a-main input, .a-main button, .a-main select, .a-main textarea, #a-foot button, #a-side button')
+        .forEach((el) => { el.disabled = true; });
+      showExpiryNotice('<p style="font-weight:700;font-size:17px;margin-bottom:8px">Your assessment time has expired.</p><p style="color:#6B7280">Submitting your answers…</p>');
+      submitAssessment(true);
     }
 
     async function loadQuestions() {
-      const { ok, data } = await api.get('/assessment/questions', token);
+      const { ok, data } = await api.get('/assessment/questions?sessionId=' + encodeURIComponent(sessionId || ''), token);
+      // Already submitted (e.g. auto-submitted from another tab) → results.
+      if (!ok && data && data.code === 'SESSION_ENDED') { goToResult(); return; }
       // Render an inline error + Retry instead of a permanent spinner, and
       // guard data.data so a malformed OK response can't throw below.
       if (!ok || !data || !data.data) {
@@ -364,7 +429,7 @@
           const total = minutes * 60 + seconds;
           t.style.color = total <= 60 ? '#DC2626' : total <= 300 ? '#F59E0B' : 'var(--r)';
         },
-        () => submitAssessment(true)
+        onTimeExpired
       );
       timer.start();
       showSection(0);
@@ -910,6 +975,7 @@
     }
 
     function recordAnswer(qId, optId) {
+      if (expired) return;
       answers[qId] = optId;
       markTimeSpent(qId);
       // Once answered, the per-question timer's only job (forcing an answer
@@ -923,6 +989,7 @@
     }
 
     function toggleMultiSelect(qId, optId, checked) {
+      if (expired) return;
       const set = new Set(answers[qId] || []);
       if (checked) set.add(optId); else set.delete(optId);
       answers[qId] = [...set];
@@ -935,7 +1002,7 @@
 
     function moveRankingItem(qId, idx, dir) {
       const order = answers[qId];
-      if (!order) return;
+      if (!order || expired) return;
       const j = idx + dir;
       if (j < 0 || j >= order.length) return;
       [order[idx], order[j]] = [order[j], order[idx]];
@@ -1168,8 +1235,9 @@
       btn.setAttribute('aria-expanded', String(!nowCollapsed));
     }
 
-    document.getElementById('btn-prev').addEventListener('click', () => { if (currentSection > 0) showSection(currentSection - 1); });
+    document.getElementById('btn-prev').addEventListener('click', () => { if (!expired && currentSection > 0) showSection(currentSection - 1); });
     document.getElementById('btn-next').addEventListener('click', () => {
+      if (expired) return;
       const unit = renderUnits[currentSection];
       // Require an answer before moving on. Timed single questions may pass once
       // they've timed out (their inputs are locked); everything else must be
@@ -1213,10 +1281,10 @@
     }
 
     async function submitAssessment(auto) {
-      if (timer) timer.stop();
-      stopQuestionTimer();
-      stopAllPlayback();
-      playToken++;
+      // One submission at a time: a double click, or the timer firing while a
+      // manual submit is in flight, must not send a second request.
+      if (submitting) return;
+      if (expired && !auto) return; // after time is up only the auto-submit runs
       const allQuestions = allQuestionsFlat();
       const resolvedCount = allQuestions.filter(isResolved).length;
 
@@ -1226,16 +1294,43 @@
         return;
       }
 
+      submitting = true;
+      if (timer) timer.stop();
+      stopQuestionTimer();
+      stopAllPlayback();
+      playToken++;
+      // Let the last progress save land first (it is accepted only if it
+      // reached the server before the deadline).
+      if (progressInFlight) await progressInFlight;
+
       const answerPayload = buildAnswerPayload(allQuestions);
       const btn = document.getElementById('btn-submit');
       btn.disabled = true; btn.textContent = 'Submitting...';
       const { ok, data } = await api.post('/assessment/submit', { sessionId, answers: answerPayload, autoSubmitted: auto }, token);
-      if (!ok) { showToast(data.message || 'Submission failed.', 'error'); btn.disabled = false; btn.textContent = 'Submit Assessment'; return; }
-      localStorage.removeItem('tbt_session_id'); localStorage.removeItem('tbt_session_expires'); localStorage.removeItem(autosaveKey());
-      const user = api.getUser(); if (user) { user.hasCompletedAssessment = true; api.setUser(user); }
-      // replace() so the browser Back button cannot return to the just-submitted
-      // assessment (the session is gone; this keeps the workflow one-directional).
-      window.location.replace('/result');
+      // Already submitted (another tab / a duplicate request won the race) → done.
+      if (!ok && data && data.code === 'ALREADY_SUBMITTED') { goToResult(); return; }
+      if (!ok) {
+        submitting = false;
+        if (auto || expired) {
+          // Stay locked; the server keeps the answers saved before the
+          // deadline, so retrying is always safe.
+          showExpiryNotice('<p style="font-weight:700;font-size:17px;margin-bottom:8px">Your assessment time has expired.</p>' +
+            '<p style="color:#6B7280;margin-bottom:16px">' + (data.message || "We couldn't submit your assessment.") + '</p>' +
+            '<button type="button" class="fbtn fbtn-next" onclick="submitAssessment(true)">Retry submission</button>');
+          return;
+        }
+        showToast(data.message || 'Submission failed.', 'error'); btn.disabled = false; btn.textContent = 'Submit Assessment';
+        // Resume the countdown (stopped above); if time ran out meanwhile its
+        // first tick triggers the locked auto-submit.
+        if (timer) timer.start();
+        return;
+      }
+      if (auto) {
+        showExpiryNotice('<p style="font-weight:700;font-size:17px;margin-bottom:8px">Your assessment time has expired.</p><p style="color:#6B7280">Your assessment has been submitted automatically.</p>');
+        setTimeout(goToResult, 3000);
+        return;
+      }
+      goToResult();
     }
 
     // Exiting the assessment (closing the tab, navigating away, mobile

@@ -8,6 +8,9 @@ const SharedUserID = require('../backend/models/SharedUserID');
 const QuestionSet = require('../backend/models/QuestionSet');
 const AssessmentSession = require('../backend/models/AssessmentSession');
 const Notification = require('../backend/models/Notification');
+const AnswerOption = require('../backend/models/AnswerOption');
+const UserAnswer = require('../backend/models/UserAnswer');
+const Result = require('../backend/models/Result');
 
 beforeAll(connect);
 afterAll(disconnect);
@@ -340,30 +343,95 @@ describe('Assessment timing — server-authoritative expiry', () => {
     sessionId = start.body.sessionId;
   });
 
-  it('rejects a submit past the grace window even with a forged autoSubmitted flag', async () => {
-    // Force the session well past expiry + grace, then try to submit with the
-    // client claiming autoSubmitted:true — the server must ignore that flag.
-    await AssessmentSession.updateOne({ _id: sessionId }, { expiresAt: new Date(Date.now() - 5 * 60 * 1000) });
-    const res = await request(app)
-      .post('/api/v1/assessment/submit')
-      .set('Authorization', `Bearer ${token}`)
-      .send({ sessionId, answers: [{ questionId: '000000000000000000000000', status: 'skipped' }], autoSubmitted: true });
-    expect(res.status).toBe(400);
-    expect(res.body.message).toMatch(/time has expired/i);
+  // Two single-answer questions from this attempt's snapshot, with one valid
+  // option each: `saved` is answered via /progress before the deadline,
+  // `late` only appears in a submit body sent after it.
+  let saved, late;
+  const auth = () => ({ Authorization: `Bearer ${token}` });
 
-    // Session stays in-progress (the late submit was rejected, not consumed).
+  it('saves progress on the server while time remains', async () => {
     const session = await AssessmentSession.findById(sessionId);
-    expect(session.status).toBe('in-progress');
+    const qs = await Question.find({ _id: { $in: session.questionIds }, questionType: { $nin: ['MULTI_SELECT', 'RANKING'] } }).limit(2);
+    [saved, late] = await Promise.all(qs.map(async (q) => ({ q, opt: await AnswerOption.findOne({ questionId: q._id }) })));
+
+    const res = await request(app).put('/api/v1/assessment/progress').set(auth())
+      .send({ sessionId, answers: [{ questionId: String(saved.q._id), answerOptionId: String(saved.opt._id), status: 'answered', junk: 'x' }] });
+    expect(res.status).toBe(200);
+    const after = await AssessmentSession.findById(sessionId).lean();
+    expect(after.draftAnswers).toEqual([{ questionId: String(saved.q._id), answerOptionId: String(saved.opt._id), status: 'answered' }]);
   });
 
-  it('auto-retires an expired abandoned session so the candidate can start fresh', async () => {
-    // The session above is expired past grace. A new start must NOT 409 forever
-    // — it retires the dead session and issues a fresh attempt.
-    const res = await request(app).post('/api/v1/assessment/start').set('Authorization', `Bearer ${token}`);
-    expect(res.status).toBe(201);
-    expect(res.body.sessionId).not.toBe(sessionId);
-    const old = await AssessmentSession.findById(sessionId);
-    expect(old.status).toBe('expired');
+  it('rejects a progress save that arrives after the deadline', async () => {
+    await AssessmentSession.updateOne({ _id: sessionId }, { expiresAt: new Date(Date.now() - 5 * 60 * 1000) });
+    const res = await request(app).put('/api/v1/assessment/progress').set(auth())
+      .send({ sessionId, answers: [{ questionId: String(late.q._id), answerOptionId: String(late.opt._id), status: 'answered' }] });
+    expect(res.status).toBe(409);
+    expect(res.body.code).toBe('TIME_EXPIRED');
+    const after = await AssessmentSession.findById(sessionId).lean();
+    expect(after.draftAnswers).toHaveLength(1); // unchanged
+  });
+
+  it('never resets the timer: /start after expiry resumes the same attempt', async () => {
+    const before = await AssessmentSession.findById(sessionId);
+    const res = await request(app).post('/api/v1/assessment/start').set(auth());
+    expect(res.status).toBe(409);
+    expect(res.body.sessionId).toBe(String(sessionId));
+    expect(new Date(res.body.expiresAt).getTime()).toBe(before.expiresAt.getTime());
+    expect(await AssessmentSession.countDocuments({ userId: before.userId })).toBe(1);
+  });
+
+  it('a late submit is auto-submitted from the answers saved before the deadline, ignoring the body', async () => {
+    const res = await request(app).post('/api/v1/assessment/submit').set(auth())
+      .send({ sessionId, autoSubmitted: false, answers: [
+        { questionId: String(late.q._id), answerOptionId: String(late.opt._id), status: 'answered' },
+      ] });
+    expect(res.status).toBe(200);
+
+    const session = await AssessmentSession.findById(sessionId);
+    expect(session.status).toBe('submitted');
+    expect(session.autoSubmitted).toBe(true);
+    const rows = await UserAnswer.find({ sessionId });
+    expect(rows).toHaveLength(session.questionIds.length);
+    const byQ = Object.fromEntries(rows.map((r) => [String(r.questionId), r]));
+    expect(byQ[String(saved.q._id)].status).toBe('answered');
+    expect(byQ[String(late.q._id)].status).toBe('skipped'); // the post-deadline answer did not count
+  });
+
+  it('rejects any further submit or change once submitted', async () => {
+    const again = await request(app).post('/api/v1/assessment/submit').set(auth())
+      .send({ sessionId, answers: [{ questionId: String(saved.q._id), status: 'skipped' }] });
+    expect(again.status).toBe(400);
+    expect(again.body.code).toBe('ALREADY_SUBMITTED');
+
+    const progress = await request(app).put('/api/v1/assessment/progress').set(auth())
+      .send({ sessionId, answers: [] });
+    expect(progress.status).toBe(409);
+    expect(progress.body.code).toBe('SESSION_ENDED');
+
+    // A refreshed/second tab asking for this attempt is sent to results, not
+    // handed a fresh full-length question list.
+    const q = await request(app).get(`/api/v1/assessment/questions?sessionId=${sessionId}`).set(auth());
+    expect(q.status).toBe(409);
+    expect(q.body.code).toBe('SESSION_ENDED');
+
+    expect(await Result.countDocuments({ sessionId })).toBe(1);
+  });
+
+  it('two simultaneous submits produce exactly one result', async () => {
+    const user = await User.findOne({ email: TIMING_EMAIL });
+    const s = await AssessmentSession.create({
+      userId: user._id, startedAt: new Date(Date.now() - 31 * 60 * 1000), expiresAt: new Date(Date.now() - 60 * 1000),
+      questionIds: [saved.q._id], durationMinutes: 30,
+      draftAnswers: [{ questionId: String(saved.q._id), answerOptionId: String(saved.opt._id), status: 'answered' }], draftSavedAt: new Date(Date.now() - 2 * 60 * 1000),
+    });
+    const body = { sessionId: String(s._id), answers: [{ questionId: String(saved.q._id), status: 'skipped' }] };
+    const [a, b] = await Promise.all([
+      request(app).post('/api/v1/assessment/submit').set(auth()).send(body),
+      request(app).post('/api/v1/assessment/submit').set(auth()).send(body),
+    ]);
+    expect([a.status, b.status].sort()).toEqual([200, 409]);
+    expect([a.body.code, b.body.code]).toContain('ALREADY_SUBMITTED');
+    expect(await Result.countDocuments({ sessionId: s._id })).toBe(1);
   });
 });
 
